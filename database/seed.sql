@@ -20,7 +20,11 @@ INSERT INTO supplier (supplierId, userId, companyName, companyAddress)
 VALUES
   ('SUP0001', 'USR0001', 'Demo Shoe Co.', '12 Jalan Sukan, Kuala Lumpur');
 
--- 2) A category for products
+-- 2) Categories for products
 INSERT INTO category (categoryId, categoryName)
 VALUES
-  ('CAT0001', 'Running');
+  ('CAT0001', 'Running'),
+  ('CAT0002', 'Basketball'),
+  ('CAT0003', 'Lifestyle'),
+  ('CAT0004', 'Training'),
+  ('CAT0005', 'Football');

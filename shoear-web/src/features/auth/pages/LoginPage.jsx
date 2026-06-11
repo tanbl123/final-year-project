@@ -64,10 +64,6 @@ function LoginPage() {
           {isSubmitting ? 'Logging in...' : 'Login'}
         </button>
       </form>
-
-      <p className="text-muted text-center mt-3" style={{ fontSize: '0.85rem' }}>
-        Demo login → <strong>supplier@shoear.com</strong> / <strong>password123</strong>
-      </p>
     </div>
   );
 }

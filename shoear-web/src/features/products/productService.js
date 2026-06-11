@@ -17,3 +17,7 @@ export function createProduct(data) {
 export function deleteProduct(id) {
   return apiDelete('/products/' + id, getToken());
 }
+
+export function fetchCategories() {
+  return apiGet('/categories', getToken());
+}

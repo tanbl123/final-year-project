@@ -20,16 +20,26 @@ function handleListProducts(PDO $pdo, array $auth): void {
 // POST /products  — create a new product for this supplier.
 function handleCreateProduct(PDO $pdo, array $auth): void {
   $supplierId = requireSupplierId($pdo, $auth);
-  $body  = getJsonBody();
-  $name  = trim($body['name'] ?? '');
-  $brand = trim($body['brand'] ?? '');
-  $price = $body['price'] ?? null;
+  $body       = getJsonBody();
+  $name       = trim($body['name'] ?? '');
+  $brand      = trim($body['brand'] ?? '');
+  $price      = $body['price'] ?? null;
+  $categoryId = trim($body['categoryId'] ?? '');
 
   if ($name === '' || $brand === '') {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Name and brand are required.']);
   }
   if (!is_numeric($price) || (float) $price <= 0) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Price must be a number greater than 0.']);
+  }
+  if ($categoryId === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Category is required.']);
+  }
+  // make sure the category actually exists (don't trust the client)
+  $chk = $pdo->prepare('SELECT 1 FROM category WHERE categoryId = :cid');
+  $chk->execute(['cid' => $categoryId]);
+  if (!$chk->fetch()) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Invalid category.']);
   }
 
   $id = nextId($pdo, 'product', 'productId', 'PRD');
@@ -40,7 +50,7 @@ function handleCreateProduct(PDO $pdo, array $auth): void {
   $stmt->execute([
     'id'    => $id,
     'sid'   => $supplierId,
-    'cat'   => 'CAT0001',          // default category for now (add a picker later)
+    'cat'   => $categoryId,
     'name'  => $name,
     'brand' => $brand,
     'price' => (float) $price,

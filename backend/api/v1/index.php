@@ -7,6 +7,7 @@ require __DIR__ . '/../../lib/auth.php';
 require __DIR__ . '/../../lib/ids.php';
 require __DIR__ . '/../../controllers/AuthController.php';
 require __DIR__ . '/../../controllers/ProductController.php';
+require __DIR__ . '/../../controllers/CategoryController.php';
 
 // ── CORS: let the React dev server (port 5173) call us ──
 header('Access-Control-Allow-Origin: http://localhost:5173');
@@ -38,6 +39,13 @@ if ($method === 'GET' && $path === '/db-test') {
 if ($method === 'POST' && $path === '/auth/login') {
   $pdo = getPDO();
   handleLogin($pdo, $secret);
+}
+
+// ── category routes (require a valid token) ──
+if ($method === 'GET' && $path === '/categories') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleListCategories($pdo);
 }
 
 // ── product routes (all require a valid token) ──
