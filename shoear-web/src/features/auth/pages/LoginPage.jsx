@@ -150,19 +150,27 @@ function LoginPage({ variant = 'supplier' }) {
           {isSubmitting ? 'Logging in...' : 'Login'}
         </button>
       </form>
-      {variant === 'admin' ? (
+
+      {/* switch between the two portals — current one is highlighted */}
+      <div className="d-flex gap-2 mt-3">
+        <Link
+          to="/admin/login"
+          className={`btn flex-fill ${variant === 'admin' ? 'btn-primary' : 'btn-outline-secondary'}`}
+        >
+          Admin login
+        </Link>
+        <Link
+          to="/login"
+          className={`btn flex-fill ${variant === 'supplier' ? 'btn-primary' : 'btn-outline-secondary'}`}
+        >
+          Supplier login
+        </Link>
+      </div>
+
+      {variant === 'supplier' && (
         <p className="text-center mt-3">
-          <Link to="/login">Supplier login</Link>
+          New supplier? <Link to="/register">Create an account</Link>
         </p>
-      ) : (
-        <>
-          <p className="text-center mt-3 mb-1">
-            New supplier? <Link to="/register">Create an account</Link>
-          </p>
-          <p className="text-center">
-            <Link to="/admin/login" className="text-muted small">Admin login</Link>
-          </p>
-        </>
       )}
     </div>
   );
