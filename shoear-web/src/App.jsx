@@ -21,35 +21,32 @@ function App() {
 
   return (
     <>
-      <nav className="navbar navbar-expand navbar-dark bg-dark px-4">
-        <span className="navbar-brand">👟 ShoeAR {isAdmin ? 'Admin' : 'Supplier'}</span>
+      {/* the top bar only makes sense once you're signed in; the login and
+          register pages are full-screen on their own */}
+      {user && (
+        <nav className="navbar navbar-expand navbar-dark bg-dark px-4">
+          <span className="navbar-brand">👟 ShoeAR {isAdmin ? 'Admin' : 'Supplier'}</span>
 
-        {/* admins manage approvals; suppliers manage their catalogue */}
-        <div className="navbar-nav me-auto">
-          {isAdmin ? (
-            <Link className="nav-link" to="/admin">Approvals</Link>
-          ) : (
-            <>
-              <Link className="nav-link" to="/products">Products</Link>
-              <Link className="nav-link" to="/reports">Reports</Link>
-            </>
-          )}
-        </div>
+          {/* admins manage approvals; suppliers manage their catalogue */}
+          <div className="navbar-nav me-auto">
+            {isAdmin ? (
+              <Link className="nav-link" to="/admin">Approvals</Link>
+            ) : (
+              <>
+                <Link className="nav-link" to="/products">Products</Link>
+                <Link className="nav-link" to="/reports">Reports</Link>
+              </>
+            )}
+          </div>
 
-        {/* show different things depending on login status */}
-        <div className="navbar-nav">
-          {user ? (
-            <>
-              <span className="navbar-text text-light me-3">Hi, {user.fullName}</span>
-              <button className="btn btn-outline-light btn-sm" onClick={handleLogout}>
-                Logout
-              </button>
-            </>
-          ) : (
-            <Link className="nav-link" to="/login">Login</Link>
-          )}
-        </div>
-      </nav>
+          <div className="navbar-nav">
+            <span className="navbar-text text-light me-3">Hi, {user.fullName}</span>
+            <button className="btn btn-outline-light btn-sm" onClick={handleLogout}>
+              Logout
+            </button>
+          </div>
+        </nav>
+      )}
 
       <Routes>
         <Route path="/login" element={<LoginPage variant="supplier" />} />

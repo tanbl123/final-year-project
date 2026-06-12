@@ -150,13 +150,20 @@ function LoginPage({ variant = 'supplier' }) {
           {isSubmitting ? 'Logging in...' : 'Login'}
         </button>
       </form>
-      <p className="text-center mt-3">
-        {variant === 'admin' ? (
+      {variant === 'admin' ? (
+        <p className="text-center mt-3">
           <Link to="/login">Supplier login</Link>
-        ) : (
-          <>New supplier? <Link to="/register">Create an account</Link></>
-        )}
-      </p>
+        </p>
+      ) : (
+        <>
+          <p className="text-center mt-3 mb-1">
+            New supplier? <Link to="/register">Create an account</Link>
+          </p>
+          <p className="text-center">
+            <Link to="/admin/login" className="text-muted small">Admin login</Link>
+          </p>
+        </>
+      )}
     </div>
   );
 }
