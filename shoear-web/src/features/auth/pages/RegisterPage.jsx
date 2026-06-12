@@ -48,6 +48,14 @@ function validateForm(form) {
   return errors;
 }
 
+// Set or clear a single field's error on an errors object (mutates it),
+// reusing the same rules as the full-form validation.
+function applyFieldError(errors, name, form) {
+  const msg = validateForm(form)[name];
+  if (msg) errors[name] = msg;
+  else delete errors[name];
+}
+
 function RegisterPage() {
   const [form, setForm] = useState({
     companyName: '', username: '', email: '', phoneNumber: '',
@@ -58,14 +66,28 @@ function RegisterPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [done, setDone] = useState(false);        // show the "pending approval" screen
 
-  // update the changed field and clear its error as the user fixes it
+  // update the changed field; if it (or the linked confirm field) is already
+  // showing an error, re-check it live so the message updates as you fix it
   function handleChange(event) {
     const { name, value } = event.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    const nextForm = { ...form, [name]: value };
+    setForm(nextForm);
+
     setErrors((prev) => {
-      if (!prev[name]) return prev;
       const next = { ...prev };
-      delete next[name];
+      if (name in prev) applyFieldError(next, name, nextForm);
+      // password & confirm are linked — keep the confirm error in sync
+      if (name === 'password' && 'confirm' in prev) applyFieldError(next, 'confirm', nextForm);
+      return next;
+    });
+  }
+
+  // validate a single field when the user leaves it (real-time, on blur)
+  function handleBlur(event) {
+    const { name } = event.target;
+    setErrors((prev) => {
+      const next = { ...prev };
+      applyFieldError(next, name, form);
       return next;
     });
   }
@@ -130,6 +152,7 @@ function RegisterPage() {
           className={`form-control ${errors[name] ? 'is-invalid' : ''}`}
           value={form[name]}
           onChange={handleChange}
+          onBlur={handleBlur}
         />
         {errors[name] && <div className="invalid-feedback">{errors[name]}</div>}
       </div>
