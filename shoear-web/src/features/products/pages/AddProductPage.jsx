@@ -15,7 +15,9 @@ function AddProductPage() {
 
   return (
     <div className="container py-4">
-      <Link to="/products" className="btn btn-link px-0">← Back to products</Link>
+      <Link to="/products" className="btn btn-outline-secondary btn-sm mb-3" title="Back to products">
+        ↑ Back to products
+      </Link>
       <h1 className="mb-4">Add a product</h1>
       <ProductForm onAdd={addProduct} onCancel={() => navigate('/products')} />
     </div>
