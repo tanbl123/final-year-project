@@ -208,8 +208,8 @@ function ProductForm({ onAdd, onCancel }) {
       setVariantTouched((t) => ({ ...t, ...allTouched }));
     }
 
+    // inline field errors already explain what to fix — no summary banner
     if (hasBaseError || hasSizeError) {
-      setError('Please fix the highlighted fields before saving.');
       return;
     }
     if (uploading) { setError('Please wait for uploads to finish.'); return; }
