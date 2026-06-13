@@ -161,7 +161,7 @@ function ProductForm({ onAdd, onCancel }) {
       const { url } = await uploadFile(file, 'model');
       setModelUrl(url);
       setModelName(file.name);
-      setTryOn(true);                     // a model means try-on can be enabled
+      // leave the try-on choice to the supplier (they tick the box below)
     } catch (err) {
       setError(err.message);
     } finally {
@@ -387,6 +387,9 @@ function ProductForm({ onAdd, onCancel }) {
         <label className="form-check-label" htmlFor="tryOn">
           Enable virtual try-on for this product
         </label>
+        {!modelUrl && (
+          <div className="form-text">Upload a 3D model first to enable this.</div>
+        )}
       </div>
 
       <hr className="my-4" />
