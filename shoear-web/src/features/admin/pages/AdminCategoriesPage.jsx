@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   getCategoriesAdmin, createCategory, renameCategory, deleteCategory,
 } from '../adminService';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Toast from '../../../components/Toast';
+
+const PAGE_SIZE = 5;
 
 function AdminCategoriesPage() {
   const [categories, setCategories] = useState([]);
@@ -20,6 +22,10 @@ function AdminCategoriesPage() {
 
   const [deleting, setDeleting] = useState(null); // category pending delete confirm
 
+  const [sortKey, setSortKey] = useState('name'); // 'name' | 'productCount'
+  const [sortDir, setSortDir] = useState('asc');  // 'asc' | 'desc'
+  const [page, setPage] = useState(1);
+
   useEffect(() => {
     let active = true;
     getCategoriesAdmin()
@@ -29,10 +35,32 @@ function AdminCategoriesPage() {
     return () => { active = false; };
   }, []);
 
-  // keep the list alphabetical like the API does
-  function sortByName(list) {
-    return [...list].sort((a, b) => a.name.localeCompare(b.name));
+  // click a column header to sort by it; click again to flip the direction
+  function toggleSort(key) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('asc');
+    }
   }
+  const sortArrow = (key) => (sortKey === key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ' ⇅');
+
+  const sorted = useMemo(() => {
+    const list = [...categories];
+    list.sort((a, b) => {
+      let cmp;
+      if (sortKey === 'productCount') cmp = a.productCount - b.productCount;
+      else cmp = a.name.localeCompare(b.name);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return list;
+  }, [categories, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  // keep the page in range when the list shrinks (e.g. after a delete)
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+  const pageItems = sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   async function handleAdd(event) {
     event.preventDefault();
@@ -42,7 +70,7 @@ function AdminCategoriesPage() {
     setAdding(true);
     try {
       const created = await createCategory(name);
-      setCategories((prev) => sortByName([...prev, created]));
+      setCategories((prev) => [...prev, created]);
       setNewName('');
       setToast(`Category “${created.name}” added.`);
     } catch (err) {
@@ -69,7 +97,7 @@ function AdminCategoriesPage() {
     try {
       const updated = await renameCategory(cat.id, name);
       setCategories((prev) =>
-        sortByName(prev.map((c) => (c.id === cat.id ? { ...c, name: updated.name } : c))));
+        prev.map((c) => (c.id === cat.id ? { ...c, name: updated.name } : c)));
       setToast(`Renamed to “${updated.name}”.`);
       cancelEdit();
     } catch (err) {
@@ -124,13 +152,18 @@ function AdminCategoriesPage() {
           <table className="table align-middle">
             <thead>
               <tr>
-                <th>Category</th>
-                <th className="text-center">Products</th>
+                <th role="button" onClick={() => toggleSort('name')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  Category<span className="text-muted small">{sortArrow('name')}</span>
+                </th>
+                <th role="button" className="text-center" onClick={() => toggleSort('productCount')}
+                  style={{ cursor: 'pointer', userSelect: 'none' }}>
+                  Products<span className="text-muted small">{sortArrow('productCount')}</span>
+                </th>
                 <th className="text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {categories.map((cat) => (
+              {pageItems.map((cat) => (
                 <tr key={cat.id}>
                   <td style={{ maxWidth: 360 }}>
                     {editingId === cat.id ? (
@@ -176,6 +209,31 @@ function AdminCategoriesPage() {
               ))}
             </tbody>
           </table>
+
+          {totalPages > 1 && (
+            <nav className="d-flex justify-content-between align-items-center">
+              <span className="text-muted small">
+                Page {page} of {totalPages} · {sorted.length} categories
+              </span>
+              <ul className="pagination mb-0">
+                <li className={'page-item' + (page === 1 ? ' disabled' : '')}>
+                  <button className="page-link" onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                    Prev
+                  </button>
+                </li>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+                  <li key={n} className={'page-item' + (n === page ? ' active' : '')}>
+                    <button className="page-link" onClick={() => setPage(n)}>{n}</button>
+                  </li>
+                ))}
+                <li className={'page-item' + (page === totalPages ? ' disabled' : '')}>
+                  <button className="page-link" onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>
+                    Next
+                  </button>
+                </li>
+              </ul>
+            </nav>
+          )}
         </div>
       )}
 
