@@ -61,8 +61,16 @@ function ResubmitApplicationPage() {
     else if (!/^\+?[1-9]\d{7,14}$/.test(f.phoneNumber.trim())) {
       e.phoneNumber = 'Enter a valid phone number in international format, e.g. +60123456789.';
     }
-    if (f.businessRegNo.trim() === '') e.businessRegNo = 'Business registration number is required.';
+    if (f.businessRegNo.trim() === '') {
+      e.businessRegNo = 'Business registration number is required.';
+    } else if (!/^(\d{12}|\d{6,8}-?[A-Za-z])$/.test(f.businessRegNo.trim())) {
+      e.businessRegNo = 'Enter a valid SSM number, e.g. 202301012345 or 1234567-A.';
+    }
     if (f.businessLicenseUrl.trim() === '') e.businessLicenseUrl = 'Please upload your business registration document.';
+    // SST number is optional, but if given it must look like a real one
+    if (f.taxNumber.trim() !== '' && !/^[A-Za-z0-9][A-Za-z0-9-]{6,18}[A-Za-z0-9]$/.test(f.taxNumber.trim())) {
+      e.taxNumber = 'Enter a valid SST number, e.g. W10-1808-32000001.';
+    }
     return e;
   }
 

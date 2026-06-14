@@ -45,6 +45,14 @@ function handleRegister(PDO $pdo): void {
   if (!preg_match('/^\+?[1-9]\d{7,14}$/', $phoneNumber)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid phone number in international format, e.g. +60123456789.']);
   }
+  // SSM number: new 12-digit format or old 6–8 digits + check letter
+  if (!preg_match('/^(\d{12}|\d{6,8}-?[A-Za-z])$/', $businessRegNo)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid SSM number, e.g. 202301012345 or 1234567-A.']);
+  }
+  // SST number is optional, but if given it must look like a real one
+  if ($taxNumber !== '' && !preg_match('/^[A-Za-z0-9][A-Za-z0-9-]{6,18}[A-Za-z0-9]$/', $taxNumber)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid SST number, e.g. W10-1808-32000001.']);
+  }
   // password policy: 8+ chars with lower, upper, digit and special char
   $pwErr = passwordPolicyError($password);
   if ($pwErr) {

@@ -14,6 +14,20 @@ function validatePassword(pw) {
   return '';
 }
 
+// SSM business registration number — accepts both formats in use in Malaysia:
+//   * new (2019+) 12-digit number, e.g. 202301012345
+//   * old format: 6–8 digits + a check letter, e.g. 1234567-A
+function validateSsm(value) {
+  return /^(\d{12}|\d{6,8}-?[A-Za-z])$/.test(value.trim());
+}
+
+// SST registration number (RMCD), e.g. W10-1808-32000001. The exact pattern
+// has variants, so this is a structural check: a letter/digit start, then
+// 8–20 letters/digits/hyphens — enough to reject obvious typos like "234fa".
+function validateSst(value) {
+  return /^[A-Za-z0-9][A-Za-z0-9-]{6,18}[A-Za-z0-9]$/.test(value.trim());
+}
+
 // Validate the whole form, returning a { field: message } object.
 // An empty object means everything passed.
 function validateForm(form) {
@@ -38,9 +52,16 @@ function validateForm(form) {
   if (form.companyAddress.trim() === '') errors.companyAddress = 'Company address is required.';
 
   // business verification
-  if (form.businessRegNo.trim() === '') errors.businessRegNo = 'Business registration number is required.';
+  if (form.businessRegNo.trim() === '') {
+    errors.businessRegNo = 'Business registration number is required.';
+  } else if (!validateSsm(form.businessRegNo)) {
+    errors.businessRegNo = 'Enter a valid SSM number, e.g. 202301012345 or 1234567-A.';
+  }
   if (form.businessLicenseUrl.trim() === '') errors.businessLicenseUrl = 'Please upload your business registration document.';
-  // taxNumber is optional — no rule
+  // taxNumber is optional, but if given it must look like a real SST number
+  if (form.taxNumber.trim() !== '' && !validateSst(form.taxNumber)) {
+    errors.taxNumber = 'Enter a valid SST number, e.g. W10-1808-32000001.';
+  }
 
   const pwError = validatePassword(form.password);
   if (pwError) errors.password = pwError;
