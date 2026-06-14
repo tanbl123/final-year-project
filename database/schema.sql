@@ -406,6 +406,33 @@ CREATE TABLE commission (
     CONSTRAINT chk_commission_rate CHECK (commissionRateValue >= 0 AND commissionRateValue <= 100)
 ) ENGINE=InnoDB;
 
+-- Record of money actually paid out to a supplier for an order, via Stripe
+-- Connect (separate charges & transfers). The customer pays the platform once
+-- (one `payment` row); the platform keeps the commission and sends each
+-- supplier their net as a Stripe Transfer — one supplier_payout row per
+-- supplier per order. This is the DB-side proof of "each supplier received
+-- money", alongside the balances visible in the Stripe dashboard.
+CREATE TABLE supplier_payout (
+    payoutId         VARCHAR(10)   NOT NULL,             -- PYT0001
+    supplierId       VARCHAR(10)   NOT NULL,
+    orderId          VARCHAR(10)   NOT NULL,
+    stripeTransferId VARCHAR(60)   NULL,                 -- tr_... returned by Stripe
+    grossAmount      DECIMAL(10,2) NOT NULL,             -- supplier's share of the order
+    commissionAmount DECIMAL(10,2) NOT NULL,             -- platform commission on that share
+    netAmount        DECIMAL(10,2) NOT NULL,             -- amount transferred to the supplier
+    currency         CHAR(3)       NOT NULL DEFAULT 'myr',
+    payoutStatus     ENUM('Pending','Paid','Failed') NOT NULL DEFAULT 'Pending',
+    created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (payoutId),
+    KEY idx_payout_supplier (supplierId),
+    KEY idx_payout_order (orderId),
+    CONSTRAINT fk_payout_supplier FOREIGN KEY (supplierId) REFERENCES supplier(supplierId)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_payout_order FOREIGN KEY (orderId) REFERENCES `order`(orderId)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT chk_payout_amounts CHECK (grossAmount >= 0 AND commissionAmount >= 0 AND netAmount >= 0)
+) ENGINE=InnoDB;
+
 -- =====================================================================
 --  END OF SCHEMA
 -- =====================================================================

@@ -13,4 +13,9 @@ return [
 
   // Only if your React app runs somewhere other than the default:
   // 'app_url' => 'http://localhost:5173',
+
+  // Optional: override the FAKE test bank account the payout demo attaches to
+  // each supplier (only needed if Stripe rejects the built-in default for your
+  // country — see Stripe's "test bank account numbers" docs).
+  // 'demo_bank' => ['routing_number' => '110000000', 'account_number' => '000123456789'],
 ];
