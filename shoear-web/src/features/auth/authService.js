@@ -1,4 +1,4 @@
-import { apiPost, apiGet, apiPut, getToken } from '../../api/client';
+import { apiPost, apiGet, apiPut, apiUpload, getToken } from '../../api/client';
 
 // REAL login against the PHP API (POST /auth/login).
 // Returns { token, user } on success, or throws with the server's error message.
@@ -16,6 +16,14 @@ export function logout() {
 // Creates a Pending account; resolves with a { message } on success.
 export function register(data) {
   return apiPost('/auth/register', data);
+}
+
+// Upload a business document (e.g. SSM certificate) during registration.
+// Public — there's no account/token yet. Resolves with { url }.
+export function uploadRegistrationDoc(file) {
+  const form = new FormData();
+  form.append('file', file);
+  return apiUpload('/uploads/registration-doc', form);
 }
 
 // The signed-in user's own profile (GET /auth/me).

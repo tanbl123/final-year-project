@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { register } from '../authService';
+import { register, uploadRegistrationDoc } from '../authService';
 import EyeIcon from '../../../components/EyeIcon';
 
 // Password policy: 8+ chars with at least one lowercase, uppercase, digit
@@ -37,6 +37,20 @@ function validateForm(form) {
 
   if (form.companyAddress.trim() === '') errors.companyAddress = 'Company address is required.';
 
+  // business verification
+  if (form.businessRegNo.trim() === '') errors.businessRegNo = 'Business registration number is required.';
+  if (form.businessLicenseUrl.trim() === '') errors.businessLicenseUrl = 'Please upload your business registration document.';
+  // taxNumber is optional — no rule
+
+  // payout (bank) details
+  if (form.bankName.trim() === '') errors.bankName = 'Bank name is required.';
+  if (form.bankAccountName.trim() === '') errors.bankAccountName = 'Account holder name is required.';
+  if (form.bankAccountNo.trim() === '') {
+    errors.bankAccountNo = 'Bank account number is required.';
+  } else if (!/^[0-9][0-9 -]{5,33}$/.test(form.bankAccountNo.trim())) {
+    errors.bankAccountNo = 'Enter a valid bank account number (digits only).';
+  }
+
   const pwError = validatePassword(form.password);
   if (pwError) errors.password = pwError;
 
@@ -61,12 +75,37 @@ function RegisterPage() {
   const [form, setForm] = useState({
     companyName: '', username: '', email: '', phoneNumber: '',
     companyAddress: '', password: '', confirm: '',
+    businessRegNo: '', taxNumber: '', businessLicenseUrl: '',
+    bankName: '', bankAccountName: '', bankAccountNo: '',
   });
   const [errors, setErrors] = useState({});       // per-field messages
   const [formError, setFormError] = useState(''); // general/server fallback
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [done, setDone] = useState(false);        // show the "pending approval" screen
   const [shown, setShown] = useState({ password: false, confirm: false }); // show/hide toggles
+  const [licenseName, setLicenseName] = useState('');   // uploaded document filename
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+
+  async function handleLicenseFile(event) {
+    const file = event.target.files[0];
+    event.target.value = '';              // let the same file be re-picked later
+    if (!file) return;
+    setUploadingDoc(true);
+    setErrors((prev) => { const next = { ...prev }; delete next.businessLicenseUrl; return next; });
+    try {
+      const { url } = await uploadRegistrationDoc(file);
+      setForm((f) => ({ ...f, businessLicenseUrl: url }));
+      setLicenseName(file.name);
+    } catch (err) {
+      setErrors((prev) => ({ ...prev, businessLicenseUrl: err.message }));
+    } finally {
+      setUploadingDoc(false);
+    }
+  }
+  function removeLicense() {
+    setForm((f) => ({ ...f, businessLicenseUrl: '' }));
+    setLicenseName('');
+  }
 
   function toggleShown(name) {
     setShown((prev) => ({ ...prev, [name]: !prev[name] }));
@@ -118,6 +157,12 @@ function RegisterPage() {
         phoneNumber: form.phoneNumber.trim(),
         companyName: form.companyName.trim(),
         companyAddress: form.companyAddress.trim(),
+        businessRegNo: form.businessRegNo.trim(),
+        businessLicenseUrl: form.businessLicenseUrl,
+        taxNumber: form.taxNumber.trim(),
+        bankName: form.bankName.trim(),
+        bankAccountName: form.bankAccountName.trim(),
+        bankAccountNo: form.bankAccountNo.trim(),
         password: form.password,
       });
       setDone(true);   // success → show pending-approval message
@@ -165,6 +210,28 @@ function RegisterPage() {
     );
   }
 
+  // business document upload (replaces the file input with a badge once done)
+  function licenseField() {
+    return (
+      <div className="mb-3">
+        <label className="form-label">Business registration document</label>
+        {form.businessLicenseUrl ? (
+          <div className="d-flex align-items-center gap-2">
+            <span className="badge text-bg-success">📄 {licenseName || 'Document uploaded'}</span>
+            <button type="button" className="btn btn-outline-danger btn-sm" onClick={removeLicense}>Remove</button>
+          </div>
+        ) : (
+          <input type="file" accept=".pdf,image/png,image/jpeg,image/webp"
+            className={`form-control ${errors.businessLicenseUrl ? 'is-invalid' : ''}`}
+            onChange={handleLicenseFile} disabled={uploadingDoc} />
+        )}
+        {uploadingDoc && <div className="form-text">Uploading…</div>}
+        {errors.businessLicenseUrl && <div className="invalid-feedback d-block">{errors.businessLicenseUrl}</div>}
+        <div className="form-text">PDF or image (JPG/PNG), up to 10&nbsp;MB — e.g. your SSM certificate.</div>
+      </div>
+    );
+  }
+
   // password fields get our own Show/Hide toggle (the browser's native reveal
   // icon is inconsistent and clashes with the validation icon). has-validation
   // lets Bootstrap show the inline error correctly inside an input-group.
@@ -199,20 +266,37 @@ function RegisterPage() {
   }
 
   return (
-    <div className="container py-5" style={{ maxWidth: '440px' }}>
+    <div className="container py-5" style={{ maxWidth: '540px' }}>
       <h1 className="mb-4 text-center">👟 Supplier Registration</h1>
       <form onSubmit={handleSubmit} className="card card-body shadow-sm text-start" noValidate>
         {formError && <div className="alert alert-danger py-2">{formError}</div>}
 
+        <h6 className="text-muted text-uppercase small fw-bold">Company</h6>
         {field('companyName', 'Company name')}
+        {field('companyAddress', 'Company address')}
+
+        <hr className="my-3" />
+        <h6 className="text-muted text-uppercase small fw-bold">Business verification</h6>
+        {field('businessRegNo', 'Business registration no. (SSM)')}
+        {field('taxNumber', 'Tax / SST number (optional)')}
+        {licenseField()}
+
+        <hr className="my-3" />
+        <h6 className="text-muted text-uppercase small fw-bold">Payout (bank) details</h6>
+        <p className="text-muted small mb-3">Used to pay out your sales income. The account holder should match your company name.</p>
+        {field('bankName', 'Bank name')}
+        {field('bankAccountName', 'Account holder name')}
+        {field('bankAccountNo', 'Bank account number')}
+
+        <hr className="my-3" />
+        <h6 className="text-muted text-uppercase small fw-bold">Account login</h6>
         {field('username', 'Username')}
         {field('email', 'Email', 'email')}
         {field('phoneNumber', 'Phone number', 'tel')}
-        {field('companyAddress', 'Company address')}
         {passwordField('password', 'Password')}
         {passwordField('confirm', 'Confirm password')}
 
-        <button type="submit" className="btn btn-primary w-100 text-center" disabled={isSubmitting}>
+        <button type="submit" className="btn btn-primary w-100 text-center" disabled={isSubmitting || uploadingDoc}>
           {isSubmitting ? 'Registering...' : 'Register'}
         </button>
       </form>

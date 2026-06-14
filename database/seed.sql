@@ -16,9 +16,14 @@ VALUES
    '$2y$12$vmauRgZFXPo8McWGHLFdIOGkZiPPnRReu5ChzCouUQdVohlUAhghS',
    'supplier@shoear.com', 'Demo Supplier', '0123456789', 'Supplier', 'Active');
 
-INSERT INTO supplier (supplierId, userId, companyName, companyAddress)
+INSERT INTO supplier
+  (supplierId, userId, companyName, companyAddress,
+   businessRegNo, businessLicenseUrl, taxNumber,
+   bankName, bankAccountName, bankAccountNo)
 VALUES
-  ('SUP0001', 'USR0001', 'Demo Shoe Co.', '12 Jalan Sukan, Kuala Lumpur');
+  ('SUP0001', 'USR0001', 'Demo Shoe Co.', '12 Jalan Sukan, Kuala Lumpur',
+   '202301000123', 'https://example.com/licenses/demo.pdf', 'W10-1234-56789012',
+   'Maybank', 'Demo Shoe Co.', '514012345678');
 
 -- 2) An admin account (status Active). Password is also "password123".
 --    Log in at the supplier portal with these credentials to reach the

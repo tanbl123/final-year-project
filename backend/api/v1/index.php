@@ -176,6 +176,13 @@ if ($path === '/uploads' && $method === 'POST') {
   handleUpload($pdo, $auth);
 }
 
+// PUBLIC: business document upload used during supplier registration (no token
+// exists yet). Locked to the 'document' kind inside the handler.
+if ($path === '/uploads/registration-doc' && $method === 'POST') {
+  $pdo = getPDO();
+  handleRegistrationUpload($pdo);
+}
+
 // ── product routes (all require a valid token) ──
 if ($path === '/products') {
   $auth = requireAuth($secret);

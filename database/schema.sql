@@ -86,6 +86,12 @@ CREATE TABLE supplier (
     userId          VARCHAR(10)  NOT NULL,
     companyName     VARCHAR(150) NOT NULL,
     companyAddress  VARCHAR(255) NOT NULL,
+    businessRegNo   VARCHAR(50)  NOT NULL,                -- SSM / company registration no.
+    businessLicenseUrl VARCHAR(255) NOT NULL,             -- uploaded registration certificate
+    taxNumber       VARCHAR(50)  NULL,                    -- SST / tax no. (optional)
+    bankName        VARCHAR(100) NOT NULL,                -- payout bank
+    bankAccountName VARCHAR(150) NOT NULL,                -- account holder (should match company)
+    bankAccountNo   VARCHAR(34)  NOT NULL,                -- account number (IBAN-length safe)
     PRIMARY KEY (supplierId),
     UNIQUE KEY uq_supplier_user (userId),
     CONSTRAINT fk_supplier_user FOREIGN KEY (userId) REFERENCES `user`(userId)

@@ -16,3 +16,15 @@ function handleUpload(PDO $pdo, array $auth): void {
   $url = storeUploadedFile($_FILES['file'], $kind);
   sendJson(201, true, ['url' => $url]);
 }
+
+// POST /uploads/registration-doc  (multipart/form-data: file=<the file>)
+// PUBLIC: a supplier has no account/token yet while registering, so this
+// endpoint accepts a business document with no auth. It is locked to the
+// 'document' kind (PDF/image, size-limited) to keep the surface small.
+function handleRegistrationUpload(PDO $pdo): void {
+  if (!isset($_FILES['file'])) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A "file" is required.']);
+  }
+  $url = storeUploadedFile($_FILES['file'], 'document');
+  sendJson(201, true, ['url' => $url]);
+}

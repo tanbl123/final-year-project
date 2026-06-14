@@ -95,9 +95,17 @@ List responses include paging info:
   "shippingAddress": "12 Jalan Bunga"        // customer-only field
 }
 ```
-For `"role": "Supplier"` send `companyName` + `companyAddress` instead; for
+For `"role": "Supplier"` send `companyName`, `companyAddress`,
+`businessRegNo`, `businessLicenseUrl`, `bankName`, `bankAccountName`,
+`bankAccountNo` (and optional `taxNumber`) instead; for
 `"role": "DeliveryPersonnel"` send `vehicleInfo`. Server hashes the password
 (bcrypt/argon2) before storing — never stores plain text.
+
+The supplier's `businessLicenseUrl` comes from first uploading the document:
+
+| Method | Path | Access | Purpose |
+|--------|------|--------|---------|
+| POST | `/uploads/registration-doc` | Public | **(Implemented)** Upload a business document (PDF/image, ≤10 MB) during registration; returns `{ url }`. No token (the account doesn't exist yet). |
 
 **`POST /auth/login` response:**
 ```json

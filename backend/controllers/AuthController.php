@@ -23,13 +23,27 @@ function handleRegister(PDO $pdo): void {
   $companyAddress = trim($body['companyAddress'] ?? '');
   $password       = $body['password'] ?? '';
 
+  // business identity + payout details (Stage 1 supplier KYC)
+  $businessRegNo      = trim($body['businessRegNo'] ?? '');
+  $businessLicenseUrl = trim($body['businessLicenseUrl'] ?? '');
+  $taxNumber          = trim($body['taxNumber'] ?? '');     // optional
+  $bankName           = trim($body['bankName'] ?? '');
+  $bankAccountName    = trim($body['bankAccountName'] ?? '');
+  $bankAccountNo      = trim($body['bankAccountNo'] ?? '');
+
   // the supplier's display name IS their company name (no separate contact name)
   $fullName = $companyName;
 
-  // every field is required (all NOT NULL in the schema)
+  // every required field must be present (taxNumber is the only optional one)
   if ($username === '' || $email === '' || $phoneNumber === ''
-      || $companyName === '' || $companyAddress === '') {
+      || $companyName === '' || $companyAddress === ''
+      || $businessRegNo === '' || $businessLicenseUrl === ''
+      || $bankName === '' || $bankAccountName === '' || $bankAccountNo === '') {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'All fields are required.']);
+  }
+  // bank account number: digits (and dashes/spaces) only, reasonable length
+  if (!preg_match('/^[0-9][0-9 -]{5,33}$/', $bankAccountNo)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid bank account number.']);
   }
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please enter a valid email.']);
@@ -71,10 +85,16 @@ function handleRegister(PDO $pdo): void {
 
     $supplierId = nextId($pdo, 'supplier', 'supplierId', 'SUP');
     $pdo->prepare(
-      'INSERT INTO supplier (supplierId, userId, companyName, companyAddress)
-       VALUES (:sid, :uid, :cn, :ca)'
+      'INSERT INTO supplier
+         (supplierId, userId, companyName, companyAddress,
+          businessRegNo, businessLicenseUrl, taxNumber,
+          bankName, bankAccountName, bankAccountNo)
+       VALUES (:sid, :uid, :cn, :ca, :brn, :blu, :tax, :bn, :ban, :bno)'
     )->execute([
       'sid' => $supplierId, 'uid' => $userId, 'cn' => $companyName, 'ca' => $companyAddress,
+      'brn' => $businessRegNo, 'blu' => $businessLicenseUrl,
+      'tax' => ($taxNumber === '' ? null : $taxNumber),
+      'bn' => $bankName, 'ban' => $bankAccountName, 'bno' => $bankAccountNo,
     ]);
 
     $pdo->commit();

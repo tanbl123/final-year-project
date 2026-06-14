@@ -24,6 +24,13 @@ const UPLOAD_KINDS = [
     'exts'     => ['glb', 'gltf'],
     'maxBytes' => 30 * 1024 * 1024,  // 30 MB
   ],
+  // business documents (e.g. the SSM registration certificate) submitted at
+  // supplier registration. PDF or an image scan.
+  'document' => [
+    'dir'      => 'documents',
+    'exts'     => ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+    'maxBytes' => 10 * 1024 * 1024,  // 10 MB
+  ],
 ];
 
 // Public base URL for served upload files. Derived from the request so it
