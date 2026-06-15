@@ -16,6 +16,26 @@ require __DIR__ . '/../../controllers/StripeController.php';
 require __DIR__ . '/../../controllers/ReportController.php';
 require __DIR__ . '/../../controllers/SupplierController.php';
 
+// ── Always answer with JSON, even on a PHP error ──
+// A stray warning/notice or an uncaught error would otherwise print into the
+// body and the client just sees "Server did not return valid JSON". We suppress
+// inline error output and convert exceptions/fatals into a JSON error envelope.
+ini_set('display_errors', '0');
+error_reporting(E_ALL);
+set_exception_handler(function ($e) {
+  if (!headers_sent()) { http_response_code(500); header('Content-Type: application/json'); }
+  echo json_encode(['success' => false, 'data' => null,
+    'error' => ['code' => 'SERVER', 'message' => $e->getMessage()]]);
+});
+register_shutdown_function(function () {
+  $err = error_get_last();
+  if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR], true)) {
+    if (!headers_sent()) { http_response_code(500); header('Content-Type: application/json'); }
+    echo json_encode(['success' => false, 'data' => null,
+      'error' => ['code' => 'SERVER', 'message' => $err['message']]]);
+  }
+});
+
 // ── CORS: let the React dev server (port 5173) call us ──
 header('Access-Control-Allow-Origin: http://localhost:5173');
 header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
