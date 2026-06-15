@@ -225,8 +225,8 @@ function RegisterPage() {
         <label className="form-label">Business registration document</label>
         {form.businessLicenseUrl ? (
           <div className="d-flex align-items-center gap-2">
-            <span className="badge text-bg-success">📄 {licenseName || 'Document uploaded'}</span>
-            <button type="button" className="btn btn-outline-danger btn-sm" onClick={removeLicense}>Remove</button>
+            <span className="badge text-bg-success text-truncate" style={{ minWidth: 0 }} title={licenseName || 'Document uploaded'}>📄 {licenseName || 'Document uploaded'}</span>
+            <button type="button" className="btn btn-outline-danger btn-sm flex-shrink-0" onClick={removeLicense}>Remove</button>
           </div>
         ) : (
           <input type="file" accept=".pdf,image/png,image/jpeg,image/webp"
