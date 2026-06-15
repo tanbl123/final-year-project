@@ -309,7 +309,7 @@ function RegisterPage() {
           value={form.username}
           onChange={handleUsernameChange}
           onBlur={handleBlur}
-          onClear={() => { setUsernameEdited(true); setForm((f) => ({ ...f, username: '' })); setErrors((p) => { const n = { ...p }; delete n.username; return n; }); }}
+          onClear={() => { setUsernameEdited(false); setForm((f) => ({ ...f, username: '' })); setErrors((p) => { const n = { ...p }; delete n.username; return n; }); }}
         />
         {errors.username && <div className="invalid-feedback d-block">{errors.username}</div>}
         {!errors.username && (
