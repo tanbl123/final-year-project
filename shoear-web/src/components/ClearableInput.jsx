@@ -20,7 +20,7 @@ function ClearableInput({ value, onClear, className = '', style, ...props }) {
           aria-label="Clear"
           onMouseDown={(e) => e.preventDefault()}   // don't steal focus on click
           onClick={onClear}
-          className="btn position-absolute top-50 end-0 translate-middle-y p-1 me-1 d-flex align-items-center text-dark border-0"
+          className="btn position-absolute top-50 end-0 translate-middle-y p-1 me-1 d-flex align-items-center text-secondary border-0"
           style={{ lineHeight: 1, background: 'none' }}
         >
           <svg width="24" height="24" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
