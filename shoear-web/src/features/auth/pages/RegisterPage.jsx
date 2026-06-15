@@ -1,7 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { register, uploadRegistrationDoc } from '../authService';
+import { register, uploadRegistrationDoc, checkUsername } from '../authService';
 import EyeIcon from '../../../components/EyeIcon';
+
+// Reduce free text (e.g. a company name) to a valid username body:
+// lowercase, only letters/numbers/underscore, max 20 chars.
+const usernameSlug = (s) => s.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20);
+const USERNAME_RE = /^[A-Za-z0-9_]{3,20}$/;
 
 // Password policy: 8+ chars with at least one lowercase, uppercase, digit
 // and special character. Returns an error string, or '' when it's valid.
@@ -34,6 +39,12 @@ function validateForm(form) {
   const errors = {};
 
   if (form.companyName.trim() === '') errors.companyName = 'Company name is required.';
+
+  if (form.username.trim() === '') {
+    errors.username = 'Username is required.';
+  } else if (!USERNAME_RE.test(form.username.trim())) {
+    errors.username = 'Username must be 3–20 letters, numbers or underscores.';
+  }
 
   if (form.email.trim() === '') {
     errors.email = 'Email is required.';
@@ -84,10 +95,14 @@ function applyFieldError(errors, name, form) {
 
 function RegisterPage() {
   const [form, setForm] = useState({
-    companyName: '', email: '', phoneNumber: '',
+    companyName: '', username: '', email: '', phoneNumber: '',
     companyAddress: '', password: '', confirm: '',
     businessRegNo: '', taxNumber: '', businessLicenseUrl: '',
   });
+  // until the supplier types in the username box, it auto-follows the company
+  // name (Instagram-style). usernameStatus drives the live availability hint.
+  const [usernameEdited, setUsernameEdited] = useState(false);
+  const [usernameStatus, setUsernameStatus] = useState({ state: 'idle', suggestion: '' });
   const [errors, setErrors] = useState({});       // per-field messages
   const [formError, setFormError] = useState(''); // general/server fallback
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -126,6 +141,10 @@ function RegisterPage() {
   function handleChange(event) {
     const { name, value } = event.target;
     const nextForm = { ...form, [name]: value };
+    // while untouched, the username mirrors a slug of the company name
+    if (name === 'companyName' && !usernameEdited) {
+      nextForm.username = usernameSlug(value);
+    }
     setForm(nextForm);
 
     setErrors((prev) => {
@@ -147,11 +166,46 @@ function RegisterPage() {
     });
   }
 
+  // typing in the username box detaches it from the company name
+  function handleUsernameChange(event) {
+    const value = event.target.value;
+    setUsernameEdited(true);
+    setForm((f) => ({ ...f, username: value }));
+    setErrors((prev) => { const next = { ...prev }; delete next.username; return next; });
+  }
+
+  function applySuggestion(name) {
+    setUsernameEdited(true);
+    setForm((f) => ({ ...f, username: name }));
+  }
+
+  // live availability check (debounced) against the API as the username changes
+  useEffect(() => {
+    const u = form.username.trim();
+    if (u === '') { setUsernameStatus({ state: 'idle', suggestion: '' }); return; }
+    if (!USERNAME_RE.test(u)) { setUsernameStatus({ state: 'invalid', suggestion: '' }); return; }
+    setUsernameStatus({ state: 'checking', suggestion: '' });
+    const timer = setTimeout(async () => {
+      try {
+        const res = await checkUsername(u);
+        if (res.available) setUsernameStatus({ state: 'available', suggestion: '' });
+        else setUsernameStatus({ state: 'taken', suggestion: res.suggestion || '' });
+      } catch {
+        setUsernameStatus({ state: 'idle', suggestion: '' });   // network hiccup → don't block
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [form.username]);
+
   async function handleSubmit(event) {
     event.preventDefault();   // AJAX submit — no page reload
     setFormError('');
 
     const found = validateForm(form);
+    // the live check already knows this handle is taken — surface it as an error
+    if (usernameStatus.state === 'taken') {
+      found.username = 'That username is already taken.';
+    }
     if (Object.keys(found).length > 0) {
       setErrors(found);
       return;
@@ -162,6 +216,7 @@ function RegisterPage() {
     try {
       // send everything the backend needs (not the confirm field)
       await register({
+        username: form.username.trim(),
         email: form.email.trim(),
         phoneNumber: form.phoneNumber.trim(),
         companyName: form.companyName.trim(),
@@ -175,7 +230,8 @@ function RegisterPage() {
     } catch (err) {
       // map known duplicate errors back onto the offending field
       const msg = err.message || 'Something went wrong. Please try again.';
-      if (/email/i.test(msg)) setErrors({ email: msg });
+      if (/username/i.test(msg)) setErrors({ username: msg });
+      else if (/email/i.test(msg)) setErrors({ email: msg });
       else setFormError(msg);
     } finally {
       setIsSubmitting(false);
@@ -211,6 +267,55 @@ function RegisterPage() {
           onBlur={handleBlur}
         />
         {errors[name] && <div className="invalid-feedback">{errors[name]}</div>}
+      </div>
+    );
+  }
+
+  // username field with an Instagram-style live availability hint underneath
+  function usernameField() {
+    const s = usernameStatus.state;
+    const invalid = !!errors.username || s === 'taken' || s === 'invalid';
+    const valid = !errors.username && s === 'available';
+    return (
+      <div className="mb-3">
+        <label className="form-label">Username</label>
+        <div className="input-group has-validation">
+          <span className="input-group-text">@</span>
+          <input
+            type="text"
+            name="username"
+            maxLength="20"
+            autoComplete="username"
+            className={`form-control ${invalid ? 'is-invalid' : valid ? 'is-valid' : ''}`}
+            placeholder={usernameSlug(form.companyName) || 'username'}
+            value={form.username}
+            onChange={handleUsernameChange}
+            onBlur={handleBlur}
+          />
+          {errors.username && <div className="invalid-feedback">{errors.username}</div>}
+        </div>
+        {!errors.username && (
+          <div className="form-text">
+            {s === 'idle' && 'Auto-filled from your company name — you can change it.'}
+            {s === 'checking' && <span className="text-muted">Checking availability…</span>}
+            {s === 'invalid' && <span className="text-danger">3–20 letters, numbers or underscores.</span>}
+            {s === 'available' && <span className="text-success">✓ @{form.username.trim()} is available</span>}
+            {s === 'taken' && (
+              <span className="text-danger">
+                @{form.username.trim()} is taken.
+                {usernameStatus.suggestion && (
+                  <>
+                    {' '}Try{' '}
+                    <button type="button" className="btn btn-link btn-sm p-0 align-baseline"
+                      onClick={() => applySuggestion(usernameStatus.suggestion)}>
+                      @{usernameStatus.suggestion}
+                    </button>
+                  </>
+                )}
+              </span>
+            )}
+          </div>
+        )}
       </div>
     );
   }
@@ -288,6 +393,7 @@ function RegisterPage() {
 
         <hr className="my-3" />
         <h6 className="text-muted text-uppercase small fw-bold">Account login</h6>
+        {usernameField()}
         {field('email', 'Email', 'email')}
         {field('phoneNumber', 'Phone number', 'tel')}
         {passwordField('password', 'Password')}

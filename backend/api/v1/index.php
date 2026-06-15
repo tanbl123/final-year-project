@@ -53,6 +53,12 @@ if ($method === 'POST' && $path === '/auth/login') {
   handleLogin($pdo, $secret);
 }
 
+// live username availability for the sign-up / profile forms (public)
+if ($method === 'GET' && $path === '/auth/username-available') {
+  $pdo = getPDO();
+  handleUsernameAvailable($pdo);
+}
+
 // ── own profile (any signed-in user) ──
 if ($method === 'GET' && $path === '/auth/me') {
   $auth = requireAuth($secret);

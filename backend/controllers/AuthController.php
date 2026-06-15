@@ -12,21 +12,59 @@ function passwordPolicyError(string $password): ?string {
   return null;
 }
 
-// Derive a unique login @handle from the company name — suppliers no longer
-// pick a username themselves. e.g. "Aiman Sports Sdn Bhd" → "aimansportssdnbhd",
-// then "aimansportssdnbhd2" if that handle is already taken.
-function generateUsername(PDO $pdo, string $companyName): string {
-  $base = preg_replace('/[^a-z0-9]/', '', strtolower($companyName));
-  if ($base === '') $base = 'supplier';
-  $base = substr($base, 0, 24);
-  $stmt = $pdo->prepare('SELECT 1 FROM `user` WHERE username = :u');
-  $candidate = $base;
-  $n = 1;
-  while (true) {
-    $stmt->execute(['u' => $candidate]);
-    if (!$stmt->fetch()) return $candidate;
-    $candidate = $base . (++$n);
+// Username rules shared by registration, profile edit and the live check.
+// 3–20 chars, letters/numbers/underscore. Returns an error message or null.
+function usernameFormatError(string $u): ?string {
+  if (!preg_match('/^[A-Za-z0-9_]{3,20}$/', $u)) {
+    return 'Username must be 3–20 letters, numbers or underscores.';
   }
+  return null;
+}
+
+// Is this username already taken? Optionally ignore one user's own row.
+// Matching is case-insensitive via the column collation.
+function usernameTaken(PDO $pdo, string $u, ?string $exceptUserId = null): bool {
+  $sql = 'SELECT 1 FROM `user` WHERE username = :u';
+  $params = ['u' => $u];
+  if ($exceptUserId !== null) { $sql .= ' AND userId != :id'; $params['id'] = $exceptUserId; }
+  $stmt = $pdo->prepare($sql);
+  $stmt->execute($params);
+  return (bool) $stmt->fetch();
+}
+
+// Reduce free text to a valid username body (lowercase, [a-z0-9_] only).
+function usernameSlug(string $s): string {
+  return substr(preg_replace('/[^a-z0-9_]/', '', strtolower($s)), 0, 20);
+}
+
+// First available handle for a base, appending 2, 3, … on collision.
+function firstFreeUsername(PDO $pdo, string $base): string {
+  if ($base === '') $base = 'user';
+  if (strlen($base) < 3) $base = str_pad($base, 3, '0');   // satisfy the 3-char minimum
+  $stem = substr($base, 0, 18);                            // leave room for a numeric suffix
+  $candidate = $stem; $n = 1;
+  while (usernameTaken($pdo, $candidate)) { $candidate = $stem . (++$n); }
+  return $candidate;
+}
+
+// Suggest a unique handle from a company name (the default offered at sign-up).
+function generateUsername(PDO $pdo, string $companyName): string {
+  $base = usernameSlug($companyName);
+  return firstFreeUsername($pdo, $base === '' ? 'supplier' : $base);
+}
+
+// GET /auth/username-available?u=...  — live availability for the sign-up and
+// profile forms (Instagram-style). Public; never reveals anything but a yes/no
+// (+ a free suggestion when taken).
+function handleUsernameAvailable(PDO $pdo): void {
+  $u = trim($_GET['u'] ?? '');
+  if ($u === '' || usernameFormatError($u) !== null) {
+    sendJson(200, true, ['available' => false, 'reason' => 'invalid']);
+  }
+  if (usernameTaken($pdo, $u)) {
+    sendJson(200, true, ['available' => false, 'suggestion' => firstFreeUsername($pdo, usernameSlug($u))]);
+  }
+  sendJson(200, true, ['available' => true]);
 }
 
 // POST /auth/register — create a new SUPPLIER account (status Pending,
@@ -82,8 +120,20 @@ function handleRegister(PDO $pdo): void {
     sendJson(409, false, null, ['code' => 'DUPLICATE', 'message' => 'That email is already registered.']);
   }
 
-  // the login handle is derived from the company name (suppliers don't choose one)
-  $username = generateUsername($pdo, $companyName);
+  // login handle: the supplier may choose one; otherwise default to a handle
+  // derived from the company name. Validate format + uniqueness when provided.
+  $username = trim($body['username'] ?? '');
+  if ($username === '') {
+    $username = generateUsername($pdo, $companyName);
+  } else {
+    $fmtErr = usernameFormatError($username);
+    if ($fmtErr) {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => $fmtErr]);
+    }
+    if (usernameTaken($pdo, $username)) {
+      sendJson(409, false, null, ['code' => 'DUPLICATE', 'message' => 'That username is already taken.']);
+    }
+  }
 
   // create user + supplier together (roll back if either fails)
   $pdo->beginTransaction();
@@ -225,15 +275,11 @@ function handleUpdateMe(PDO $pdo, array $auth): void {
   if ($username === '') {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Username is required.']);
   }
-  if (!preg_match('/^[A-Za-z0-9_]{3,20}$/', $username)) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Username must be 3–20 letters, numbers or underscores.']);
+  $fmtErr = usernameFormatError($username);
+  if ($fmtErr) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => $fmtErr]);
   }
-
-  // username must stay unique (case-insensitive via the column collation),
-  // ignoring the user's own current row
-  $chk = $pdo->prepare('SELECT 1 FROM `user` WHERE username = :u AND userId != :id');
-  $chk->execute(['u' => $username, 'id' => $auth['userId']]);
-  if ($chk->fetch()) {
+  if (usernameTaken($pdo, $username, $auth['userId'])) {
     sendJson(409, false, null, ['code' => 'DUPLICATE', 'message' => 'That username is already taken.']);
   }
 

@@ -19,6 +19,12 @@ export function register(data) {
   return apiPost('/auth/register', data);
 }
 
+// Live username availability check (GET /auth/username-available). Public.
+// Resolves with { available, suggestion? } — used by the sign-up/profile forms.
+export function checkUsername(username) {
+  return apiGet(`/auth/username-available?u=${encodeURIComponent(username)}`);
+}
+
 // Upload a business document (e.g. SSM certificate) during registration.
 // Public — there's no account/token yet. Resolves with { url }.
 export function uploadRegistrationDoc(file) {
