@@ -131,9 +131,6 @@ function SupplierOrderDetailPage() {
                   </tr>
                 </tbody>
               </table>
-              <p className="text-muted small mb-0">
-                This is your share of the order. Other suppliers' items (if any) are not shown.
-              </p>
             </div>
           </div>
         </div>
