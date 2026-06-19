@@ -408,3 +408,88 @@ function handleDeleteProduct(PDO $pdo, array $auth, string $id): void {
   }
   sendJson(200, true, ['id' => $id, 'deleted' => true]);
 }
+
+// ── Inventory (quick stock management) ───────────────────────────────
+// A flat, size-level view so a supplier can adjust quantities across their
+// whole catalogue in one screen, without opening each product's full editor.
+
+// GET /supplier/inventory — every size (variant) of this supplier's products.
+function handleListInventory(PDO $pdo, array $auth): void {
+  $supplierId = requireSupplierId($pdo, $auth);
+  $stmt = $pdo->prepare(
+    'SELECT pv.productVariantId AS variantId,
+            p.productId         AS productId,
+            p.productName       AS productName,
+            p.productBrand      AS brand,
+            p.productStatus     AS status,
+            pv.size             AS size,
+            pv.stockQuantity    AS stock,
+            (SELECT pi.productImageUrl FROM product_image pi
+              WHERE pi.productId = p.productId ORDER BY pi.productImageId LIMIT 1) AS imageUrl
+       FROM product p
+       JOIN product_variant pv ON pv.productId = p.productId
+      WHERE p.supplierId = :sid AND p.productStatus <> "Removed"
+      ORDER BY p.productName, pv.productVariantId'
+  );
+  $stmt->execute(['sid' => $supplierId]);
+  $rows = $stmt->fetchAll();
+  foreach ($rows as &$r) { $r['stock'] = (int) $r['stock']; }
+  unset($r);
+  sendJson(200, true, ['inventory' => $rows]);
+}
+
+// PATCH /supplier/inventory — bulk stock update. Body: { updates: [ { variantId,
+// stock }, ... ] }. Stock-only, so it never changes product approval status.
+// Every variant must belong to the caller; all rows are written in one
+// transaction (all-or-nothing).
+function handleUpdateInventory(PDO $pdo, array $auth): void {
+  $supplierId = requireSupplierId($pdo, $auth);
+  $body    = getJsonBody();
+  $updates = is_array($body['updates'] ?? null) ? $body['updates'] : [];
+  if (count($updates) === 0) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'No stock changes provided.']);
+  }
+
+  // Validate + de-dupe (last value wins) into variantId => stock.
+  $clean = [];
+  foreach ($updates as $u) {
+    $vid   = trim($u['variantId'] ?? '');
+    $stock = filter_var($u['stock'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0]]);
+    if ($vid === '') { continue; }
+    if ($stock === false) {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Stock must be a whole number of 0 or more.']);
+    }
+    $clean[$vid] = $stock;
+  }
+  if (count($clean) === 0) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'No valid stock changes provided.']);
+  }
+
+  // Ownership: every variant must belong to one of this supplier's products.
+  $ids          = array_keys($clean);
+  $placeholders = implode(',', array_fill(0, count($ids), '?'));
+  $own = $pdo->prepare(
+    "SELECT pv.productVariantId
+       FROM product_variant pv
+       JOIN product p ON p.productId = pv.productId
+      WHERE p.supplierId = ? AND pv.productVariantId IN ($placeholders)"
+  );
+  $own->execute(array_merge([$supplierId], $ids));
+  if (count($own->fetchAll()) !== count($ids)) {
+    sendJson(403, false, null, ['code' => 'FORBIDDEN', 'message' => 'One or more sizes are not yours.']);
+  }
+
+  try {
+    $pdo->beginTransaction();
+    $upd = $pdo->prepare('UPDATE product_variant SET stockQuantity = :stock WHERE productVariantId = :vid');
+    foreach ($clean as $vid => $stock) {
+      $upd->execute(['stock' => $stock, 'vid' => $vid]);
+    }
+    $pdo->commit();
+  } catch (Throwable $e) {
+    if ($pdo->inTransaction()) { $pdo->rollBack(); }
+    sendJson(500, false, null, ['code' => 'DB_ERROR', 'message' => 'Could not update stock.']);
+  }
+
+  sendJson(200, true, ['updated' => count($clean)]);
+}

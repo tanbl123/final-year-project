@@ -330,6 +330,15 @@ if ($path === '/uploads/registration-doc' && $method === 'POST') {
   handleRegistrationUpload($pdo);
 }
 
+// ── supplier inventory (quick stock management) ──
+if ($path === '/supplier/inventory') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  if ($method === 'GET')   handleListInventory($pdo, $auth);
+  if ($method === 'PATCH') handleUpdateInventory($pdo, $auth);
+  sendJson(405, false, null, ['code' => 'METHOD', 'message' => 'Method not allowed.']);
+}
+
 // ── product routes (all require a valid token) ──
 if ($path === '/products') {
   $auth = requireAuth($secret);

@@ -9,6 +9,7 @@ import ResubmitApplicationPage from './features/auth/pages/ResubmitApplicationPa
 import ProductDetailPage from './features/products/pages/ProductDetailPage';
 import AddProductPage from './features/products/pages/AddProductPage';
 import EditProductPage from './features/products/pages/EditProductPage';
+import SupplierInventoryPage from './features/products/pages/SupplierInventoryPage';
 import AdminDashboardPage from './features/admin/pages/AdminDashboardPage';
 import AdminProductApprovalsPage from './features/admin/pages/AdminProductApprovalsPage';
 import AdminCategoriesPage from './features/admin/pages/AdminCategoriesPage';
@@ -54,6 +55,7 @@ function App() {
             ) : user.status === 'Active' ? (
               <>
                 <Link className="nav-link" to="/products">Products</Link>
+                <Link className="nav-link" to="/inventory">Inventory</Link>
                 <Link className="nav-link" to="/reports">Reports</Link>
                 <Link className="nav-link" to="/payouts">Payouts</Link>
               </>
@@ -125,6 +127,9 @@ function App() {
         } />
         <Route path="/products/new" element={
           <ProtectedRoute role="Supplier"><AddProductPage /></ProtectedRoute>
+        } />
+        <Route path="/inventory" element={
+          <ProtectedRoute role="Supplier"><SupplierInventoryPage /></ProtectedRoute>
         } />
         <Route path="/products/:id/edit" element={
           <ProtectedRoute role="Supplier"><EditProductPage /></ProtectedRoute>

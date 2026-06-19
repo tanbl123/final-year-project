@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiDelete, apiUpload, getToken } from '../../api/client';
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete, apiUpload, getToken } from '../../api/client';
 
 // All product data now comes from the real PHP API (with the JWT token).
 
@@ -24,6 +24,16 @@ export function deleteProduct(id) {
 
 export function fetchCategories() {
   return apiGet('/categories', getToken());
+}
+
+// ── inventory (quick stock management) ──
+export function getInventory() {
+  return apiGet('/supplier/inventory', getToken());
+}
+
+// updates: [{ variantId, stock }]
+export function updateInventory(updates) {
+  return apiPatch('/supplier/inventory', { updates }, getToken());
 }
 
 // Upload one file (kind = 'image' | 'model'); resolves to { url }.

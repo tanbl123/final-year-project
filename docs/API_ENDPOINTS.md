@@ -184,6 +184,8 @@ modified through this endpoint.
 | POST   | `/products` | Supplier | **(Implemented)** Create product → starts as `Pending`. |
 | PUT    | `/products/{productId}` | Supplier(Owner) | **(Implemented)** Edit own product — details, sizes/stock, images and 3D model in one call (see note below). |
 | DELETE | `/products/{productId}` | Supplier(Owner)/Admin | **(Implemented)** Soft delete → `Removed`. |
+| GET    | `/supplier/inventory` | Supplier | **(Implemented)** Flat, size-level stock list for the quick "Inventory" page. |
+| PATCH  | `/supplier/inventory` | Supplier | **(Implemented)** Bulk stock update `{ updates: [ { variantId, stock } ] }` in one transaction; stock-only, no re-approval. |
 | POST   | `/products/{productId}/variants` | Supplier(Owner) | Add a size + stock. *(Folded into the `PUT` above.)* |
 | PUT    | `/variants/{productVariantId}` | Supplier(Owner) | Update a size's stock. *(Folded into the `PUT` above.)* |
 | DELETE | `/variants/{productVariantId}` | Supplier(Owner) | Remove a size. *(Folded into the `PUT` above.)* |
