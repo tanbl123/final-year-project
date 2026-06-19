@@ -280,6 +280,8 @@ and also writes in one transaction. Two behaviours:
 | GET   | `/orders/{orderId}` | Customer(Owner)/Admin | Order detail + items + payment + delivery status. |
 | GET   | `/admin/orders` | Admin | All orders, filterable by status. |
 | PATCH | `/admin/orders/{orderId}/status` | Admin | Manual status change if needed. |
+| GET   | `/supplier/orders` | Supplier | **(Implemented)** Orders containing this supplier's products; their item count + subtotal only. Optional `?status=`. |
+| GET   | `/supplier/orders/{orderId}` | Supplier | **(Implemented)** One order in detail — the supplier's own line items, customer, delivery address, order + payment status. |
 
 **`POST /orders` request:**
 ```json

@@ -17,6 +17,7 @@ require __DIR__ . '/../../controllers/StripeController.php';
 require __DIR__ . '/../../controllers/ReportController.php';
 require __DIR__ . '/../../controllers/SupplierController.php';
 require __DIR__ . '/../../controllers/DeliveryController.php';
+require __DIR__ . '/../../controllers/OrderController.php';
 
 // ── Always answer with JSON, even on a PHP error ──
 // A stray warning/notice or an uncaught error would otherwise print into the
@@ -328,6 +329,19 @@ if ($path === '/uploads' && $method === 'POST') {
 if ($path === '/uploads/registration-doc' && $method === 'POST') {
   $pdo = getPDO();
   handleRegistrationUpload($pdo);
+}
+
+// ── supplier orders (orders containing this supplier's products) ──
+if ($method === 'GET' && $path === '/supplier/orders') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleListSupplierOrders($pdo, $auth);
+}
+
+if ($method === 'GET' && preg_match('#^/supplier/orders/([^/]+)$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleGetSupplierOrder($pdo, $auth, $m[1]);
 }
 
 // ── supplier inventory (quick stock management) ──
