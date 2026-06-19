@@ -72,9 +72,11 @@ function handleGetSupplierOrder(PDO $pdo, array $auth, string $orderId): void {
   }
   unset($x);
 
-  // order header + customer + payment status (delivery handled separately)
+  // order header + customer name + payment status. Per PDPA data minimisation,
+  // the supplier does NOT receive the customer's delivery address or contact —
+  // they don't deliver (delivery personnel do); they only fulfil their items.
   $h = $pdo->prepare(
-    "SELECT o.orderId, o.orderDate, o.orderStatus, o.orderDeliveryAddress,
+    "SELECT o.orderId, o.orderDate, o.orderStatus,
             buyer.fullName AS customerName,
             pay.paymentStatus
        FROM `order` o

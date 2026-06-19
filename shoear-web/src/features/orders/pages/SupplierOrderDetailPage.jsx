@@ -77,16 +77,15 @@ function SupplierOrderDetailPage() {
       </div>
 
       <div className="row g-4">
-        {/* customer & delivery */}
+        {/* customer & payment (no delivery address — PDPA: the supplier doesn't
+            deliver, so they don't receive the customer's address/contact) */}
         <div className="col-lg-5">
           <div className="card h-100">
-            <div className="card-header bg-white fw-semibold">Customer &amp; delivery</div>
+            <div className="card-header bg-white fw-semibold">Customer &amp; payment</div>
             <div className="card-body">
               <dl className="row mb-0">
                 <dt className="col-4">Customer</dt>
                 <dd className="col-8">{order.customerName}</dd>
-                <dt className="col-4">Deliver to</dt>
-                <dd className="col-8" style={{ overflowWrap: 'anywhere' }}>{order.orderDeliveryAddress}</dd>
                 <dt className="col-4">Payment</dt>
                 <dd className="col-8">
                   {order.paymentStatus
