@@ -1,10 +1,5 @@
 import { apiGet, apiPatch, getToken } from '../../api/client';
 
-// Supplier: reviews on their own products (read-only).
-export function getSupplierReviews() {
-  return apiGet('/supplier/reviews', getToken());
-}
-
 // Admin: all reviews. filters: { status, rating, search }.
 export function getAdminReviews(filters = {}) {
   const qs = new URLSearchParams();

@@ -357,7 +357,7 @@ updates (Section 11) drive the later stages.
 | POST   | `/products/{productId}/reviews` | Customer | Leave a review. Body: `{ "ratingScore": 5, "reviewComment": "..." }`. |
 | PUT    | `/reviews/{reviewId}` | Customer(Owner) | Edit own review. |
 | DELETE | `/reviews/{reviewId}` | Customer(Owner)/Admin | Remove own review. |
-| GET    | `/supplier/reviews` | Supplier | **(Implemented)** Published reviews on the supplier's own products (read-only). |
+| GET    | `/products/{productId}` | Supplier(Owner) | **(Implemented)** Product detail now embeds `reviews` + `ratingAverage`/`ratingCount`, so a supplier sees a product's reviews on its own page (no separate list). |
 | GET    | `/admin/reviews` | Admin | **(Implemented)** All reviews; filters `?status=`, `?rating=`, `?search=`. |
 | PATCH  | `/admin/reviews/{reviewId}/status` | Admin | **(Implemented)** Moderate — `Removed` hides an inappropriate review, `Published` restores it. |
 

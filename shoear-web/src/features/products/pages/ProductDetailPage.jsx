@@ -3,6 +3,7 @@ import { useParams, useLocation, useNavigate, Link } from 'react-router-dom';
 import { fetchProductById } from '../productService';
 import BackButton from '../../../components/BackButton';
 import Toast from '../../../components/Toast';
+import StarRating from '../../../components/StarRating';
 
 const STATUS_COLORS = { Approved: 'success', Pending: 'warning', Rejected: 'danger', Removed: 'secondary' };
 const LOW_STOCK = 5;   // at or below this (but > 0) we flag a size as running low
@@ -77,6 +78,12 @@ function ProductDetailPage() {
             <span className="badge text-bg-light">{product.categoryName}</span>
             {product.virtualTryOnEnable && (
               <span className="badge text-bg-info ms-2">AR try-on</span>
+            )}
+            {product.ratingCount > 0 && (
+              <span className="ms-2">
+                <StarRating score={product.ratingAverage} />
+                <span className="small ms-1">{product.ratingAverage.toFixed(1)} ({product.ratingCount})</span>
+              </span>
             )}
           </div>
         </div>
@@ -219,6 +226,38 @@ function ProductDetailPage() {
           </div>
         </div>
       )}
+
+      {/* customer reviews (reviews live on the product) */}
+      <div className="card mt-4">
+        <div className="card-header bg-white d-flex justify-content-between align-items-center">
+          <span className="fw-semibold">Customer reviews</span>
+          {product.ratingCount > 0 && (
+            <span className="d-flex align-items-center gap-2">
+              <span className="fw-bold">{product.ratingAverage.toFixed(1)}</span>
+              <StarRating score={product.ratingAverage} />
+              <span className="text-muted small">({product.ratingCount})</span>
+            </span>
+          )}
+        </div>
+        <div className="card-body">
+          {product.reviews?.length > 0 ? (
+            <div className="d-flex flex-column gap-3">
+              {product.reviews.map((r) => (
+                <div key={r.reviewId} className="border-bottom pb-2">
+                  <div className="d-flex justify-content-between align-items-center">
+                    <StarRating score={r.ratingScore} />
+                    <span className="text-muted small">{new Date(r.reviewDate).toLocaleDateString()}</span>
+                  </div>
+                  {r.reviewComment && <p className="mb-1 mt-1">{r.reviewComment}</p>}
+                  <div className="text-muted small">{r.customerName}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted mb-0">No reviews yet for this product.</p>
+          )}
+        </div>
+      </div>
 
       <p className="text-muted small mt-4 mb-0">Product ID: {product.id}</p>
 

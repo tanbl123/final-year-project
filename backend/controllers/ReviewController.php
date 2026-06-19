@@ -4,27 +4,6 @@
 //   - Admin: view all reviews and moderate (remove / restore) them.
 // Reviews are created by customers in the mobile app (not here).
 
-// GET /supplier/reviews — Published reviews on this supplier's products.
-function handleListSupplierReviews(PDO $pdo, array $auth): void {
-  $supplierId = requireSupplierId($pdo, $auth);
-  $stmt = $pdo->prepare(
-    "SELECT r.reviewId, r.productId, p.productName, p.productBrand AS brand,
-            r.ratingScore, r.reviewComment, r.reviewDate,
-            buyer.fullName AS customerName
-       FROM review r
-       JOIN product p    ON p.productId = r.productId
-       JOIN customer c   ON c.customerId = r.customerId
-       JOIN `user` buyer ON buyer.userId = c.userId
-      WHERE p.supplierId = :sid AND r.reviewStatus = 'Published'
-      ORDER BY r.reviewDate DESC"
-  );
-  $stmt->execute(['sid' => $supplierId]);
-  $rows = $stmt->fetchAll();
-  foreach ($rows as &$r) { $r['ratingScore'] = (int) $r['ratingScore']; }
-  unset($r);
-  sendJson(200, true, ['reviews' => $rows]);
-}
-
 // GET /admin/reviews — all reviews. Filters: ?status= ?rating= ?search=.
 function handleListAdminReviews(PDO $pdo): void {
   $status = trim($_GET['status'] ?? '');

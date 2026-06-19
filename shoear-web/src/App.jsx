@@ -15,7 +15,6 @@ import EditProductPage from './features/products/pages/EditProductPage';
 import SupplierInventoryPage from './features/products/pages/SupplierInventoryPage';
 import SupplierOrdersPage from './features/orders/pages/SupplierOrdersPage';
 import SupplierOrderDetailPage from './features/orders/pages/SupplierOrderDetailPage';
-import SupplierReviewsPage from './features/reviews/pages/SupplierReviewsPage';
 import AdminReviewsPage from './features/reviews/pages/AdminReviewsPage';
 import AdminDashboardPage from './features/admin/pages/AdminDashboardPage';
 import AdminProductApprovalsPage from './features/admin/pages/AdminProductApprovalsPage';
@@ -67,7 +66,6 @@ function Layout() {
                 <Link className="nav-link" to="/products">Products</Link>
                 <Link className="nav-link" to="/inventory">Inventory</Link>
                 <Link className="nav-link" to="/orders">Orders</Link>
-                <Link className="nav-link" to="/reviews">Reviews</Link>
                 <Link className="nav-link" to="/reports">Reports</Link>
                 <Link className="nav-link" to="/payouts">Payouts</Link>
               </>
@@ -163,9 +161,6 @@ const router = createBrowserRouter(
       } />
       <Route path="/orders/:orderId" element={
         <ProtectedRoute role="Supplier"><SupplierOrderDetailPage /></ProtectedRoute>
-      } />
-      <Route path="/reviews" element={
-        <ProtectedRoute role="Supplier"><SupplierReviewsPage /></ProtectedRoute>
       } />
       <Route path="/products/:id/edit" element={
         <ProtectedRoute role="Supplier"><EditProductPage /></ProtectedRoute>

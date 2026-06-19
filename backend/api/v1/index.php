@@ -345,13 +345,7 @@ if ($method === 'GET' && preg_match('#^/supplier/orders/([^/]+)$#', $path, $m)) 
   handleGetSupplierOrder($pdo, $auth, $m[1]);
 }
 
-// ── reviews & ratings ──
-if ($method === 'GET' && $path === '/supplier/reviews') {
-  $auth = requireAuth($secret);
-  $pdo  = getPDO();
-  handleListSupplierReviews($pdo, $auth);
-}
-
+// ── reviews & ratings (admin moderation; supplier sees reviews on product detail) ──
 if ($method === 'GET' && $path === '/admin/reviews') {
   $auth = requireAuth($secret);
   requireAdmin($auth);

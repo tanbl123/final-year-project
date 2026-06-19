@@ -188,6 +188,27 @@ function handleGetProduct(PDO $pdo, array $auth, string $id): void {
   );
   $row['totalStock'] = array_sum(array_column($row['variants'], 'stock'));
 
+  // published reviews + a rating summary (reviews live on the product, so the
+  // supplier sees them here rather than on a separate page)
+  $rev = $pdo->prepare(
+    "SELECT r.reviewId, r.ratingScore, r.reviewComment, r.reviewDate,
+            buyer.fullName AS customerName
+       FROM review r
+       JOIN customer c   ON c.customerId = r.customerId
+       JOIN `user` buyer ON buyer.userId = c.userId
+      WHERE r.productId = :id AND r.reviewStatus = 'Published'
+      ORDER BY r.reviewDate DESC"
+  );
+  $rev->execute(['id' => $id]);
+  $reviews = $rev->fetchAll();
+  foreach ($reviews as &$rv) { $rv['ratingScore'] = (int) $rv['ratingScore']; }
+  unset($rv);
+  $row['reviews']       = $reviews;
+  $row['ratingCount']   = count($reviews);
+  $row['ratingAverage'] = $reviews
+    ? round(array_sum(array_column($reviews, 'ratingScore')) / count($reviews), 1)
+    : 0;
+
   sendJson(200, true, $row);
 }
 
