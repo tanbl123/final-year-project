@@ -18,6 +18,7 @@ require __DIR__ . '/../../controllers/ReportController.php';
 require __DIR__ . '/../../controllers/SupplierController.php';
 require __DIR__ . '/../../controllers/DeliveryController.php';
 require __DIR__ . '/../../controllers/OrderController.php';
+require __DIR__ . '/../../controllers/ReviewController.php';
 
 // ── Always answer with JSON, even on a PHP error ──
 // A stray warning/notice or an uncaught error would otherwise print into the
@@ -342,6 +343,27 @@ if ($method === 'GET' && preg_match('#^/supplier/orders/([^/]+)$#', $path, $m)) 
   $auth = requireAuth($secret);
   $pdo  = getPDO();
   handleGetSupplierOrder($pdo, $auth, $m[1]);
+}
+
+// ── reviews & ratings ──
+if ($method === 'GET' && $path === '/supplier/reviews') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleListSupplierReviews($pdo, $auth);
+}
+
+if ($method === 'GET' && $path === '/admin/reviews') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleListAdminReviews($pdo);
+}
+
+if ($method === 'PATCH' && preg_match('#^/admin/reviews/([^/]+)/status$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleSetReviewStatus($pdo, $m[1]);
 }
 
 // ── supplier inventory (quick stock management) ──

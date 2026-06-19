@@ -357,7 +357,9 @@ updates (Section 11) drive the later stages.
 | POST   | `/products/{productId}/reviews` | Customer | Leave a review. Body: `{ "ratingScore": 5, "reviewComment": "..." }`. |
 | PUT    | `/reviews/{reviewId}` | Customer(Owner) | Edit own review. |
 | DELETE | `/reviews/{reviewId}` | Customer(Owner)/Admin | Remove own review. |
-| PATCH  | `/admin/reviews/{reviewId}/status` | Admin | Moderate (set `Removed`). |
+| GET    | `/supplier/reviews` | Supplier | **(Implemented)** Published reviews on the supplier's own products (read-only). |
+| GET    | `/admin/reviews` | Admin | **(Implemented)** All reviews; filters `?status=`, `?rating=`, `?search=`. |
+| PATCH  | `/admin/reviews/{reviewId}/status` | Admin | **(Implemented)** Moderate — `Removed` hides an inappropriate review, `Published` restores it. |
 
 > Rules from the schema: one review per (customer, product); rating must be 1–5.
 > Recommended business rule: only customers who **purchased** the product may review.
