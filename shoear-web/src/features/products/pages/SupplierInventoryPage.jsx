@@ -248,16 +248,14 @@ function SupplierInventoryPage() {
                       </td>
                       <td className="text-center">{stockBadge(effectiveStock(r))}</td>
                       <td className="text-end">
-                        {dirty && (
-                          <div className="d-inline-flex gap-1">
-                            <button className="btn btn-success btn-sm" disabled={saving || !!err}
-                              onClick={() => saveRows([r])}>
-                              {rowSaving ? 'Saving…' : 'Save'}
-                            </button>
-                            <button className="btn btn-outline-secondary btn-sm" disabled={saving}
-                              onClick={() => revert(r)} title="Undo">↶</button>
-                          </div>
-                        )}
+                        <div className="d-inline-flex gap-1">
+                          <button className="btn btn-success btn-sm" disabled={!dirty || saving || !!err}
+                            onClick={() => saveRows([r])}>
+                            {rowSaving ? 'Saving…' : 'Save'}
+                          </button>
+                          <button className="btn btn-outline-secondary btn-sm" disabled={!dirty || saving}
+                            onClick={() => revert(r)} title="Undo change">↶</button>
+                        </div>
                       </td>
                     </tr>
                   );
