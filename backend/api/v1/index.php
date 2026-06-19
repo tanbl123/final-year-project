@@ -19,6 +19,7 @@ require __DIR__ . '/../../controllers/SupplierController.php';
 require __DIR__ . '/../../controllers/DeliveryController.php';
 require __DIR__ . '/../../controllers/OrderController.php';
 require __DIR__ . '/../../controllers/ReviewController.php';
+require __DIR__ . '/../../controllers/RefundController.php';
 
 // ── Always answer with JSON, even on a PHP error ──
 // A stray warning/notice or an uncaught error would otherwise print into the
@@ -343,6 +344,21 @@ if ($method === 'GET' && preg_match('#^/supplier/orders/([^/]+)$#', $path, $m)) 
   $auth = requireAuth($secret);
   $pdo  = getPDO();
   handleGetSupplierOrder($pdo, $auth, $m[1]);
+}
+
+// ── admin refunds ──
+if ($method === 'GET' && $path === '/admin/refunds') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleListRefunds($pdo);
+}
+
+if ($method === 'PATCH' && preg_match('#^/admin/refunds/([^/]+)/status$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleSetRefundStatus($pdo, $m[1]);
 }
 
 // ── reviews & ratings (admin moderation; supplier sees reviews on product detail) ──

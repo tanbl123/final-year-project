@@ -8,6 +8,7 @@ const STATUS_COLORS = {
   OutForDelivery: 'primary', Delivered: 'success', Completed: 'success', Cancelled: 'danger',
 };
 const PAY_COLORS = { Successful: 'success', Pending: 'warning', Failed: 'danger', Refunded: 'secondary' };
+const REFUND_COLORS = { Pending: 'warning', Approved: 'info', Rejected: 'danger', Completed: 'success' };
 const label = (s) => s.replace(/([a-z])([A-Z])/g, '$1 $2');
 const money = (n) => `RM ${Number(n).toFixed(2)}`;
 
@@ -135,6 +136,37 @@ function SupplierOrderDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* refunds on this order (read-only — the admin processes them) */}
+      {order.refunds?.length > 0 && (
+        <div className="card mt-4">
+          <div className="card-header bg-white fw-semibold">Refund requests</div>
+          <div className="card-body">
+            <table className="table table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>Reason</th>
+                  <th className="text-end" style={{ width: 110 }}>Amount</th>
+                  <th className="text-center" style={{ width: 120 }}>Status</th>
+                  <th style={{ width: 120 }}>Requested</th>
+                </tr>
+              </thead>
+              <tbody>
+                {order.refunds.map((rf) => (
+                  <tr key={rf.refundId}>
+                    <td style={{ overflowWrap: 'anywhere' }}>{rf.refundReason}</td>
+                    <td className="text-end">{money(rf.refundAmount)}</td>
+                    <td className="text-center">
+                      <span className={`badge text-bg-${REFUND_COLORS[rf.refundStatus] || 'secondary'}`}>{rf.refundStatus}</span>
+                    </td>
+                    <td className="text-muted small">{new Date(rf.requestDate).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

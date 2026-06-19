@@ -22,7 +22,9 @@ function handleListSupplierOrders(PDO $pdo, array $auth): void {
     "SELECT o.orderId, o.orderDate, o.orderStatus,
             buyer.fullName AS customerName,
             COUNT(oi.orderItemId)  AS itemCount,
-            SUM(oi.orderSubtotal)  AS supplierSubtotal
+            SUM(oi.orderSubtotal)  AS supplierSubtotal,
+            (SELECT rf.refundStatus FROM refund rf
+              WHERE rf.orderId = o.orderId ORDER BY rf.requestDate DESC LIMIT 1) AS refundStatus
        FROM `order` o
        JOIN order_item oi      ON oi.orderId = o.orderId
        JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
@@ -91,6 +93,18 @@ function handleGetSupplierOrder(PDO $pdo, array $auth, string $orderId): void {
   $order['items']            = $items;
   $order['itemCount']        = count($items);
   $order['supplierSubtotal'] = array_sum(array_column($items, 'subtotal'));
+
+  // refund requests on this order (per-order, so the supplier sees them here).
+  // No customer PII beyond the name already shown above.
+  $rf = $pdo->prepare(
+    "SELECT refundId, refundReason, refundAmount, refundStatus, requestDate
+       FROM refund WHERE orderId = :oid ORDER BY requestDate DESC"
+  );
+  $rf->execute(['oid' => $orderId]);
+  $refunds = $rf->fetchAll();
+  foreach ($refunds as &$x) { $x['refundAmount'] = (float) $x['refundAmount']; }
+  unset($x);
+  $order['refunds'] = $refunds;
 
   sendJson(200, true, $order);
 }

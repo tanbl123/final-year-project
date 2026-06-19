@@ -16,6 +16,7 @@ import SupplierInventoryPage from './features/products/pages/SupplierInventoryPa
 import SupplierOrdersPage from './features/orders/pages/SupplierOrdersPage';
 import SupplierOrderDetailPage from './features/orders/pages/SupplierOrderDetailPage';
 import AdminReviewsPage from './features/reviews/pages/AdminReviewsPage';
+import AdminRefundsPage from './features/refunds/pages/AdminRefundsPage';
 import AdminDashboardPage from './features/admin/pages/AdminDashboardPage';
 import AdminProductApprovalsPage from './features/admin/pages/AdminProductApprovalsPage';
 import AdminCategoriesPage from './features/admin/pages/AdminCategoriesPage';
@@ -59,6 +60,7 @@ function Layout() {
                 <Link className="nav-link" to="/admin/categories">Categories</Link>
                 <Link className="nav-link" to="/admin/deliveries">Deliveries</Link>
                 <Link className="nav-link" to="/admin/reviews">Reviews</Link>
+                <Link className="nav-link" to="/admin/refunds">Refunds</Link>
                 <Link className="nav-link" to="/admin/commission">Commission</Link>
               </>
             ) : user.status === 'Active' ? (
@@ -136,6 +138,9 @@ const router = createBrowserRouter(
       } />
       <Route path="/admin/reviews" element={
         <ProtectedRoute role="Admin"><AdminReviewsPage /></ProtectedRoute>
+      } />
+      <Route path="/admin/refunds" element={
+        <ProtectedRoute role="Admin"><AdminRefundsPage /></ProtectedRoute>
       } />
       <Route path="/admin/commission" element={
         <ProtectedRoute role="Admin"><AdminCommissionPage /></ProtectedRoute>

@@ -90,6 +90,11 @@ function SupplierOrdersPage() {
                     <span className={`badge text-bg-${STATUS_COLORS[o.orderStatus] || 'secondary'}`}>
                       {label(o.orderStatus)}
                     </span>
+                    {o.refundStatus && (
+                      <div className="mt-1">
+                        <span className="badge text-bg-light border">Refund: {o.refundStatus}</span>
+                      </div>
+                    )}
                   </td>
                   <td className="text-center">{o.itemCount}</td>
                   <td className="text-end fw-semibold">{money(o.supplierSubtotal)}</td>

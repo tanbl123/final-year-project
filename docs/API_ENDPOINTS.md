@@ -371,9 +371,9 @@ updates (Section 11) drive the later stages.
 | Method | Path | Access | Purpose |
 |--------|------|--------|---------|
 | POST  | `/orders/{orderId}/refund` | Customer(Owner) | Request refund. Body: `{ "refundReason": "...", "refundAmount": 120.00, "refundProof": "https://.../proof.jpg" }`. |
-| GET   | `/refunds` | Customer/Admin | Customer sees own; admin sees all (filter by status). |
-| GET   | `/refunds/{refundId}` | Customer(Owner)/Admin | One refund's detail. |
-| PATCH | `/admin/refunds/{refundId}/status` | Admin | Approve / reject / complete. On `Completed` → payment becomes `Refunded`. |
+| GET   | `/admin/refunds` | Admin | **(Implemented)** All refund requests (Pending first); optional `?status=`. |
+| PATCH | `/admin/refunds/{refundId}/status` | Admin | **(Implemented)** Transitions: `Pending`→`Approved`/`Rejected`, `Approved`→`Completed`. On `Completed` → payment becomes `Refunded`. |
+| GET   | `/supplier/orders/{orderId}` | Supplier | **(Implemented)** Order detail embeds `refunds[]` for that order (per-order, so suppliers see refunds on their orders here). The list `/supplier/orders` carries the latest `refundStatus` per order. |
 
 ---
 
