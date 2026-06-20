@@ -63,6 +63,19 @@ body {
   box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
 }
 
+/* navbar link row: scrolls horizontally with ‹ › arrows (NavScroller); the
+   native scrollbar is hidden since the arrows are the affordance */
+.nav-scroller {
+  overflow-x: auto;
+  scrollbar-width: none;          /* Firefox */
+}
+.nav-scroller::-webkit-scrollbar {
+  display: none;                  /* Chrome / Safari */
+}
+.nav-scroller .nav-link {
+  white-space: nowrap;
+}
+
 #root {
   width: 1126px;
   max-width: 100%;
