@@ -4,9 +4,12 @@ import ProductCard from '../components/ProductCard';
 import ProductFilterBar from '../components/ProductFilterBar';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Toast from '../../../components/Toast';
+import Pagination from '../../../components/Pagination';
+import { usePagination } from '../../../hooks/usePagination';
 import { fetchProducts, deleteProduct } from '../productService';
 
 const EMPTY_FILTERS = { name: '', brand: '', maxPrice: '', categoryId: '', status: '' };
+const PAGE_SIZE = 12;
 
 function ProductsPage() {
   const [products, setProducts] = useState([]);
@@ -85,6 +88,13 @@ function ProductsPage() {
     });
   }, [products, filters]);
 
+  const { page, setPage, totalPages, pageItems } = usePagination(visible, PAGE_SIZE);
+  // jump back to page 1 whenever the filters change
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPage(1);
+  }, [filters, setPage]);
+
   return (
     <div className="container py-4 text-start">
       <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
@@ -146,22 +156,26 @@ function ProductsPage() {
                 : 'No products match these filters.'}
             </div>
           ) : (
-            <div className="row g-3">
-              {visible.map((shoe) => (
-                <div className="col-12 col-sm-6 col-md-4 col-lg-3" key={shoe.id}>
-                  <ProductCard
-                    id={shoe.id}
-                    name={shoe.name}
-                    brand={shoe.brand}
-                    price={shoe.price}
-                    status={shoe.status}
-                    imageUrl={shoe.imageUrl}
-                    totalStock={shoe.totalStock}
-                    onDelete={askDelete}
-                  />
-                </div>
-              ))}
-            </div>
+            <>
+              <div className="row g-3">
+                {pageItems.map((shoe) => (
+                  <div className="col-12 col-sm-6 col-md-4 col-lg-3" key={shoe.id}>
+                    <ProductCard
+                      id={shoe.id}
+                      name={shoe.name}
+                      brand={shoe.brand}
+                      price={shoe.price}
+                      status={shoe.status}
+                      imageUrl={shoe.imageUrl}
+                      totalStock={shoe.totalStock}
+                      onDelete={askDelete}
+                    />
+                  </div>
+                ))}
+              </div>
+              <Pagination page={page} totalPages={totalPages} onChange={setPage}
+                summary={`Page ${page} of ${totalPages} · ${visible.length} products`} />
+            </>
           )}
         </>
       )}

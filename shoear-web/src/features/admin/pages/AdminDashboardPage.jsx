@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import { getPendingSuppliers, approveSupplier, rejectSupplier } from '../adminService';
+import Pagination from '../../../components/Pagination';
+import { usePagination } from '../../../hooks/usePagination';
+
+const PAGE_SIZE = 10;
 
 function AdminDashboardPage() {
   const [suppliers, setSuppliers] = useState([]);
@@ -7,6 +11,8 @@ function AdminDashboardPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');       // transient success message
   const [busyId, setBusyId] = useState('');        // userId currently being actioned
+
+  const { page, setPage, totalPages, pageItems } = usePagination(suppliers, PAGE_SIZE);
 
   // reject modal state
   const [rejecting, setRejecting] = useState(null); // supplier being rejected
@@ -94,7 +100,7 @@ function AdminDashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {suppliers.map((s) => (
+              {pageItems.map((s) => (
                 <tr key={s.userId}>
                   <td>
                     <div className="fw-semibold">{s.companyName}</div>
@@ -135,6 +141,9 @@ function AdminDashboardPage() {
               ))}
             </tbody>
           </table>
+
+          <Pagination page={page} totalPages={totalPages} onChange={setPage}
+            summary={`Page ${page} of ${totalPages} · ${suppliers.length} pending`} />
         </div>
       )}
 

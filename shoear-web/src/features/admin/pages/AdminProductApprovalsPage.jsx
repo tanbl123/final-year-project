@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 import { getPendingProducts, approveProduct, rejectProduct } from '../adminService';
 import ConfirmDialog from '../../../components/ConfirmDialog';
+import Pagination from '../../../components/Pagination';
+import { usePagination } from '../../../hooks/usePagination';
+
+const PAGE_SIZE = 10;
 
 function AdminProductApprovalsPage() {
   const [products, setProducts] = useState([]);
@@ -9,6 +13,8 @@ function AdminProductApprovalsPage() {
   const [notice, setNotice] = useState('');        // transient success message
   const [busyId, setBusyId] = useState('');         // productId currently being actioned
   const [rejecting, setRejecting] = useState(null); // product pending reject confirmation
+
+  const { page, setPage, totalPages, pageItems } = usePagination(products, PAGE_SIZE);
 
   // load the pending queue on mount
   useEffect(() => {
@@ -70,7 +76,7 @@ function AdminProductApprovalsPage() {
               </tr>
             </thead>
             <tbody>
-              {products.map((p) => (
+              {pageItems.map((p) => (
                 <tr key={p.productId}>
                   <td>
                     <div className="fw-semibold">{p.productName}</div>
@@ -100,6 +106,9 @@ function AdminProductApprovalsPage() {
               ))}
             </tbody>
           </table>
+
+          <Pagination page={page} totalPages={totalPages} onChange={setPage}
+            summary={`Page ${page} of ${totalPages} · ${products.length} pending`} />
         </div>
       )}
 

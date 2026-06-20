@@ -4,6 +4,10 @@ import { getInventory, updateInventory } from '../productService';
 import { useUnsavedChangesWarning } from '../../../hooks/useUnsavedChangesWarning';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Toast from '../../../components/Toast';
+import Pagination from '../../../components/Pagination';
+import { usePagination } from '../../../hooks/usePagination';
+
+const ROWS_PER_PAGE = 15;
 
 const LOW_STOCK = 10;   // at or below this (but > 0) counts as "low"
 const STATUS_COLORS = { Approved: 'success', Pending: 'warning', Rejected: 'danger', Removed: 'secondary' };
@@ -86,6 +90,13 @@ function SupplierInventoryPage() {
       return true;
     });
   }, [rows, search, filter]);
+
+  const { page, setPage, totalPages, pageItems } = usePagination(visible, ROWS_PER_PAGE);
+  // back to page 1 when the search/filter changes
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPage(1);
+  }, [search, filter, setPage]);
 
   function setQty(variantId, value) {
     setDraft((d) => ({ ...d, [variantId]: value }));
@@ -216,8 +227,8 @@ function SupplierInventoryPage() {
                 </tr>
               </thead>
               <tbody>
-                {visible.map((r, i) => {
-                  const firstOfProduct = i === 0 || visible[i - 1].productId !== r.productId;
+                {pageItems.map((r, i) => {
+                  const firstOfProduct = i === 0 || pageItems[i - 1].productId !== r.productId;
                   const err = rowError(r);
                   const dirty = isDirty(r);
                   const rowSaving = savingIds.includes(r.variantId);
@@ -274,6 +285,10 @@ function SupplierInventoryPage() {
                 })}
               </tbody>
             </table>
+          </div>
+          <div className="card-body pt-0">
+            <Pagination page={page} totalPages={totalPages} onChange={setPage}
+              summary={`Page ${page} of ${totalPages} · ${visible.length} sizes`} />
           </div>
         </div>
       )}

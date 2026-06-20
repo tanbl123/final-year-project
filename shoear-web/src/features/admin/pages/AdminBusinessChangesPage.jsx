@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import Pagination from '../../../components/Pagination';
+import { usePagination } from '../../../hooks/usePagination';
 import {
   getSupplierChangeRequests, approveChangeRequest, rejectChangeRequest,
 } from '../adminService';
@@ -24,6 +26,7 @@ function DiffRow({ label, from, to, isDoc }) {
 
 function AdminBusinessChangesPage() {
   const [requests, setRequests] = useState([]);
+  const { page, setPage, totalPages, pageItems } = usePagination(requests, 8);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -96,7 +99,7 @@ function AdminBusinessChangesPage() {
         </div>
       ) : (
         <div className="d-flex flex-column gap-3">
-          {requests.map((r) => (
+          {pageItems.map((r) => (
             <div key={r.requestId} className="card">
               <div className="card-body">
                 <div className="d-flex justify-content-between align-items-start mb-2">
@@ -124,6 +127,8 @@ function AdminBusinessChangesPage() {
               </div>
             </div>
           ))}
+          <Pagination page={page} totalPages={totalPages} onChange={setPage}
+            summary={`Page ${page} of ${totalPages} · ${requests.length} requests`} />
         </div>
       )}
 
