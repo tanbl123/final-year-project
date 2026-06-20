@@ -151,9 +151,20 @@ function LoginPage({ variant = 'supplier' }) {
           {isSubmitting ? 'Logging in...' : 'Login'}
         </button>
 
-        <div className="text-center mt-3">
-          <Link to="/forgot-password" className="small">Forgot password?</Link>
-        </div>
+        {/* secondary actions as buttons (kept inside the card) */}
+        <Link to="/forgot-password" className="btn btn-outline-secondary w-100 mt-2 text-center">
+          Forgot password?
+        </Link>
+
+        {variant === 'supplier' && (
+          <>
+            <hr className="my-3" />
+            <p className="text-center text-muted small mb-2">New to ShoeAR?</p>
+            <Link to="/register" className="btn btn-outline-primary w-100 text-center">
+              Create a supplier account
+            </Link>
+          </>
+        )}
       </form>
 
       {/* switch between the two portals — current one is highlighted */}
@@ -171,12 +182,6 @@ function LoginPage({ variant = 'supplier' }) {
           Supplier login
         </Link>
       </div>
-
-      {variant === 'supplier' && (
-        <p className="text-center mt-3">
-          New supplier? <Link to="/register">Create an account</Link>
-        </p>
-      )}
     </div>
   );
 }
