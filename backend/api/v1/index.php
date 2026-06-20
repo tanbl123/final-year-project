@@ -24,6 +24,7 @@ require __DIR__ . '/../../controllers/CommissionController.php';
 require __DIR__ . '/../../controllers/CatalogController.php';
 require __DIR__ . '/../../controllers/CartController.php';
 require __DIR__ . '/../../controllers/WishlistController.php';
+require __DIR__ . '/../../controllers/PaymentController.php';
 
 // ── Always answer with JSON, even on a PHP error ──
 // A stray warning/notice or an uncaught error would otherwise print into the
@@ -114,6 +115,19 @@ if ($method === 'GET' && preg_match('#^/orders/([^/]+)$#', $path, $m)) {
   $auth = requireAuth($secret);
   $pdo  = getPDO();
   handleGetCustomerOrder($pdo, $auth, $m[1]);
+}
+
+// pay an order (simulated gateway → runs the real post-payment pipeline)
+if ($method === 'POST' && preg_match('#^/orders/([^/]+)/payment$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handlePayOrder($pdo, $auth, $m[1]);
+}
+
+if ($method === 'GET' && preg_match('#^/orders/([^/]+)/receipt$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleGetReceipt($pdo, $auth, $m[1]);
 }
 
 // ── customer wishlist (require a Customer token) ──

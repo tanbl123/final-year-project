@@ -305,13 +305,12 @@ updates (Section 11) drive the later stages.
 
 | Method | Path | Access | Purpose |
 |--------|------|--------|---------|
-| POST | `/orders/{orderId}/payment` | Customer(Owner) | Start payment. Body: `{ "paymentMethod": "Stripe" }`. Returns gateway client-secret / approval URL. |
-| GET  | `/orders/{orderId}/payment` | Customer(Owner)/Admin | Payment status for an order. |
-| POST | `/payments/webhook` | Public (gateway-signed) | **Stripe/PayPal calls this**, not an app. On success → run atomic stock decrement, set payment `Successful`, order → `Paid`, create receipt + **auto-assign a courier** (`assignDelivery()`). If no courier is free the delivery is left `Pending`/unassigned for the admin queue. |
+| POST | `/orders/{orderId}/payment` | Customer(Owner) | **(Implemented)** Pay a `Placed` order. Body: `{ "paymentMethod": "Stripe"|"PayPal" }`. Confirms payment (simulated gateway) and runs the pipeline **in one transaction**: atomic stock decrement → payment `Successful` → order `Paid` → receipt → **auto-assign courier**. 409 if an item sold out (not charged). |
+| POST | `/payments/webhook` | Public (gateway-signed) | *(Future)* Real Stripe/PayPal confirmation. The post-payment pipeline above is what it would trigger; the payout demo already proves the live Stripe flow. |
 
-> The webhook is the trusted "payment really happened" signal. The
-> **atomic stock decrement** (`UPDATE ... WHERE stockQuantity >= :qty`) runs here,
-> inside a transaction, so two buyers can't oversell the last pair.
+> The **atomic stock decrement** (`UPDATE ... WHERE stockQuantity >= :qty`) runs
+> here, inside the payment transaction, so two buyers can't oversell the last
+> pair — the loser's payment fails and is rolled back (not charged).
 
 ---
 
@@ -319,7 +318,7 @@ updates (Section 11) drive the later stages.
 
 | Method | Path | Access | Purpose |
 |--------|------|--------|---------|
-| GET | `/orders/{orderId}/receipt` | Customer(Owner)/Admin | Receipt for a paid order (JSON now; PDF later). |
+| GET | `/orders/{orderId}/receipt` | Customer(Owner) | **(Implemented)** Receipt for a paid order — order + payment + line items (JSON now; PDF later). |
 
 ---
 
