@@ -50,52 +50,56 @@ function Layout() {
       {/* the top bar only makes sense once you're signed in; the login and
           register pages are full-screen on their own */}
       {user && (
-        <nav className="navbar navbar-expand navbar-dark bg-dark px-4 flex-nowrap">
-          <span className="navbar-brand flex-shrink-0">👟 ShoeAR {isAdmin ? 'Admin' : 'Supplier'}</span>
+        <header>
+          {/* top bar: brand on the left, the signed-in user on the right */}
+          <nav className="navbar navbar-dark bg-dark px-4 d-flex justify-content-between">
+            <span className="navbar-brand me-0">👟 ShoeAR {isAdmin ? 'Admin' : 'Supplier'}</span>
+            <div className="navbar-nav flex-row align-items-center">
+              <Link to="/profile"
+                className="navbar-text text-light me-3 d-inline-flex align-items-center text-decoration-none text-nowrap">
+                <Avatar name={user.fullName} size={32} className="me-2" />
+                <span>Hi, {user.fullName}</span>
+              </Link>
+              <button className="btn btn-outline-light btn-sm" onClick={handleLogout}>
+                Logout
+              </button>
+            </div>
+          </nav>
 
-          {/* admins manage approvals; suppliers manage their catalogue.
-              The link row scrolls horizontally when it can't fit. */}
-          <div className="navbar-nav flex-row flex-nowrap nav-scroll me-auto" style={{ minWidth: 0 }}>
-            {isAdmin ? (
-              <>
-                <Link className="nav-link" to="/admin">Suppliers</Link>
-                <Link className="nav-link" to="/admin/changes">Changes</Link>
-                <Link className="nav-link" to="/admin/users">Users</Link>
-                <Link className="nav-link" to="/admin/products">Products</Link>
-                <Link className="nav-link" to="/admin/inventory">Inventory</Link>
-                <Link className="nav-link" to="/admin/categories">Categories</Link>
-                <Link className="nav-link" to="/admin/orders">Orders</Link>
-                <Link className="nav-link" to="/admin/deliveries">Deliveries</Link>
-                <Link className="nav-link" to="/admin/reviews">Reviews</Link>
-                <Link className="nav-link" to="/admin/refunds">Refunds</Link>
-                <Link className="nav-link" to="/admin/commission">Commission</Link>
-              </>
-            ) : user.status === 'Active' ? (
-              <>
-                <Link className="nav-link" to="/products">Products</Link>
-                <Link className="nav-link" to="/inventory">Inventory</Link>
-                <Link className="nav-link" to="/orders">Orders</Link>
-                <Link className="nav-link" to="/refunds">Refunds</Link>
-                <Link className="nav-link" to="/reports">Reports</Link>
-                <Link className="nav-link" to="/payouts">Payouts</Link>
-              </>
-            ) : (
-              // a not-yet-approved supplier only has the resubmit/status page
-              <Link className="nav-link" to="/resubmit">My application</Link>
-            )}
+          {/* second bar: the section links on their own row (wrap if needed, so
+              nothing is ever hidden) — admins manage approvals, suppliers their catalogue */}
+          <div className="navbar navbar-dark bg-dark px-4 py-0 border-top border-secondary">
+            <div className="navbar-nav flex-row flex-wrap">
+              {isAdmin ? (
+                <>
+                  <Link className="nav-link" to="/admin">Suppliers</Link>
+                  <Link className="nav-link" to="/admin/changes">Changes</Link>
+                  <Link className="nav-link" to="/admin/users">Users</Link>
+                  <Link className="nav-link" to="/admin/products">Products</Link>
+                  <Link className="nav-link" to="/admin/inventory">Inventory</Link>
+                  <Link className="nav-link" to="/admin/categories">Categories</Link>
+                  <Link className="nav-link" to="/admin/orders">Orders</Link>
+                  <Link className="nav-link" to="/admin/deliveries">Deliveries</Link>
+                  <Link className="nav-link" to="/admin/reviews">Reviews</Link>
+                  <Link className="nav-link" to="/admin/refunds">Refunds</Link>
+                  <Link className="nav-link" to="/admin/commission">Commission</Link>
+                </>
+              ) : user.status === 'Active' ? (
+                <>
+                  <Link className="nav-link" to="/products">Products</Link>
+                  <Link className="nav-link" to="/inventory">Inventory</Link>
+                  <Link className="nav-link" to="/orders">Orders</Link>
+                  <Link className="nav-link" to="/refunds">Refunds</Link>
+                  <Link className="nav-link" to="/reports">Reports</Link>
+                  <Link className="nav-link" to="/payouts">Payouts</Link>
+                </>
+              ) : (
+                // a not-yet-approved supplier only has the resubmit/status page
+                <Link className="nav-link" to="/resubmit">My application</Link>
+              )}
+            </div>
           </div>
-
-          <div className="navbar-nav flex-row align-items-center flex-shrink-0 ms-3">
-            <Link to="/profile"
-              className="navbar-text text-light me-3 d-inline-flex align-items-center text-decoration-none text-nowrap">
-              <Avatar name={user.fullName} size={32} className="me-2" />
-              <span>Hi, {user.fullName}</span>
-            </Link>
-            <button className="btn btn-outline-light btn-sm" onClick={handleLogout}>
-              Logout
-            </button>
-          </div>
-        </nav>
+        </header>
       )}
 
       <Outlet />
