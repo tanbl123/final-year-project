@@ -63,25 +63,89 @@ body {
   box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
 }
 
-/* navbar link row: scrolls horizontally with ‹ › arrows (NavScroller); the
-   native scrollbar is hidden since the arrows are the affordance */
-.nav-scroller {
-  overflow-x: auto;
-  scrollbar-width: none;          /* Firefox */
+/* ── app shell: fixed sidebar + top bar, the page scrolls in between ── */
+.app-shell {
+  height: 100svh;
 }
-.nav-scroller::-webkit-scrollbar {
-  display: none;                  /* Chrome / Safari */
+.app-main {
+  height: 100svh;
+  background: #f4f5f7;            /* light grey so white cards stand out */
 }
-.nav-scroller .nav-link {
+/* pages use Bootstrap .container (viewport-sized); inside the main area we want
+   them to fill the space next to the sidebar instead */
+.app-main .container {
+  max-width: 100%;
+}
+.app-content {
+  text-align: left;
+}
+
+.app-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  background: #1f2733;
+  color: #cbd5e1;
+  transition: width 0.2s ease;
+  overflow: hidden;
+}
+.app-sidebar.collapsed {
+  width: 64px;
+}
+.app-sidebar.collapsed .nav-label {
+  display: none;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1rem;
+  color: #fff;
   white-space: nowrap;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.sidebar-brand .brand-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.sidebar-group {
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: #6b7685;
+  padding: 0.6rem 1rem 0.25rem;
+  white-space: nowrap;
+}
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.55rem 1rem;
+  color: #cbd5e1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+.sidebar-link.active {
+  background: rgba(13, 110, 253, 0.18);
+  color: #fff;
+  border-left: 3px solid #0d6efd;
+  padding-left: calc(1rem - 3px);
+}
+.sidebar-icon {
+  width: 1.4rem;
+  text-align: center;
+  flex-shrink: 0;
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
+  width: 100%;
+  margin: 0;
   text-align: center;
-  border-inline: 1px solid var(--border);
   min-height: 100svh;
   display: flex;
   flex-direction: column;

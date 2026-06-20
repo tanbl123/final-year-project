@@ -31,76 +31,53 @@ import AdminDeliveriesPage from './features/admin/pages/AdminDeliveriesPage';
 import ProfilePage from './features/profile/ProfilePage';
 import PayoutsPage from './features/payouts/PayoutsPage';
 import Avatar from './components/Avatar';
-import NavScroller from './components/NavScroller';
+import Sidebar from './components/Sidebar';
+import { useState } from 'react';
 
 // Top bar + the active route's content. As a layout route it renders <Outlet/>,
 // so every page below shares this chrome. (Data router → enables useBlocker.)
 function Layout() {
   const { user, logout } = useAuth();   // 👈 tune in to the auth broadcast
   const navigate = useNavigate();
-
-  const isAdmin = user?.role === 'Admin';
+  const [collapsed, setCollapsed] = useState(false);
 
   function handleLogout() {
     logout();
     navigate('/login');
   }
 
+  // login / register pages are full-screen on their own (no app shell)
+  if (!user) {
+    return <Outlet />;
+  }
+
   return (
-    <>
-      {/* the top bar only makes sense once you're signed in; the login and
-          register pages are full-screen on their own */}
-      {user && (
-        <nav className="navbar navbar-dark bg-dark px-4 flex-nowrap">
-          <span className="navbar-brand flex-shrink-0">👟 ShoeAR {isAdmin ? 'Admin' : 'Supplier'}</span>
+    <div className="app-shell d-flex">
+      <Sidebar user={user} collapsed={collapsed} />
 
-          {/* section links scroll horizontally with ‹ › arrows when they overflow,
-              so nothing is hidden — admins manage approvals, suppliers their catalogue */}
-          <NavScroller>
-            {isAdmin ? (
-              <>
-                <Link className="nav-link" to="/admin">Suppliers</Link>
-                <Link className="nav-link" to="/admin/changes">Changes</Link>
-                <Link className="nav-link" to="/admin/users">Users</Link>
-                <Link className="nav-link" to="/admin/products">Products</Link>
-                <Link className="nav-link" to="/admin/inventory">Inventory</Link>
-                <Link className="nav-link" to="/admin/categories">Categories</Link>
-                <Link className="nav-link" to="/admin/orders">Orders</Link>
-                <Link className="nav-link" to="/admin/deliveries">Deliveries</Link>
-                <Link className="nav-link" to="/admin/reviews">Reviews</Link>
-                <Link className="nav-link" to="/admin/refunds">Refunds</Link>
-                <Link className="nav-link" to="/admin/commission">Commission</Link>
-              </>
-            ) : user.status === 'Active' ? (
-              <>
-                <Link className="nav-link" to="/products">Products</Link>
-                <Link className="nav-link" to="/inventory">Inventory</Link>
-                <Link className="nav-link" to="/orders">Orders</Link>
-                <Link className="nav-link" to="/refunds">Refunds</Link>
-                <Link className="nav-link" to="/reports">Reports</Link>
-                <Link className="nav-link" to="/payouts">Payouts</Link>
-              </>
-            ) : (
-              // a not-yet-approved supplier only has the resubmit/status page
-              <Link className="nav-link" to="/resubmit">My application</Link>
-            )}
-          </NavScroller>
-
-          <div className="navbar-nav flex-row align-items-center flex-shrink-0 ms-3">
-            <Link to="/profile"
-              className="navbar-text text-light me-3 d-inline-flex align-items-center text-decoration-none text-nowrap">
+      <div className="app-main d-flex flex-column flex-grow-1" style={{ minWidth: 0 }}>
+        {/* top bar: collapse toggle on the left, the signed-in user on the right */}
+        <header className="app-topbar d-flex align-items-center justify-content-between border-bottom bg-white px-3 py-2 flex-shrink-0">
+          <button className="btn btn-light btn-sm" onClick={() => setCollapsed((c) => !c)} aria-label="Toggle sidebar">
+            ☰
+          </button>
+          <div className="d-flex align-items-center gap-3">
+            <Link to="/profile" className="d-inline-flex align-items-center text-decoration-none text-dark text-nowrap">
               <Avatar name={user.fullName} size={32} className="me-2" />
-              <span>Hi, {user.fullName}</span>
+              <span>{user.fullName}</span>
             </Link>
-            <button className="btn btn-outline-light btn-sm" onClick={handleLogout}>
+            <button className="btn btn-outline-secondary btn-sm" onClick={handleLogout}>
               Logout
             </button>
           </div>
-        </nav>
-      )}
+        </header>
 
-      <Outlet />
-    </>
+        {/* the active page scrolls here, while the sidebar + top bar stay put */}
+        <main className="app-content flex-grow-1 overflow-auto">
+          <Outlet />
+        </main>
+      </div>
+    </div>
   );
 }
 
