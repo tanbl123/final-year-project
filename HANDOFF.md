@@ -82,17 +82,29 @@ The schema is complete in **`database/schema.sql`** (22 tables) with rationale i
 - The user is newer to git/web-dev workflows — explain steps clearly, plan before coding.
 
 ## 6. Next steps (resume here) ▶️
-The agreed next planning task is the **REST API endpoint list** — the contract
-between the database and the 4 apps. Suggested order after that:
 
-1. **REST API endpoint design** (auth, products, cart, orders, payment, delivery,
-   reviews, refunds, admin, supplier, ML recommend) — method, path, who calls it,
-   request/response shape.
-2. Decide the **first app to build** (suggest: Admin or Supplier web portal, since
-   they populate the catalog the others depend on).
-3. Build the **PHP REST API** skeleton + DB connection + auth (hashed passwords, JWT or session).
-4. **AR module** (customer app) — load `.glb` model, overlay on foot.
-5. **ML recommender** — design interaction logging + recommendation approach.
+**Status: the entire PHP backend + the React web portal are DONE.** ✅
+- **Web portal** (`shoear-web/`): admin (approvals, users, products, inventory,
+  categories, orders, deliveries dispatch, reviews moderation, refunds,
+  commission rate+report) + supplier (products, inventory, orders, refunds,
+  reviews+reply, reports, payouts, profile). Sidebar nav, pagination, etc.
+- **PHP REST API** (`backend/`): every endpoint in `docs/API_ENDPOINTS.md`
+  marked *(Implemented)* — admin, supplier, **customer** (catalog → cart →
+  wishlist → checkout → payment+receipt → reviews → refunds) and **delivery**
+  (assignments → status → OTP → proof). Stripe payout demo proves the live
+  money flow.
+
+Remaining work (mostly **separate codebases** — see `mobile/README.md`):
+1. **Flutter customer app** (`mobile/customer/`) — the primary user app +
+   **AR virtual try-on** (flagship #1). Consumes the customer API.
+2. **Flutter delivery app** (`mobile/delivery/`) — consumes the delivery API.
+3. **ML recommender** (`ml/`, Python/Flask) — flagship #2.
+4. Loose ends (in `backend/`): real Stripe **PaymentIntent + webhook** (payment
+   is simulated for now), **push notifications**, and final testing.
+
+> Beyond-proposal extras already built (document or keep): supplier **review
+> reply**, **edit-product re-approval**, dedicated **Inventory** page, supplier
+> **business-detail change** re-approval.
 
 ## 7. How to start the new session (for the user)
 1. Go to **claude.ai/code**, start a new session, and **select `final-year-project-web`**
