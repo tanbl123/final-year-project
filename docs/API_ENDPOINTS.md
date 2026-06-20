@@ -154,10 +154,12 @@ modified through this endpoint.
 ### Public / customer browsing
 | Method | Path | Access | Purpose |
 |--------|------|--------|---------|
-| GET | `/products` | Public | List **Approved** products. Filters: `categoryId`, `search`, `minPrice`, `maxPrice`, `sort`, paging. |
-| GET | `/products/{productId}` | Public | Full detail: product + images + 3D model + variants(sizes/stock) + avg rating. |
-| GET | `/products/{productId}/variants` | Public | Sizes & stock for one product. |
-| GET | `/products/{productId}/reviews` | Public | Reviews for one product. |
+| GET | `/catalog/products` | Public | **(Implemented)** List **Approved** products. Filters: `categoryId`, `search`, `minPrice`, `maxPrice`, `sort` (`price_asc`/`price_desc`/`newest`), `page`, `limit`. Returns `{ items, page, limit, total }` with a primary image + rating summary per card. |
+| GET | `/catalog/products/{productId}` | Public | **(Implemented)** Full detail: product + supplier + images + 3D model + variants (sizes/stock) + published reviews + rating summary. |
+
+> Note: customer browsing lives under `/catalog/*` (the bare `/products` is the
+> supplier's own catalogue management). Sizes and reviews are embedded in the
+> detail response, so no separate `/variants` or `/reviews` call is needed.
 
 **`GET /products/{id}` response (shape):**
 ```json

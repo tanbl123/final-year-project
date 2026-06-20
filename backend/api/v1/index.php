@@ -21,6 +21,7 @@ require __DIR__ . '/../../controllers/OrderController.php';
 require __DIR__ . '/../../controllers/ReviewController.php';
 require __DIR__ . '/../../controllers/RefundController.php';
 require __DIR__ . '/../../controllers/CommissionController.php';
+require __DIR__ . '/../../controllers/CatalogController.php';
 
 // ── Always answer with JSON, even on a PHP error ──
 // A stray warning/notice or an uncaught error would otherwise print into the
@@ -67,6 +68,17 @@ if ($method === 'GET' && $path === '/db-test') {
   $stmt = $pdo->query('SELECT COUNT(*) AS total FROM product');
   $row  = $stmt->fetch();
   sendJson(200, true, ['productCount' => (int) $row['total']]);
+}
+
+// ── public catalog (customer app browsing; guests allowed — no token) ──
+if ($method === 'GET' && $path === '/catalog/products') {
+  $pdo = getPDO();
+  handleListCatalog($pdo);
+}
+
+if ($method === 'GET' && preg_match('#^/catalog/products/([^/]+)$#', $path, $m)) {
+  $pdo = getPDO();
+  handleGetCatalogProduct($pdo, $m[1]);
 }
 
 if ($method === 'POST' && $path === '/auth/register') {
