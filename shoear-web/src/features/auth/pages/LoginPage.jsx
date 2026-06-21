@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { homePathFor } from '../ProtectedRoute';
 import EyeIcon from '../../../components/EyeIcon';
@@ -40,6 +40,10 @@ function LoginPage({ variant = 'supplier' }) {
 
   const { login, logout } = useAuth();
   const navigate = useNavigate();
+  // a one-off success notice passed via navigation state (e.g. after a password
+  // reset). Captured once at mount so it doesn't linger on later navigations.
+  const location = useLocation();
+  const [notice] = useState(() => location.state?.notice || '');
 
   // update the changed field; re-check it live once it's already erroring
   function handleChange(event) {
@@ -105,6 +109,7 @@ function LoginPage({ variant = 'supplier' }) {
       <h1 className="mb-4 text-center">{config.title}</h1>
 
       <form onSubmit={handleSubmit} className="card card-body shadow-sm text-start" noValidate>
+        {notice && <div className="alert alert-success py-2">{notice}</div>}
         <div className="mb-3">
           <label className="form-label">Email or username</label>
           <ClearableInput

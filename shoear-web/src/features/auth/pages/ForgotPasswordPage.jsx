@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { forgotPassword, verifyResetCode, resetPassword } from '../authService';
 import EyeIcon from '../../../components/EyeIcon';
 import BackButton from '../../../components/BackButton';
@@ -20,6 +20,7 @@ function validatePassword(pw) {
 //   2. 'verify'  → enter the code; it's checked on its own (not consumed)
 //   3. 'reset'   → only now enter a new password
 function ForgotPasswordPage() {
+  const navigate = useNavigate();
   const [step, setStep] = useState('request');   // 'request' → 'verify' → 'reset'
 
   const [email, setEmail] = useState('');
@@ -39,8 +40,6 @@ function ForgotPasswordPage() {
   const [pwErrors, setPwErrors] = useState({});   // per-field inline errors
   const [resetError, setResetError] = useState(''); // server-side errors only
   const [resetting, setResetting] = useState(false);
-
-  const [done, setDone] = useState(false);
 
   // tick the resend cooldown down to zero
   useEffect(() => {
@@ -159,7 +158,8 @@ function ForgotPasswordPage() {
     setResetting(true);
     try {
       await resetPassword(email.trim(), code.trim(), password);
-      setDone(true);
+      // standard e-commerce pattern: send them to login with a success notice
+      navigate('/login', { state: { notice: 'Your password has been reset — please log in.' } });
     } catch (err) {
       const msg = err.message || 'Something went wrong. Please try again.';
       setResetError(msg);
@@ -188,19 +188,6 @@ function ForgotPasswordPage() {
     } finally {
       setResending(false);
     }
-  }
-
-  // success screen
-  if (done) {
-    return (
-      <div className="container py-5 text-center" style={{ maxWidth: '480px' }}>
-        <h1 className="mb-3">✅ Password reset</h1>
-        <p className="text-muted">
-          Your password has been updated. You can now log in with your new password.
-        </p>
-        <Link to="/login" className="btn btn-primary mt-2">Back to Login</Link>
-      </div>
-    );
   }
 
   // a password field with a Show/Hide toggle (same pattern as the other forms)
