@@ -17,10 +17,11 @@ VALUES
    'supplier@shoear.com', 'Demo Supplier', '0123456789', 'Supplier', 'Active');
 
 INSERT INTO supplier
-  (supplierId, userId, companyName, companyAddress,
+  (supplierId, userId, companyName, companyAddress, operationalAddress,
    businessRegNo, businessLicenseUrl, taxNumber)
 VALUES
   ('SUP0001', 'USR0001', 'Demo Shoe Co.', '12 Jalan Sukan, Kuala Lumpur',
+   '12 Jalan Sukan, Kuala Lumpur',
    '202301000123', 'https://example.com/licenses/demo.pdf', 'W10-1234-56789012');
 
 -- 2) An admin account (status Active). Password is also "password123".

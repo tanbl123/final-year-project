@@ -18,7 +18,7 @@ function ResubmitApplicationPage() {
   const [reason, setReason] = useState('');
   const [readonly, setReadonly] = useState({ username: '', email: '' });
   const [form, setForm] = useState({
-    companyName: '', companyAddress: '', phoneNumber: '',
+    companyName: '', companyAddress: '', operationalAddress: '', phoneNumber: '',
     businessRegNo: '', taxNumber: '', businessLicenseUrl: '',
   });
   const [errors, setErrors] = useState({});
@@ -40,6 +40,7 @@ function ResubmitApplicationPage() {
         setForm({
           companyName: a.companyName || '',
           companyAddress: a.companyAddress || '',
+          operationalAddress: a.operationalAddress || a.companyAddress || '',
           phoneNumber: a.phoneNumber || '',
           businessRegNo: a.businessRegNo || '',
           taxNumber: a.taxNumber || '',
@@ -118,6 +119,7 @@ function ResubmitApplicationPage() {
       const res = await resubmitApplication({
         companyName: form.companyName.trim(),
         companyAddress: form.companyAddress.trim(),
+        operationalAddress: form.operationalAddress.trim(),
         phoneNumber: form.phoneNumber.trim(),
         businessRegNo: form.businessRegNo.trim(),
         taxNumber: form.taxNumber.trim(),
@@ -190,7 +192,8 @@ function ResubmitApplicationPage() {
         <hr className="my-3" />
         <h6 className="text-muted text-uppercase small fw-bold">Company</h6>
         {field('companyName', 'Company name')}
-        {field('companyAddress', 'Company address')}
+        {field('companyAddress', 'Business address')}
+        {field('operationalAddress', 'Operational (pickup) address')}
         {field('phoneNumber', 'Phone number', 'tel')}
 
         <hr className="my-3" />

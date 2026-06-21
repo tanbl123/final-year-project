@@ -338,6 +338,12 @@ if ($method === 'PUT' && $path === '/supplier/company-address') {
   handleUpdateCompanyAddress($pdo, $auth);
 }
 
+if ($method === 'PUT' && $path === '/supplier/operational-address') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleUpdateOperationalAddress($pdo, $auth);
+}
+
 if ($method === 'POST' && $path === '/supplier/business-details/change-request') {
   $auth = requireAuth($secret);
   $pdo  = getPDO();

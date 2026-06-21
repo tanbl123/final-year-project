@@ -41,9 +41,10 @@ VALUES
    'supplier2@shoear.com', 'Aiman Sports', '0192223333', 'Supplier', 'Active');
 
 INSERT IGNORE INTO supplier
-  (supplierId, userId, companyName, companyAddress, businessRegNo, businessLicenseUrl, taxNumber)
+  (supplierId, userId, companyName, companyAddress, operationalAddress, businessRegNo, businessLicenseUrl, taxNumber)
 VALUES
   ('SUP0002', 'USR0004', 'Aiman Sports Sdn Bhd', '45 Jalan Ampang, Kuala Lumpur',
+   'Lot 7, Shah Alam Warehouse Park, Selangor',
    '202301000456', 'https://example.com/licenses/sup0002.pdf', 'W10-2222-33334444');
 
 INSERT IGNORE INTO product
@@ -67,9 +68,10 @@ VALUES
    'supplier3@shoear.com', 'Mei Footwear', '0184445555', 'Supplier', 'Active');
 
 INSERT IGNORE INTO supplier
-  (supplierId, userId, companyName, companyAddress, businessRegNo, businessLicenseUrl, taxNumber)
+  (supplierId, userId, companyName, companyAddress, operationalAddress, businessRegNo, businessLicenseUrl, taxNumber)
 VALUES
   ('SUP0003', 'USR0005', 'Mei Footwear Trading', '9 Jalan Bukit Bintang, Kuala Lumpur',
+   '9 Jalan Bukit Bintang, Kuala Lumpur',
    '202301000789', 'https://example.com/licenses/sup0003.pdf', 'W10-5555-66667777');
 
 INSERT IGNORE INTO product

@@ -98,12 +98,15 @@ function applyFieldError(errors, name, form) {
 function RegisterPage() {
   const [form, setForm] = useState({
     companyName: '', username: '', email: '', phoneNumber: '',
-    companyAddress: '', password: '', confirm: '',
+    companyAddress: '', operationalAddress: '', password: '', confirm: '',
     businessRegNo: '', taxNumber: '', businessLicenseUrl: '',
   });
   // until the supplier types in the username box, it auto-follows the company
   // name (Instagram-style). usernameStatus drives the live availability hint.
   const [usernameEdited, setUsernameEdited] = useState(false);
+  // the operational (pickup) address mirrors the business address until the
+  // supplier edits it — same "follow until touched" idea as the username.
+  const [operationalEdited, setOperationalEdited] = useState(false);
   const [usernameStatus, setUsernameStatus] = useState({ state: 'idle', suggestion: '' });
   const [errors, setErrors] = useState({});       // per-field messages
   const [formError, setFormError] = useState(''); // general/server fallback
@@ -165,6 +168,11 @@ function RegisterPage() {
     if (name === 'companyName' && !usernameEdited) {
       nextForm.username = usernameSlug(value);
     }
+    // while untouched, the operational address mirrors the business address
+    // verbatim (no slug — it's a real address)
+    if (name === 'companyAddress' && !operationalEdited) {
+      nextForm.operationalAddress = value;
+    }
     setForm(nextForm);
 
     setErrors((prev) => {
@@ -205,10 +213,22 @@ function RegisterPage() {
     setErrors((prev) => { const next = { ...prev }; delete next.username; return next; });
   }
 
+  // typing in the operational-address box detaches it from the business address
+  function handleOperationalChange(event) {
+    setOperationalEdited(true);
+    setForm((f) => ({ ...f, operationalAddress: event.target.value }));
+  }
+  // clearing it re-attaches to the business address (mirrors it again)
+  function clearOperational() {
+    setOperationalEdited(false);
+    setForm((f) => ({ ...f, operationalAddress: f.companyAddress }));
+  }
+
   // clear a field via its ✕ button (mirrors handleChange's live re-validation)
   function clearField(name) {
     const nextForm = { ...form, [name]: '' };
     if (name === 'companyName' && !usernameEdited) nextForm.username = '';
+    if (name === 'companyAddress' && !operationalEdited) nextForm.operationalAddress = '';
     setForm(nextForm);
     setErrors((prev) => {
       const next = { ...prev };
@@ -243,6 +263,7 @@ function RegisterPage() {
       phoneNumber: form.phoneNumber.trim(),
       companyName: form.companyName.trim(),
       companyAddress: form.companyAddress.trim(),
+      operationalAddress: form.operationalAddress.trim(),
       businessRegNo: form.businessRegNo.trim(),
       businessLicenseUrl: form.businessLicenseUrl,
       taxNumber: form.taxNumber.trim(),
@@ -411,6 +432,29 @@ function RegisterPage() {
     );
   }
 
+  // operational (pickup) address — mirrors the business address until edited,
+  // the same "follow until touched" pattern as the username field.
+  function operationalAddressField() {
+    return (
+      <div className="mb-3">
+        <label className="form-label">Operational (pickup) address</label>
+        <ClearableInput
+          type="text"
+          name="operationalAddress"
+          maxLength="255"
+          value={form.operationalAddress}
+          onChange={handleOperationalChange}
+          onClear={clearOperational}
+        />
+        <div className="form-text">
+          {operationalEdited
+            ? 'Where couriers collect your orders. Clear it to use your business address again.'
+            : 'Auto-filled from your business address — change it if you ship from elsewhere.'}
+        </div>
+      </div>
+    );
+  }
+
   // username field with an Instagram-style live availability hint underneath
   function usernameField() {
     const s = usernameStatus.state;
@@ -522,7 +566,8 @@ function RegisterPage() {
 
         <h6 className="text-muted text-uppercase small fw-bold">Company</h6>
         {field('companyName', 'Company name')}
-        {field('companyAddress', 'Company address')}
+        {field('companyAddress', 'Business address')}
+        {operationalAddressField()}
 
         <hr className="my-3" />
         <h6 className="text-muted text-uppercase small fw-bold">Business verification</h6>

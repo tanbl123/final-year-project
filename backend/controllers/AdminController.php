@@ -6,7 +6,7 @@
 // actually review the application before approving or rejecting it.
 function handleListPendingSuppliers(PDO $pdo): void {
   $stmt = $pdo->query(
-    "SELECT u.userId, s.supplierId, s.companyName, s.companyAddress,
+    "SELECT u.userId, s.supplierId, s.companyName, s.companyAddress, s.operationalAddress,
             s.businessRegNo, s.businessLicenseUrl, s.taxNumber,
             u.username, u.email, u.phoneNumber, u.created_at
        FROM `user` u
@@ -156,7 +156,7 @@ function handleGetUser(PDO $pdo, string $userId): void {
 
   $profile = null;
   if ($u['role'] === 'Supplier') {
-    $p = $pdo->prepare('SELECT supplierId, companyName, companyAddress FROM supplier WHERE userId = :id');
+    $p = $pdo->prepare('SELECT supplierId, companyName, companyAddress, operationalAddress FROM supplier WHERE userId = :id');
   } elseif ($u['role'] === 'Customer') {
     $p = $pdo->prepare('SELECT customerId, shippingAddress FROM customer WHERE userId = :id');
   } elseif ($u['role'] === 'DeliveryPersonnel') {

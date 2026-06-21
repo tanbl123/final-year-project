@@ -241,7 +241,8 @@ function AdminUsersPage() {
                     {detail.role === 'Supplier' && detail.profile && (
                       <>
                         <dt className="col-4">Company</dt><dd className="col-8">{detail.profile.companyName}</dd>
-                        <dt className="col-4">Address</dt><dd className="col-8">{detail.profile.companyAddress}</dd>
+                        <dt className="col-4">Business address</dt><dd className="col-8">{detail.profile.companyAddress}</dd>
+                        <dt className="col-4">Pickup address</dt><dd className="col-8">{detail.profile.operationalAddress || detail.profile.companyAddress}</dd>
                       </>
                     )}
                     {detail.role === 'Customer' && detail.profile && (

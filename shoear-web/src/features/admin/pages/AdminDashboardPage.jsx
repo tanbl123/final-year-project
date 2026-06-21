@@ -106,6 +106,9 @@ function AdminDashboardPage() {
                     <div className="fw-semibold">{s.companyName}</div>
                     <div className="text-muted small">@{s.username}</div>
                     <div className="text-muted small">{s.companyAddress}</div>
+                    {s.operationalAddress && s.operationalAddress !== s.companyAddress && (
+                      <div className="text-muted small">Pickup: {s.operationalAddress}</div>
+                    )}
                   </td>
                   <td>
                     <div>{s.email}</div>

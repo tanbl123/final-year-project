@@ -10,7 +10,7 @@ function handleGetApplication(PDO $pdo, array $auth): void {
   requireSupplierId($pdo, $auth);
   $stmt = $pdo->prepare(
     'SELECT u.username, u.email, u.phoneNumber, u.status, u.rejectionReason,
-            s.companyName, s.companyAddress, s.businessRegNo,
+            s.companyName, s.companyAddress, s.operationalAddress, s.businessRegNo,
             s.businessLicenseUrl, s.taxNumber
        FROM `user` u
        JOIN supplier s ON s.userId = u.userId
@@ -75,6 +75,8 @@ function handleResubmitApplication(PDO $pdo, array $auth): void {
   $phoneNumber        = trim($body['phoneNumber'] ?? '');
   $companyName        = trim($body['companyName'] ?? '');
   $companyAddress     = trim($body['companyAddress'] ?? '');
+  $operationalAddress = trim($body['operationalAddress'] ?? '');
+  if ($operationalAddress === '') $operationalAddress = $companyAddress;
   $businessRegNo      = trim($body['businessRegNo'] ?? '');
   $businessLicenseUrl = trim($body['businessLicenseUrl'] ?? '');
   $taxNumber          = trim($body['taxNumber'] ?? '');     // optional
@@ -95,6 +97,9 @@ function handleResubmitApplication(PDO $pdo, array $auth): void {
   if ($taxNumber !== '' && !preg_match('/^[A-Za-z0-9][A-Za-z0-9-]{6,18}[A-Za-z0-9]$/', $taxNumber)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid SST number, e.g. W10-1808-32000001.']);
   }
+  if (mb_strlen($operationalAddress) > 255) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Operational address is too long.']);
+  }
 
   // the supplier's display name IS their company name (mirrors registration)
   $pdo->beginTransaction();
@@ -107,11 +112,12 @@ function handleResubmitApplication(PDO $pdo, array $auth): void {
 
     $pdo->prepare(
       'UPDATE supplier
-          SET companyName = :cn, companyAddress = :ca, businessRegNo = :brn,
-              businessLicenseUrl = :blu, taxNumber = :tax
+          SET companyName = :cn, companyAddress = :ca, operationalAddress = :oa,
+              businessRegNo = :brn, businessLicenseUrl = :blu, taxNumber = :tax
         WHERE userId = :id'
     )->execute([
-      'cn' => $companyName, 'ca' => $companyAddress, 'brn' => $businessRegNo,
+      'cn' => $companyName, 'ca' => $companyAddress, 'oa' => $operationalAddress,
+      'brn' => $businessRegNo,
       'blu' => $businessLicenseUrl, 'tax' => ($taxNumber === '' ? null : $taxNumber),
       'id' => $auth['userId'],
     ]);
@@ -148,7 +154,7 @@ function handleGetBusinessDetails(PDO $pdo, array $auth): void {
   $supplierId = requireSupplierId($pdo, $auth);
 
   $cur = $pdo->prepare(
-    'SELECT companyName, companyAddress, businessRegNo, taxNumber, businessLicenseUrl
+    'SELECT companyName, companyAddress, operationalAddress, businessRegNo, taxNumber, businessLicenseUrl
        FROM supplier WHERE supplierId = :sid'
   );
   $cur->execute(['sid' => $supplierId]);
@@ -184,6 +190,24 @@ function handleUpdateCompanyAddress(PDO $pdo, array $auth): void {
   $pdo->prepare('UPDATE supplier SET companyAddress = :ca WHERE supplierId = :sid')
       ->execute(['ca' => $address, 'sid' => $supplierId]);
   sendJson(200, true, ['companyAddress' => $address]);
+}
+
+// PUT /supplier/operational-address — the operational (pickup) address is where
+// couriers collect orders. It's logistics, not verified identity, so the
+// supplier can change it freely with no admin review.
+function handleUpdateOperationalAddress(PDO $pdo, array $auth): void {
+  $supplierId = requireSupplierId($pdo, $auth);
+  $body    = getJsonBody();
+  $address = trim($body['operationalAddress'] ?? '');
+  if ($address === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Operational address is required.']);
+  }
+  if (mb_strlen($address) > 255) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Operational address is too long.']);
+  }
+  $pdo->prepare('UPDATE supplier SET operationalAddress = :oa WHERE supplierId = :sid')
+      ->execute(['oa' => $address, 'sid' => $supplierId]);
+  sendJson(200, true, ['operationalAddress' => $address]);
 }
 
 // POST /supplier/business-details/change-request — propose new values for the

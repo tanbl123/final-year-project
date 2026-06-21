@@ -87,6 +87,12 @@ export function updateCompanyAddress(companyAddress) {
   return apiPut('/supplier/company-address', { companyAddress }, getToken());
 }
 
+// Operational (pickup) address — where couriers collect orders. Logistics, not
+// verified identity, so it's editable freely (no admin review).
+export function updateOperationalAddress(operationalAddress) {
+  return apiPut('/supplier/operational-address', { operationalAddress }, getToken());
+}
+
 // Propose changes to the verified fields (company name, SSM, SST, document).
 // Goes to the admin re-approval queue; the account stays Active meanwhile.
 export function submitBusinessChangeRequest(data) {

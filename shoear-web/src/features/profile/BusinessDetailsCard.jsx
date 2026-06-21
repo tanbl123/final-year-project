@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
-  getBusinessDetails, updateCompanyAddress, submitBusinessChangeRequest, uploadRegistrationDoc,
+  getBusinessDetails, updateCompanyAddress, updateOperationalAddress,
+  submitBusinessChangeRequest, uploadRegistrationDoc,
 } from '../auth/authService';
 import ClearableInput from '../../components/ClearableInput';
 
@@ -16,11 +17,17 @@ function BusinessDetailsCard({ onToast }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // free address edit
+  // free address edit (company / registered address)
   const [addrEditing, setAddrEditing] = useState(false);
   const [addr, setAddr] = useState('');
   const [addrError, setAddrError] = useState('');
   const [addrSaving, setAddrSaving] = useState(false);
+
+  // free address edit (operational / pickup address)
+  const [opEditing, setOpEditing] = useState(false);
+  const [opAddr, setOpAddr] = useState('');
+  const [opError, setOpError] = useState('');
+  const [opSaving, setOpSaving] = useState(false);
 
   // change request form (verified fields)
   const [reqOpen, setReqOpen] = useState(false);
@@ -66,6 +73,25 @@ function BusinessDetailsCard({ onToast }) {
       setAddrError(err.message);
     } finally {
       setAddrSaving(false);
+    }
+  }
+
+  // ── operational (pickup) address (free edit) ──────────────────────
+  function startOp() { setOpAddr(cur.operationalAddress || cur.companyAddress || ''); setOpError(''); setOpEditing(true); }
+  async function saveOp(e) {
+    e.preventDefault();
+    if (!opAddr.trim()) { setOpError('Operational address is required.'); return; }
+    if (opAddr.trim() === (cur.operationalAddress || '')) { setOpEditing(false); return; }
+    setOpSaving(true);
+    try {
+      const saved = await updateOperationalAddress(opAddr.trim());
+      setData((d) => ({ ...d, current: { ...d.current, ...saved } }));
+      setOpEditing(false);
+      onToast?.('Operational address updated.');
+    } catch (err) {
+      setOpError(err.message);
+    } finally {
+      setOpSaving(false);
     }
   }
 
@@ -190,8 +216,8 @@ function BusinessDetailsCard({ onToast }) {
               : <span className="text-muted">—</span>}
           </dd>
 
-          {/* company address — free edit */}
-          <dt className="col-sm-4">Company address</dt>
+          {/* business / registered address — free edit */}
+          <dt className="col-sm-4">Business address</dt>
           <dd className="col-sm-8">
             {addrEditing ? (
               <form onSubmit={saveAddr} className="d-flex flex-column gap-2">
@@ -213,6 +239,36 @@ function BusinessDetailsCard({ onToast }) {
               <div className="d-flex justify-content-between align-items-start gap-2">
                 <span>{cur.companyAddress || <span className="text-muted">—</span>}</span>
                 <button className="btn btn-link btn-sm p-0" onClick={startAddr}>Edit</button>
+              </div>
+            )}
+          </dd>
+
+          {/* operational / pickup address — free edit */}
+          <dt className="col-sm-4">Operational (pickup) address</dt>
+          <dd className="col-sm-8">
+            {opEditing ? (
+              <form onSubmit={saveOp} className="d-flex flex-column gap-2">
+                <ClearableInput type="text" maxLength="255"
+                  className={opError ? 'is-invalid' : ''}
+                  value={opAddr}
+                  onChange={(e) => { setOpAddr(e.target.value); if (opError) setOpError(''); }}
+                  onClear={() => setOpAddr('')} />
+                {opError && <div className="invalid-feedback d-block">{opError}</div>}
+                <div className="d-flex gap-2">
+                  <button type="submit" className="btn btn-primary btn-sm" disabled={opSaving}>
+                    {opSaving ? 'Saving…' : 'Save'}
+                  </button>
+                  <button type="button" className="btn btn-outline-secondary btn-sm"
+                    onClick={() => setOpEditing(false)} disabled={opSaving}>Cancel</button>
+                </div>
+              </form>
+            ) : (
+              <div className="d-flex justify-content-between align-items-start gap-2">
+                <span>
+                  {cur.operationalAddress || cur.companyAddress || <span className="text-muted">—</span>}
+                  <div className="text-muted small">Where couriers collect your orders.</div>
+                </span>
+                <button className="btn btn-link btn-sm p-0" onClick={startOp}>Edit</button>
               </div>
             )}
           </dd>

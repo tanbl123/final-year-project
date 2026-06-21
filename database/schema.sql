@@ -91,7 +91,8 @@ CREATE TABLE supplier (
     supplierId      VARCHAR(10)  NOT NULL,                -- SUP0001
     userId          VARCHAR(10)  NOT NULL,
     companyName     VARCHAR(150) NOT NULL,
-    companyAddress  VARCHAR(255) NOT NULL,
+    companyAddress  VARCHAR(255) NOT NULL,                -- registered business address (matches SSM)
+    operationalAddress VARCHAR(255) NOT NULL,             -- where couriers collect orders (pickup); defaults to companyAddress
     businessRegNo   VARCHAR(50)  NOT NULL,                -- SSM / company registration no.
     businessLicenseUrl VARCHAR(255) NOT NULL,             -- uploaded registration certificate
     taxNumber       VARCHAR(50)  NULL,                    -- SST / tax no. (optional)

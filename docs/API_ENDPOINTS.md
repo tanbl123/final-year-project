@@ -100,7 +100,9 @@ List responses include paging info:
 }
 ```
 For `"role": "Supplier"` send `companyName`, `companyAddress`,
-`businessRegNo`, `businessLicenseUrl` (and optional `taxNumber`) instead; for
+`businessRegNo`, `businessLicenseUrl` (and optional `taxNumber`, and optional
+`operationalAddress` — the courier pickup address, defaults to `companyAddress`
+when omitted) instead; for
 `"role": "DeliveryPersonnel"` send `vehicleInfo`. Server hashes the password
 (bcrypt/argon2) before storing — never stores plain text. Bank/payout details
 are NOT collected here — suppliers add them later via Stripe Connect.
