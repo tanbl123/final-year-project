@@ -46,4 +46,10 @@ class OrderService {
   Future<CustomerOrder> getOrder(String orderId) async => CustomerOrder.fromJson(
         await api.get('/orders/$orderId') as Map<String, dynamic>,
       );
+
+  /// POST /orders/{id}/refund — request a (full) refund. Throws on failure
+  /// (e.g. not a paid order, or a refund already in progress).
+  Future<void> requestRefund(String orderId, String reason) async {
+    await api.post('/orders/$orderId/refund', {'refundReason': reason});
+  }
 }

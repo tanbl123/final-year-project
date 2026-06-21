@@ -41,6 +41,57 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     await next;
   }
 
+  static const _refundableStatuses = {'Paid', 'Processing', 'Shipped', 'OutForDelivery', 'Delivered', 'Completed'};
+  static const _activeRefundStatuses = {'Pending', 'Approved', 'Completed'};
+
+  bool _canRequestRefund(CustomerOrder o) =>
+      _refundableStatuses.contains(o.orderStatus) &&
+      !o.refunds.any((r) => _activeRefundStatuses.contains(r.refundStatus));
+
+  Future<void> _requestRefund() async {
+    final reasonCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Request a refund'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Tell us why you want a refund. An admin will review your request.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              autofocus: true,
+              minLines: 2,
+              maxLines: 4,
+              maxLength: 255,
+              decoration: const InputDecoration(hintText: 'Reason', border: OutlineInputBorder()),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Submit')),
+        ],
+      ),
+    );
+    final reason = reasonCtrl.text.trim();
+    reasonCtrl.dispose();
+    if (ok != true) return;
+    if (reason.isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A reason is required.')));
+      return;
+    }
+    try {
+      await context.read<OrderService>().requestRefund(widget.orderId, reason);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Refund request submitted.')));
+      _refresh();
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -151,6 +202,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ],
               ),
             ),
+        ],
+
+        if (_canRequestRefund(o)) ...[
+          const SizedBox(height: 24),
+          OutlinedButton.icon(
+            onPressed: _requestRefund,
+            icon: const Icon(Icons.assignment_return_outlined),
+            label: const Text('Request a refund'),
+          ),
         ],
       ],
     );
