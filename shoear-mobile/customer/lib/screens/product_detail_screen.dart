@@ -282,61 +282,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Future<void> _openReviewEditor({MyReview? existing}) async {
-    int rating = existing?.ratingScore ?? 5;
-    final commentCtrl = TextEditingController(text: existing?.reviewComment ?? '');
-    final result = await showModalBottomSheet<bool>(
+    final result = await showModalBottomSheet<_ReviewResult>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          left: 16, right: 16, top: 16,
-          bottom: 16 + MediaQuery.of(ctx).viewInsets.bottom,
-        ),
-        child: StatefulBuilder(
-          builder: (ctx, setSheet) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(existing == null ? 'Write a review' : 'Edit your review',
-                  style: Theme.of(ctx).textTheme.titleLarge),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  for (int i = 1; i <= 5; i++)
-                    IconButton(
-                      onPressed: () => setSheet(() => rating = i),
-                      icon: Icon(i <= rating ? Icons.star : Icons.star_border, color: Colors.amber.shade700, size: 32),
-                    ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              TextField(
-                controller: commentCtrl,
-                minLines: 2,
-                maxLines: 5,
-                maxLength: 1000,
-                decoration: const InputDecoration(
-                  hintText: 'Share your thoughts (optional)',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: () => Navigator.of(ctx).pop(true),
-                  child: const Text('Submit'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      builder: (_) => _ReviewSheet(existing: existing),
     );
-    if (result == true) {
-      await _submitReview(existing, rating, commentCtrl.text.trim());
+    if (result != null) {
+      await _submitReview(existing, result.rating, result.comment);
     }
-    commentCtrl.dispose();
   }
 
   Future<void> _submitReview(MyReview? existing, int rating, String comment) async {
@@ -432,6 +385,78 @@ class _ReviewTile extends StatelessWidget {
               decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(8)),
               child: Text('Seller reply: ${review.supplierReply}', style: const TextStyle(fontSize: 13)),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Result of the review editor sheet.
+class _ReviewResult {
+  final int rating;
+  final String comment;
+  _ReviewResult(this.rating, this.comment);
+}
+
+/// Review editor — owns its comment controller (disposed in dispose) so it's
+/// never freed while the text field is still attached.
+class _ReviewSheet extends StatefulWidget {
+  final MyReview? existing;
+  const _ReviewSheet({this.existing});
+
+  @override
+  State<_ReviewSheet> createState() => _ReviewSheetState();
+}
+
+class _ReviewSheetState extends State<_ReviewSheet> {
+  late int _rating = widget.existing?.ratingScore ?? 5;
+  late final TextEditingController _comment = TextEditingController(text: widget.existing?.reviewComment ?? '');
+
+  @override
+  void dispose() {
+    _comment.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 16 + MediaQuery.of(context).viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(widget.existing == null ? 'Write a review' : 'Edit your review',
+              style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (int i = 1; i <= 5; i++)
+                IconButton(
+                  onPressed: () => setState(() => _rating = i),
+                  icon: Icon(i <= _rating ? Icons.star : Icons.star_border, color: Colors.amber.shade700, size: 32),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _comment,
+            minLines: 2,
+            maxLines: 5,
+            maxLength: 1000,
+            decoration: const InputDecoration(
+              hintText: 'Share your thoughts (optional)',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => Navigator.of(context).pop(_ReviewResult(_rating, _comment.text.trim())),
+              child: const Text('Submit'),
+            ),
+          ),
         ],
       ),
     );

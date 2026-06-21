@@ -114,124 +114,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
 
   Future<void> _openEdit(Map<String, dynamic> me, Map profile) async {
-    final name = TextEditingController(text: me['fullName']?.toString() ?? '');
-    final username = TextEditingController(text: me['username']?.toString() ?? '');
-    final phone = TextEditingController(text: me['phoneNumber']?.toString() ?? '');
-    final address = TextEditingController(text: (profile['shippingAddress'] as String?) ?? '');
-    bool saving = false;
-    String? err;
-
-    await showModalBottomSheet<void>(
+    final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 16 + MediaQuery.of(ctx).viewInsets.bottom),
-        child: StatefulBuilder(
-          builder: (ctx, setSheet) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Edit profile', style: Theme.of(ctx).textTheme.titleLarge),
-              const SizedBox(height: 12),
-              if (err != null) ...[
-                Text(err!, style: TextStyle(color: Colors.red.shade700)),
-                const SizedBox(height: 8),
-              ],
-              _sheetField(name, 'Full name'),
-              _sheetField(username, 'Username'),
-              _sheetField(phone, 'Phone number'),
-              _sheetField(address, 'Shipping address', maxLines: 2),
-              const SizedBox(height: 8),
-              FilledButton(
-                onPressed: saving
-                    ? null
-                    : () async {
-                        setSheet(() { saving = true; err = null; });
-                        try {
-                          await context.read<AccountService>().updateProfile(
-                                fullName: name.text.trim(),
-                                phoneNumber: phone.text.trim(),
-                                username: username.text.trim(),
-                                shippingAddress: address.text.trim(),
-                              );
-                          await context.read<AuthProvider>().applyProfile(fullName: name.text.trim());
-                          if (ctx.mounted) Navigator.of(ctx).pop();
-                        } catch (e) {
-                          setSheet(() { saving = false; err = e.toString(); });
-                        }
-                      },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: saving
-                      ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('Save'),
-                ),
-              ),
-            ],
-          ),
-        ),
+      builder: (_) => _EditProfileSheet(
+        fullName: me['fullName']?.toString() ?? '',
+        username: me['username']?.toString() ?? '',
+        phone: me['phoneNumber']?.toString() ?? '',
+        address: (profile['shippingAddress'] as String?) ?? '',
       ),
     );
-    for (final c in [name, username, phone, address]) {
-      c.dispose();
-    }
-    if (mounted) _reload();
+    if (saved == true && mounted) _reload();
   }
 
   Future<void> _openChangePassword() async {
-    final current = TextEditingController();
-    final next = TextEditingController();
-    bool saving = false;
-    String? err;
-
-    await showModalBottomSheet<void>(
+    final ok = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 16 + MediaQuery.of(ctx).viewInsets.bottom),
-        child: StatefulBuilder(
-          builder: (ctx, setSheet) => Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('Change password', style: Theme.of(ctx).textTheme.titleLarge),
-              const SizedBox(height: 12),
-              if (err != null) ...[
-                Text(err!, style: TextStyle(color: Colors.red.shade700)),
-                const SizedBox(height: 8),
-              ],
-              _sheetField(current, 'Current password', obscure: true),
-              _sheetField(next, 'New password', obscure: true),
-              const SizedBox(height: 8),
-              FilledButton(
-                onPressed: saving
-                    ? null
-                    : () async {
-                        setSheet(() { saving = true; err = null; });
-                        try {
-                          await context.read<AccountService>().changePassword(current.text, next.text);
-                          if (ctx.mounted) {
-                            Navigator.of(ctx).pop();
-                            ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('Password changed.')));
-                          }
-                        } catch (e) {
-                          setSheet(() { saving = false; err = e.toString(); });
-                        }
-                      },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: saving
-                      ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('Update password'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
+      builder: (_) => const _ChangePasswordSheet(),
     );
-    current.dispose();
-    next.dispose();
+    if (ok == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password changed.')));
+    }
   }
 
   Future<void> _confirmDelete() async {
@@ -260,14 +164,157 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
     }
   }
+}
 
-  Widget _sheetField(TextEditingController c, String label, {bool obscure = false, int maxLines = 1}) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: TextField(
-          controller: c,
-          obscureText: obscure,
-          maxLines: obscure ? 1 : maxLines,
-          decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
-        ),
-      );
+/// Shared field used by the profile sheets.
+Widget _profileField(TextEditingController c, String label, {bool obscure = false, int maxLines = 1}) => Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: TextField(
+        controller: c,
+        obscureText: obscure,
+        maxLines: obscure ? 1 : maxLines,
+        decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+      ),
+    );
+
+/// Edit-profile sheet — owns its controllers (disposed in dispose) and does its
+/// own save, popping `true` on success so the caller can refresh.
+class _EditProfileSheet extends StatefulWidget {
+  final String fullName;
+  final String username;
+  final String phone;
+  final String address;
+  const _EditProfileSheet({required this.fullName, required this.username, required this.phone, required this.address});
+
+  @override
+  State<_EditProfileSheet> createState() => _EditProfileSheetState();
+}
+
+class _EditProfileSheetState extends State<_EditProfileSheet> {
+  late final TextEditingController _name = TextEditingController(text: widget.fullName);
+  late final TextEditingController _username = TextEditingController(text: widget.username);
+  late final TextEditingController _phone = TextEditingController(text: widget.phone);
+  late final TextEditingController _address = TextEditingController(text: widget.address);
+  bool _saving = false;
+  String? _err;
+
+  @override
+  void dispose() {
+    for (final c in [_name, _username, _phone, _address]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() { _saving = true; _err = null; });
+    try {
+      await context.read<AccountService>().updateProfile(
+            fullName: _name.text.trim(),
+            phoneNumber: _phone.text.trim(),
+            username: _username.text.trim(),
+            shippingAddress: _address.text.trim(),
+          );
+      await context.read<AuthProvider>().applyProfile(fullName: _name.text.trim());
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) setState(() { _saving = false; _err = e.toString(); });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 16 + MediaQuery.of(context).viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Edit profile', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          if (_err != null) ...[
+            Text(_err!, style: TextStyle(color: Colors.red.shade700)),
+            const SizedBox(height: 8),
+          ],
+          _profileField(_name, 'Full name'),
+          _profileField(_username, 'Username'),
+          _profileField(_phone, 'Phone number'),
+          _profileField(_address, 'Shipping address', maxLines: 2),
+          const SizedBox(height: 8),
+          FilledButton(
+            onPressed: _saving ? null : _save,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: _saving
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Save'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Change-password sheet — owns its controllers; pops `true` on success.
+class _ChangePasswordSheet extends StatefulWidget {
+  const _ChangePasswordSheet();
+
+  @override
+  State<_ChangePasswordSheet> createState() => _ChangePasswordSheetState();
+}
+
+class _ChangePasswordSheetState extends State<_ChangePasswordSheet> {
+  final TextEditingController _current = TextEditingController();
+  final TextEditingController _next = TextEditingController();
+  bool _saving = false;
+  String? _err;
+
+  @override
+  void dispose() {
+    _current.dispose();
+    _next.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() { _saving = true; _err = null; });
+    try {
+      await context.read<AccountService>().changePassword(_current.text, _next.text);
+      if (mounted) Navigator.of(context).pop(true);
+    } catch (e) {
+      if (mounted) setState(() { _saving = false; _err = e.toString(); });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 16 + MediaQuery.of(context).viewInsets.bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Change password', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          if (_err != null) ...[
+            Text(_err!, style: TextStyle(color: Colors.red.shade700)),
+            const SizedBox(height: 8),
+          ],
+          _profileField(_current, 'Current password', obscure: true),
+          _profileField(_next, 'New password', obscure: true),
+          const SizedBox(height: 8),
+          FilledButton(
+            onPressed: _saving ? null : _save,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: _saving
+                  ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('Update password'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
