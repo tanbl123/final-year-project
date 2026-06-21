@@ -6,6 +6,7 @@ import 'services/auth_service.dart';
 import 'services/catalog_service.dart';
 import 'services/cart_service.dart';
 import 'services/order_service.dart';
+import 'services/review_service.dart';
 import 'services/wishlist_service.dart';
 import 'state/auth_provider.dart';
 import 'state/cart_provider.dart';
@@ -32,6 +33,7 @@ class ShoeArApp extends StatelessWidget {
         ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
         Provider<CatalogService>.value(value: CatalogService(api)),
         Provider<OrderService>.value(value: OrderService(api)),
+        Provider<ReviewService>.value(value: ReviewService(api)),
         // the cart loads on login and clears on logout (driven by AuthProvider)
         ChangeNotifierProxyProvider<AuthProvider, CartProvider>(
           create: (_) => CartProvider(CartService(api)),

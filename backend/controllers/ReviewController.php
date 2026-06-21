@@ -180,6 +180,24 @@ function handleCreateReview(PDO $pdo, array $auth, string $productId): void {
   sendJson(201, true, ['reviewId' => $id, 'productId' => $productId, 'ratingScore' => $rating, 'reviewComment' => $comment]);
 }
 
+// GET /products/{productId}/reviews/mine — the caller's own review for this
+// product (or null), plus whether they're eligible to write one (have purchased
+// it). Lets the app show "Write a review" vs "Edit / delete your review".
+function handleGetMyReview(PDO $pdo, array $auth, string $productId): void {
+  $customerId = requireCustomerId($pdo, $auth);
+  $stmt = $pdo->prepare(
+    "SELECT reviewId, ratingScore, reviewComment, reviewDate, reviewStatus
+       FROM review WHERE customerId = :cid AND productId = :pid"
+  );
+  $stmt->execute(['cid' => $customerId, 'pid' => $productId]);
+  $row = $stmt->fetch() ?: null;
+  if ($row) { $row['ratingScore'] = (int) $row['ratingScore']; }
+  sendJson(200, true, [
+    'myReview'  => $row,
+    'canReview' => customerHasPurchased($pdo, $customerId, $productId),
+  ]);
+}
+
 // PUT /reviews/{reviewId} — edit your own review.
 function handleUpdateReview(PDO $pdo, array $auth, string $reviewId): void {
   $customerId = requireCustomerId($pdo, $auth);

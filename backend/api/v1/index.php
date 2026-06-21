@@ -132,6 +132,12 @@ if ($method === 'GET' && preg_match('#^/orders/([^/]+)/receipt$#', $path, $m)) {
 }
 
 // ── customer reviews (create on a purchased product; edit/delete your own) ──
+if ($method === 'GET' && preg_match('#^/products/([^/]+)/reviews/mine$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleGetMyReview($pdo, $auth, $m[1]);
+}
+
 if ($method === 'POST' && preg_match('#^/products/([^/]+)/reviews$#', $path, $m)) {
   $auth = requireAuth($secret);
   $pdo  = getPDO();
