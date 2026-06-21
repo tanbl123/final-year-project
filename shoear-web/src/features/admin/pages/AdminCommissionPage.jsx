@@ -89,7 +89,7 @@ function AdminCommissionPage() {
                 </div>
                 <div className="col-sm-4">
                   <label className="form-label small text-muted mb-1">New rate (%)</label>
-                  <input type="number" min="0" max="100" step="1" placeholder="e.g. 10"
+                  <input type="number" min="0" max="100" step="0.01" placeholder="e.g. 10"
                     className={'form-control' + (rateError ? ' is-invalid' : '')}
                     value={newRate} onChange={(e) => setNewRate(e.target.value)} />
                   {rateError && <div className="invalid-feedback">{rateError}</div>}
