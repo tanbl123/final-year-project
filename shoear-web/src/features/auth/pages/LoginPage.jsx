@@ -110,6 +110,21 @@ function LoginPage({ variant = 'supplier' }) {
       <Toast message={toast} onClose={() => setToast('')} />
       <h1 className="mb-4 text-center">{config.title}</h1>
 
+      {/* portal switch as a tab bar above the card — anchored here so the card's
+          differing height (the supplier sign-up block) never shifts it */}
+      <ul className="nav nav-pills nav-justified mb-3">
+        <li className="nav-item">
+          <Link to="/admin/login" className={`nav-link ${variant === 'admin' ? 'active' : ''}`}>
+            Admin login
+          </Link>
+        </li>
+        <li className="nav-item">
+          <Link to="/login" className={`nav-link ${variant === 'supplier' ? 'active' : ''}`}>
+            Supplier login
+          </Link>
+        </li>
+      </ul>
+
       <form onSubmit={handleSubmit} className="card card-body shadow-sm text-start" noValidate>
         <div className="mb-3">
           <label className="form-label">Email or username</label>
@@ -162,9 +177,7 @@ function LoginPage({ variant = 'supplier' }) {
           Forgot password?
         </Link>
 
-        {/* footer block — kept the same height on both variants so the portal
-            toggle below the card doesn't jump when switching */}
-        {variant === 'supplier' ? (
+        {variant === 'supplier' && (
           <>
             <hr className="my-3" />
             <p className="text-center text-muted small mb-2">New to ShoeAR?</p>
@@ -172,32 +185,8 @@ function LoginPage({ variant = 'supplier' }) {
               Create a supplier account
             </Link>
           </>
-        ) : (
-          <>
-            <hr className="my-3" />
-            <p className="text-center text-muted small mb-2">Don't have an admin account?</p>
-            <div className="btn btn-outline-secondary w-100 text-center disabled" aria-disabled="true">
-              Created internally — ask an administrator
-            </div>
-          </>
         )}
       </form>
-
-      {/* switch between the two portals — current one is highlighted */}
-      <div className="d-flex gap-2 mt-3">
-        <Link
-          to="/admin/login"
-          className={`btn flex-fill ${variant === 'admin' ? 'btn-primary' : 'btn-outline-secondary'}`}
-        >
-          Admin login
-        </Link>
-        <Link
-          to="/login"
-          className={`btn flex-fill ${variant === 'supplier' ? 'btn-primary' : 'btn-outline-secondary'}`}
-        >
-          Supplier login
-        </Link>
-      </div>
     </div>
   );
 }
