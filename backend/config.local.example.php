@@ -11,6 +11,10 @@ return [
   // config.local.php, not here.
   'stripe_secret' => 'sk_test_REPLACE_ME',
 
+  // Your Stripe TEST publishable key (starts with pk_test_). Sent to the mobile
+  // app so its Stripe SDK can present the payment sheet. Safe to expose.
+  'stripe_publishable' => 'pk_test_REPLACE_ME',
+
   // Only if your React app runs somewhere other than the default:
   // 'app_url' => 'http://localhost:5173',
 

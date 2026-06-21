@@ -71,6 +71,41 @@ flutter run
 - Set `apiBaseUrl` to your PC's LAN IP (e.g. `http://192.168.1.5/shoear/api/v1`),
   and make sure your firewall/XAMPP allows the connection.
 
+## Stripe checkout (card payments)
+
+Card checkout uses **Stripe test mode** via the `flutter_stripe` PaymentSheet.
+PayPal stays simulated. After `flutter pub get`, do the one-time native setup
+(these folders are generated locally, so they aren't in the repo):
+
+**1. Backend keys** — in `backend/config.local.php`:
+```php
+'stripe_secret'      => 'sk_test_...',   // Stripe → Developers → API keys
+'stripe_publishable' => 'pk_test_...',
+```
+
+**2. Android** (`android/`):
+- `android/app/build.gradle.kts` → `minSdk = 21` (or higher).
+- `MainActivity.kt` → extend `FlutterFragmentActivity` (not `FlutterActivity`):
+  ```kotlin
+  import io.flutter.embedding.android.FlutterFragmentActivity
+  class MainActivity : FlutterFragmentActivity()
+  ```
+- `res/values/styles.xml` **and** `res/values-night/styles.xml` → the `NormalTheme`
+  parent must be an AppCompat/MaterialComponents theme, e.g.
+  `Theme.MaterialComponents.DayNight.NoActionBar`.
+
+**3. iOS** (`ios/`): set the platform to 13+ in `ios/Podfile`:
+```ruby
+platform :ios, '13.0'
+```
+
+**4. Test card:** `4242 4242 4242 4242`, any future expiry, any CVC/postcode.
+
+> The backend creates a PaymentIntent (`POST /orders/{id}/payment-intent`), the
+> app collects the card via PaymentSheet, then the server **verifies the
+> PaymentIntent** before marking the order Paid. With no Stripe key configured,
+> the server returns `STRIPE_NOT_CONFIGURED` (PayPal still works, simulated).
+
 ## Test login
 
 Browsing works without logging in (the catalog is public). To test sign-in, use

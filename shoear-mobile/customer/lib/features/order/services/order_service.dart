@@ -23,10 +23,19 @@ class OrderService {
         await api.post('/orders', {'deliveryAddress': deliveryAddress}) as Map<String, dynamic>,
       );
 
-  /// POST /orders/{id}/payment — simulated gateway; on success the order is Paid
-  /// and dispatched. Throws [ApiException] on failure (e.g. out of stock).
-  Future<void> pay(String orderId, String method) async {
-    await api.post('/orders/$orderId/payment', {'paymentMethod': method});
+  /// POST /orders/{id}/payment-intent — start a Stripe payment; returns
+  /// { clientSecret, paymentIntentId, publishableKey } for the payment sheet.
+  Future<Map<String, dynamic>> createPaymentIntent(String orderId) async =>
+      await api.post('/orders/$orderId/payment-intent', {}) as Map<String, dynamic>;
+
+  /// POST /orders/{id}/payment — finalize. For Stripe, pass the paymentIntentId
+  /// (verified server-side); otherwise it's a simulated success. On success the
+  /// order is Paid and dispatched. Throws [ApiException] on failure.
+  Future<void> pay(String orderId, String method, {String? paymentIntentId}) async {
+    await api.post('/orders/$orderId/payment', {
+      'paymentMethod': method,
+      if (paymentIntentId != null) 'paymentIntentId': paymentIntentId,
+    });
   }
 
   /// GET /orders/{id}/receipt

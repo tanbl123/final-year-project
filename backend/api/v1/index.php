@@ -118,11 +118,18 @@ if ($method === 'GET' && preg_match('#^/orders/([^/]+)$#', $path, $m)) {
   handleGetCustomerOrder($pdo, $auth, $m[1]);
 }
 
-// pay an order (simulated gateway → runs the real post-payment pipeline)
+// create a Stripe PaymentIntent for an order (mobile checkout)
+if ($method === 'POST' && preg_match('#^/orders/([^/]+)/payment-intent$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleCreatePaymentIntent($pdo, $config, $auth, $m[1]);
+}
+
+// pay an order: verifies the Stripe PaymentIntent (or simulates) → post-payment pipeline
 if ($method === 'POST' && preg_match('#^/orders/([^/]+)/payment$#', $path, $m)) {
   $auth = requireAuth($secret);
   $pdo  = getPDO();
-  handlePayOrder($pdo, $auth, $m[1]);
+  handlePayOrder($pdo, $config, $auth, $m[1]);
 }
 
 if ($method === 'GET' && preg_match('#^/orders/([^/]+)/receipt$#', $path, $m)) {

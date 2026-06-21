@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:provider/provider.dart';
 
 import 'package:customer/features/order/services/order_service.dart';
@@ -58,12 +59,38 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final cart = context.read<CartProvider>();
     try {
       final created = await orders.checkout(address);
-      await orders.pay(created.orderId, _method);
+
+      if (_method == 'Stripe') {
+        // real Stripe: create a PaymentIntent, collect the card via PaymentSheet,
+        // then confirm server-side
+        final pi = await orders.createPaymentIntent(created.orderId);
+        Stripe.publishableKey = pi['publishableKey'] as String? ?? '';
+        await Stripe.instance.applySettings();
+        await Stripe.instance.initPaymentSheet(
+          paymentSheetParameters: SetupPaymentSheetParameters(
+            paymentIntentClientSecret: pi['clientSecret'] as String,
+            merchantDisplayName: 'ShoeAR',
+          ),
+        );
+        await Stripe.instance.presentPaymentSheet(); // throws if cancelled/failed
+        await orders.pay(created.orderId, 'Stripe', paymentIntentId: pi['paymentIntentId'] as String?);
+      } else {
+        await orders.pay(created.orderId, _method); // PayPal — simulated
+      }
+
       final receipt = await orders.getReceipt(created.orderId);
       await cart.refresh(); // cart was cleared server-side
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => ReceiptScreen(receipt: receipt)),
+      );
+    } on StripeException catch (e) {
+      // the customer cancelled the sheet or the card was declined; the order
+      // stays unpaid (Placed) so they can try again
+      if (!mounted) return;
+      setState(() => _placing = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.error.localizedMessage ?? 'Payment cancelled.')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -148,7 +175,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   secondary: const Icon(Icons.account_balance_wallet),
                   contentPadding: EdgeInsets.zero,
                 ),
-                Text('Payment is simulated for this demo — no real charge is made.',
+                Text('Card payments use Stripe in test mode (try card 4242 4242 4242 4242). PayPal is simulated.',
                     style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
               ],
             ),
