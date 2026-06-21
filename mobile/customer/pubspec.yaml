@@ -1,0 +1,23 @@
+name: customer
+description: ShoeAR customer app — browse, AR try-on, cart, checkout, track, review.
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  http: ^1.2.2              # talks to the PHP REST API
+  provider: ^6.1.2          # simple state management (auth session)
+  shared_preferences: ^2.3.2 # persists the JWT + basic user across launches
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true

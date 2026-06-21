@@ -10,15 +10,20 @@ mobile/
 ```
 
 ## Status
-Not scaffolded yet. Create each app from a machine with the **Flutter SDK**:
+- **customer/** — started (Increment 1: scaffold + API client + login + browse
+  catalog). See `customer/README.md` for setup + run steps.
+- **delivery/** — not started yet.
+
+The app source (`lib/` + `pubspec.yaml`) is committed; the generated platform
+folders (`android/`, `ios/`, …) and `build/` / `.dart_tool/` are gitignored, so
+each app needs `flutter create .` run once locally to add them:
 
 ```bash
-cd mobile
-flutter create customer
-flutter create delivery
+cd mobile/customer
+flutter create .   # generates android/ios/etc around the existing lib/
+flutter pub get
+flutter run
 ```
-
-Keep Flutter `build/` and `.dart_tool/` **gitignored** so the repo stays lean.
 
 ## API the apps will call (all implemented)
 

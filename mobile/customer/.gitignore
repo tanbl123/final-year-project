@@ -1,0 +1,28 @@
+# Flutter / Dart build + tooling artefacts (regenerated locally)
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+.pub-cache/
+.pub/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Generated platform folders are created locally with `flutter create .`
+# (kept out of git so the repo stays lean — see README).
+/android/
+/ios/
+/linux/
+/macos/
+/windows/
+/web/
+
+# Misc
+*.log
+.DS_Store
