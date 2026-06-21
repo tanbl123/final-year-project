@@ -252,6 +252,11 @@ if ($method === 'POST' && $path === '/auth/forgot-password') {
   handleForgotPassword($pdo, $config);
 }
 
+if ($method === 'POST' && $path === '/auth/reset-password/verify-code') {
+  $pdo = getPDO();
+  handleVerifyResetCode($pdo);
+}
+
 if ($method === 'POST' && $path === '/auth/reset-password') {
   $pdo = getPDO();
   handleResetPassword($pdo);

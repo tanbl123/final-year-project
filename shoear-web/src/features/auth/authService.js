@@ -20,6 +20,12 @@ export function forgotPassword(email) {
   return apiPost('/auth/forgot-password', { email });
 }
 
+// Verify a reset code WITHOUT consuming it (POST /auth/reset-password/verify-code)
+// — used as its own step before the new-password step. Resolves on success.
+export function verifyResetCode(email, code) {
+  return apiPost('/auth/reset-password/verify-code', { email, code });
+}
+
 // Finish "forgot password" (POST /auth/reset-password): verify the emailed code
 // and set a new password. Resolves with a { message } on success.
 export function resetPassword(email, code, newPassword) {

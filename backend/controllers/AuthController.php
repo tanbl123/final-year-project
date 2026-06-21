@@ -483,6 +483,47 @@ function handleForgotPassword(PDO $pdo, array $config): void {
   sendJson(200, true, $generic);
 }
 
+// POST /auth/reset-password/verify-code — check the emailed code is valid for
+// the address WITHOUT consuming it or changing the password. This lets the UI
+// confirm the code as its own step before asking for a new password; the code
+// is finally consumed by /auth/reset-password. Body: { email, code }.
+function handleVerifyResetCode(PDO $pdo): void {
+  $body  = getJsonBody();
+  $email = trim($body['email'] ?? '');
+  $code  = trim($body['code'] ?? '');
+
+  if ($email === '' || $code === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Email and code are required.']);
+  }
+
+  $vstmt = $pdo->prepare('SELECT codeHash, attempts, (expires_at < NOW()) AS expired
+                            FROM password_reset WHERE email = :e');
+  $vstmt->execute(['e' => $email]);
+  $vrow = $vstmt->fetch();
+  if (!$vrow) {
+    sendJson(400, false, null, ['code' => 'NO_CODE',
+      'message' => 'Please request a password reset code first.']);
+  }
+  if ((int) $vrow['attempts'] >= VERIFY_MAX_ATTEMPTS) {
+    $pdo->prepare('DELETE FROM password_reset WHERE email = :e')->execute(['e' => $email]);
+    sendJson(429, false, null, ['code' => 'TOO_MANY',
+      'message' => 'Too many incorrect attempts. Please request a new code.']);
+  }
+  if ((int) $vrow['expired'] === 1) {
+    sendJson(400, false, null, ['code' => 'CODE_EXPIRED',
+      'message' => 'Your reset code has expired. Please request a new one.']);
+  }
+  if (!password_verify($code, $vrow['codeHash'])) {
+    $pdo->prepare('UPDATE password_reset SET attempts = attempts + 1 WHERE email = :e')->execute(['e' => $email]);
+    $left = VERIFY_MAX_ATTEMPTS - ((int) $vrow['attempts'] + 1);
+    $msg  = $left > 0 ? "Incorrect code. $left attempt(s) left." : 'Incorrect code. Please request a new one.';
+    sendJson(400, false, null, ['code' => 'BAD_CODE', 'message' => $msg]);
+  }
+
+  // valid — leave the code in place; /auth/reset-password will consume it
+  sendJson(200, true, ['message' => 'Code verified.']);
+}
+
 // POST /auth/reset-password — finish the flow: verify the emailed code for the
 // address, then set a new password. Body: { email, code, newPassword }.
 function handleResetPassword(PDO $pdo): void {
