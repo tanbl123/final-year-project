@@ -281,6 +281,67 @@ function handleRegister(PDO $pdo): void {
   sendJson(201, true, ['message' => 'Registration submitted. Your account is pending admin approval.']);
 }
 
+// POST /auth/register/customer — self-service CUSTOMER sign-up from the mobile
+// app. Unlike suppliers (who need admin approval + KYB), customers are Active
+// immediately. Creates a `user` row + a `customer` row. They log in afterwards.
+function handleRegisterCustomer(PDO $pdo): void {
+  $body        = getJsonBody();
+  $username    = trim($body['username'] ?? '');
+  $email       = trim($body['email'] ?? '');
+  $password    = $body['password'] ?? '';
+  $fullName    = trim($body['fullName'] ?? '');
+  $phoneNumber = trim($body['phoneNumber'] ?? '');
+  $shipping    = trim($body['shippingAddress'] ?? '');
+
+  if ($fullName === '' || $username === '' || $email === '' || $phoneNumber === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Name, username, email and phone number are required.']);
+  }
+  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please enter a valid email.']);
+  }
+  if (!preg_match('/^\+?[1-9]\d{7,14}$/', $phoneNumber)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid phone number in international format, e.g. +60123456789.']);
+  }
+  $fmtErr = usernameFormatError($username);
+  if ($fmtErr) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => $fmtErr]);
+  }
+  $pwErr = passwordPolicyError($password);
+  if ($pwErr) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => $pwErr]);
+  }
+
+  $chk = $pdo->prepare('SELECT 1 FROM `user` WHERE email = :e');
+  $chk->execute(['e' => $email]);
+  if ($chk->fetch()) {
+    sendJson(409, false, null, ['code' => 'DUPLICATE', 'message' => 'That email is already registered.']);
+  }
+  if (usernameTaken($pdo, $username)) {
+    sendJson(409, false, null, ['code' => 'DUPLICATE', 'message' => 'That username is already taken.']);
+  }
+
+  $pdo->beginTransaction();
+  try {
+    $userId = nextId($pdo, 'user', 'userId', 'USR');
+    $hash   = password_hash($password, PASSWORD_BCRYPT);
+    $pdo->prepare(
+      'INSERT INTO `user` (userId, username, password, email, fullName, phoneNumber, role, status)
+       VALUES (:id, :un, :pw, :em, :fn, :ph, "Customer", "Active")'
+    )->execute(['id' => $userId, 'un' => $username, 'pw' => $hash, 'em' => $email, 'fn' => $fullName, 'ph' => $phoneNumber]);
+
+    $customerId = nextId($pdo, 'customer', 'customerId', 'CUS');
+    $pdo->prepare('INSERT INTO customer (customerId, userId, shippingAddress) VALUES (:cid, :uid, :sa)')
+        ->execute(['cid' => $customerId, 'uid' => $userId, 'sa' => $shipping !== '' ? $shipping : null]);
+
+    $pdo->commit();
+  } catch (Throwable $e) {
+    $pdo->rollBack();
+    sendJson(500, false, null, ['code' => 'SERVER', 'message' => 'Could not create the account. Please try again.']);
+  }
+
+  sendJson(201, true, ['message' => 'Account created. You can now log in.']);
+}
+
 // POST /auth/login  — verify email + password, return a JWT + basic profile.
 function handleLogin(PDO $pdo, string $secret): void {
   $body = getJsonBody();
@@ -399,7 +460,21 @@ function handleUpdateMe(PDO $pdo, array $auth): void {
   $upd = $pdo->prepare('UPDATE `user` SET fullName = :fn, phoneNumber = :ph, username = :un WHERE userId = :id');
   $upd->execute(['fn' => $fullName, 'ph' => $phone, 'un' => $username, 'id' => $auth['userId']]);
 
+  // customers may also update their saved shipping address (no-op for others)
+  if (array_key_exists('shippingAddress', $body)) {
+    $pdo->prepare('UPDATE customer SET shippingAddress = :sa WHERE userId = :id')
+        ->execute(['sa' => trim((string) $body['shippingAddress']), 'id' => $auth['userId']]);
+  }
+
   sendJson(200, true, ['fullName' => $fullName, 'phoneNumber' => $phone, 'username' => $username]);
+}
+
+// DELETE /auth/me — the user closes their own account. Soft-delete (status →
+// 'Deleted') so order/review history stays intact; the account can no longer log in.
+function handleDeleteMe(PDO $pdo, array $auth): void {
+  $pdo->prepare("UPDATE `user` SET status = 'Deleted' WHERE userId = :id")
+      ->execute(['id' => $auth['userId']]);
+  sendJson(200, true, ['message' => 'Your account has been deleted.']);
 }
 
 // POST /auth/change-password — verify the current password, then set a new one.

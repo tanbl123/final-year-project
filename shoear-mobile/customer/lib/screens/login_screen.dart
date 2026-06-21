@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../state/auth_provider.dart';
+import 'register_screen.dart';
 
 /// Customer sign-in. Pops back to the previous screen on success.
 class LoginScreen extends StatefulWidget {
@@ -98,6 +99,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                         : const Text('Login'),
                   ),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _loading
+                      ? null
+                      : () => Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                          ),
+                  child: const Text("New to ShoeAR? Create an account"),
                 ),
               ],
             ),

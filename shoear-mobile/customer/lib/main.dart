@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'api/api_client.dart';
+import 'services/account_service.dart';
 import 'services/auth_service.dart';
 import 'services/catalog_service.dart';
 import 'services/cart_service.dart';
@@ -32,6 +33,7 @@ class ShoeArApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
         Provider<CatalogService>.value(value: CatalogService(api)),
+        Provider<AccountService>.value(value: AccountService(api)),
         Provider<OrderService>.value(value: OrderService(api)),
         Provider<ReviewService>.value(value: ReviewService(api)),
         // the cart loads on login and clears on logout (driven by AuthProvider)

@@ -247,6 +247,12 @@ if ($method === 'POST' && $path === '/auth/register') {
   handleRegister($pdo);
 }
 
+// customer self-service sign-up (mobile app) — Active immediately, no approval
+if ($method === 'POST' && $path === '/auth/register/customer') {
+  $pdo = getPDO();
+  handleRegisterCustomer($pdo);
+}
+
 if ($method === 'POST' && $path === '/auth/login') {
   $pdo = getPDO();
   handleLogin($pdo, $secret);
@@ -285,6 +291,12 @@ if ($method === 'PUT' && $path === '/auth/me') {
   $auth = requireAuth($secret);
   $pdo  = getPDO();
   handleUpdateMe($pdo, $auth);
+}
+
+if ($method === 'DELETE' && $path === '/auth/me') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleDeleteMe($pdo, $auth);
 }
 
 if ($method === 'POST' && $path === '/auth/change-password') {
