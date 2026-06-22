@@ -92,10 +92,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 label: const Text('Sign out'),
               ),
               const SizedBox(height: 24),
-              TextButton.icon(
+              OutlinedButton.icon(
                 onPressed: _confirmDelete,
-                icon: const Icon(Icons.delete_forever, color: Colors.red),
-                label: const Text('Delete my account', style: TextStyle(color: Colors.red)),
+                icon: const Icon(Icons.delete_forever),
+                label: const Text('Delete my account'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  side: const BorderSide(color: Colors.red),
+                ),
               ),
             ],
           );
