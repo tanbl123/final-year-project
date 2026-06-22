@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:delivery/features/auth/state/auth_provider.dart';
+import 'package:delivery/features/auth/widgets/vehicle_picker.dart';
 
 // Password policy mirrors the backend: 8+ chars with at least one lowercase,
 // uppercase, digit and special character. Returns an error string, or null.
@@ -41,8 +42,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _usernameFocus = FocusNode();
   final _emailFocus = FocusNode();
   final _phoneFocus = FocusNode();
-  final _vehicleBrandFocus = FocusNode();
-  final _vehicleModelFocus = FocusNode();
+  // Brand & model are dropdowns (VehiclePicker) — no blur focus needed.
   final _vehiclePlateFocus = FocusNode();
   final _passwordFocus = FocusNode();
   final _confirmFocus = FocusNode();
@@ -67,8 +67,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _usernameFocus.addListener(() => _onBlur(_usernameFocus, () => _usernameError = _validateUsername(_username.text)));
     _emailFocus.addListener(() => _onBlur(_emailFocus, () => _emailError = _validateEmail(_email.text)));
     _phoneFocus.addListener(() => _onBlur(_phoneFocus, () => _phoneError = _validatePhone(_phone.text)));
-    _vehicleBrandFocus.addListener(() => _onBlur(_vehicleBrandFocus, () => _vehicleBrandError = _validateBrand(_vehicleBrand.text)));
-    _vehicleModelFocus.addListener(() => _onBlur(_vehicleModelFocus, () => _vehicleModelError = _validateModel(_vehicleModel.text)));
     _vehiclePlateFocus.addListener(() => _onBlur(_vehiclePlateFocus, () => _vehiclePlateError = _validatePlate(_vehiclePlate.text)));
     _passwordFocus.addListener(() => _onBlur(_passwordFocus, () => _passwordError = _validatePassword(_password.text)));
     _confirmFocus.addListener(() => _onBlur(_confirmFocus, () => _confirmError = _validateConfirm()));
@@ -83,7 +81,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     for (final c in [_fullName, _username, _email, _phone, _vehicleBrand, _vehicleModel, _vehiclePlate, _password, _confirm]) {
       c.dispose();
     }
-    for (final f in [_fullNameFocus, _usernameFocus, _emailFocus, _phoneFocus, _vehicleBrandFocus, _vehicleModelFocus, _vehiclePlateFocus, _passwordFocus, _confirmFocus]) {
+    for (final f in [_fullNameFocus, _usernameFocus, _emailFocus, _phoneFocus, _vehiclePlateFocus, _passwordFocus, _confirmFocus]) {
       f.dispose();
     }
     super.dispose();
@@ -274,19 +272,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
               onChanged: (v) => setState(() => _vehicleType = v ?? 'Motorcycle'),
             ),
           ),
-          _field(
-            controller: _vehicleBrand,
-            focusNode: _vehicleBrandFocus,
-            label: 'Vehicle brand (e.g. Honda, Yamaha)',
-            error: _vehicleBrandError,
-            onChanged: (v) => setState(() => _vehicleBrandError = _validateBrand(v)),
-          ),
-          _field(
-            controller: _vehicleModel,
-            focusNode: _vehicleModelFocus,
-            label: 'Vehicle model (e.g. EX5, LC135)',
-            error: _vehicleModelError,
-            onChanged: (v) => setState(() => _vehicleModelError = _validateModel(v)),
+          // Brand & model from the NHTSA vPIC API (with manual fallback).
+          VehiclePicker(
+            vehicleType: _vehicleType,
+            brand: _vehicleBrand,
+            model: _vehicleModel,
+            brandError: _vehicleBrandError,
+            modelError: _vehicleModelError,
+            onBrandChanged: () => setState(() => _vehicleBrandError = _validateBrand(_vehicleBrand.text)),
+            onModelChanged: () => setState(() => _vehicleModelError = _validateModel(_vehicleModel.text)),
           ),
           _field(
             controller: _vehiclePlate,

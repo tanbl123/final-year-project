@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:delivery/core/widgets/profile_avatar.dart';
 import 'package:delivery/features/auth/services/account_service.dart';
 import 'package:delivery/features/auth/state/auth_provider.dart';
+import 'package:delivery/features/auth/widgets/vehicle_picker.dart';
 
 /// Full-page edit-profile form for couriers: change the photo (take/choose/
 /// remove) and the account fields. Pops `true` on a successful save.
@@ -266,8 +267,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 onChanged: (v) => setState(() => _vehicleType = v ?? 'Motorcycle'),
               ),
             ),
-            _field(_vehicleBrand, 'Brand (e.g. Honda, Yamaha)'),
-            _field(_vehicleModel, 'Model (e.g. EX5, LC135)'),
+            // Brand & model from the NHTSA vPIC API (with manual fallback).
+            VehiclePicker(
+              vehicleType: _vehicleType,
+              brand: _vehicleBrand,
+              model: _vehicleModel,
+            ),
             _field(_vehiclePlate, 'Plate number (e.g. ABC 1234)', maxLength: 20),
             const SizedBox(height: 8),
             FilledButton(

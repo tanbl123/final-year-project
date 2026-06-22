@@ -72,8 +72,15 @@ don't use the supplier-only `/uploads` endpoint.
 ## Courier sign-up (self-apply + admin approval)
 
 New couriers tap **"Apply to be a courier"** on the login screen and submit their
-details (name, username, email, phone, vehicle info, password). This mirrors how
-real platforms onboard drivers (Grab/Lalamove/Shopee SPX):
+details (name, username, email, phone, vehicle details, password). This mirrors
+how real platforms onboard drivers (Grab/Lalamove/Shopee SPX):
+
+> **Vehicle brand & model** are picked from dropdowns populated live by the free
+> [NHTSA vPIC API](https://vpic.nhtsa.dot.gov/api/) (no key needed): type →
+> brand → model. If the API is unreachable, or the brand isn't listed (it's a
+> US dataset, so some local brands like Perodua/Proton may be missing), each
+> field falls back to free text so a courier is never blocked.
+
 
 1. The app calls `POST /auth/register/courier` → the account is created as
    **`Pending`** (it cannot log in yet).
