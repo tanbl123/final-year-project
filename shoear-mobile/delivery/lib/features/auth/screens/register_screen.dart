@@ -130,7 +130,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _validatePlate(String v) {
     final t = v.trim();
     if (t.isEmpty) return 'Plate number is required.';
-    if (t.length > 20) return 'Plate number is too long (max 20 characters).';
+    if (!RegExp(r'^[A-Za-z0-9 \-]{3,20}$').hasMatch(t)) {
+      return 'Letters, numbers, spaces and hyphens only (3–20 characters).';
+    }
     return null;
   }
 

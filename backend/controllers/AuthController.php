@@ -373,8 +373,8 @@ function handleRegisterCourier(PDO $pdo): void {
   if (mb_strlen($vehicleModel) > 50) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Vehicle model is too long (max 50 characters).']);
   }
-  if (mb_strlen($vehiclePlate) > 20) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Plate number is too long (max 20 characters).']);
+  if (!preg_match('/^[A-Za-z0-9 \-]{3,20}$/', $vehiclePlate)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Plate number must be 3–20 characters: letters, numbers, spaces and hyphens only.']);
   }
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please enter a valid email.']);
@@ -565,6 +565,9 @@ function handleUpdateMe(PDO $pdo, array $auth): void {
     $vModel = trim((string) ($body['vehicleModel'] ?? ''));
     $vPlate = trim((string) ($body['vehiclePlate'] ?? ''));
     if (!in_array($vType, $allowedTypes, true)) $vType = 'Motorcycle';
+    if ($vPlate !== '' && !preg_match('/^[A-Za-z0-9 \-]{3,20}$/', $vPlate)) {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Plate number must be 3–20 characters: letters, numbers, spaces and hyphens only.']);
+    }
     $pdo->prepare('UPDATE delivery_personnel SET vehicleType = :vt, vehicleBrand = :vb, vehicleModel = :vm, vehiclePlate = :vp WHERE userId = :id')
         ->execute(['vt' => $vType, 'vb' => $vBrand, 'vm' => $vModel, 'vp' => $vPlate, 'id' => $auth['userId']]);
   }

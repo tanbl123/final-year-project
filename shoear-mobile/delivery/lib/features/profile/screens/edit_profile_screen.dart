@@ -57,6 +57,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _nameError;
   String? _usernameError;
   String? _phoneError;
+  String? _plateError;
 
   @override
   void initState() {
@@ -211,6 +212,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           _saving = false;
           if (lower.contains('phone')) {
             _phoneError = msg;
+          } else if (lower.contains('plate')) {
+            _plateError = msg;
           } else if (lower.contains('name')) {
             _nameError = msg;
           } else {
@@ -273,7 +276,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               brand: _vehicleBrand,
               model: _vehicleModel,
             ),
-            _field(_vehiclePlate, 'Plate number (e.g. ABC 1234)', maxLength: 20),
+            _field(_vehiclePlate, 'Plate number (e.g. ABC 1234)', maxLength: 20, error: _plateError,
+                onChanged: (_) => setState(() => _plateError = null)),
             const SizedBox(height: 8),
             FilledButton(
               onPressed: (_saving || !_dirty) ? null : _save,
