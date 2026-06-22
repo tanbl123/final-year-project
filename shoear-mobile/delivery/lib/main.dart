@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'package:delivery/core/api/api_client.dart';
 import 'package:delivery/features/auth/services/auth_service.dart';
+import 'package:delivery/features/auth/services/account_service.dart';
 import 'package:delivery/features/auth/state/auth_provider.dart';
 import 'package:delivery/features/delivery/services/delivery_service.dart';
 import 'package:delivery/features/shell/main_shell.dart';
@@ -26,6 +27,7 @@ class CourierApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider<AuthProvider>.value(value: authProvider),
         Provider<DeliveryService>.value(value: DeliveryService(api)),
+        Provider<AccountService>.value(value: AccountService(api)),
       ],
       child: MaterialApp(
         title: 'ShoeAR Courier',

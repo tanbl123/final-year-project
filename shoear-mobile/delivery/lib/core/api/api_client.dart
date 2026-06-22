@@ -50,6 +50,18 @@ class ApiClient {
     return _unwrap(res);
   }
 
+  Future<dynamic> put(String path, Map<String, dynamic> body) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final res = await http.put(uri, headers: _headers(json: true), body: jsonEncode(body));
+    return _unwrap(res);
+  }
+
+  Future<dynamic> delete(String path) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final res = await http.delete(uri, headers: _headers());
+    return _unwrap(res);
+  }
+
   /// Multipart POST of a single file (field `file`). Used for the
   /// proof-of-delivery photo → POST /deliveries/{id}/proof.
   Future<dynamic> uploadFile(String path, File file) async {

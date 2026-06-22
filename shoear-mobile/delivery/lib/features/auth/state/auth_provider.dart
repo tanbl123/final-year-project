@@ -52,6 +52,19 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Update the cached display name after a profile edit (keeps the UI in sync).
+  Future<void> applyProfile({required String fullName}) async {
+    final s = _session;
+    if (s == null) return;
+    _session = CourierSession(
+      token: s.token,
+      user: CourierUser(userId: s.user.userId, role: s.user.role, fullName: fullName, status: s.user.status),
+    );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kUser, jsonEncode(_session!.user.toJson()));
+    notifyListeners();
+  }
+
   Future<void> logout() async {
     _session = null;
     api.setToken(null);

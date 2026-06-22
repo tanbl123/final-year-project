@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:delivery/features/auth/state/auth_provider.dart';
 import 'package:delivery/features/delivery/models/delivery.dart';
 import 'package:delivery/features/delivery/services/delivery_service.dart';
 import 'package:delivery/features/delivery/screens/delivery_detail_screen.dart';
@@ -34,24 +33,8 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final name = context.watch<AuthProvider>().user?.fullName ?? 'Courier';
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('My deliveries'),
-        actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.account_circle_outlined),
-            onSelected: (v) {
-              if (v == 'logout') context.read<AuthProvider>().logout();
-            },
-            itemBuilder: (_) => [
-              PopupMenuItem(enabled: false, child: Text(name, style: const TextStyle(fontWeight: FontWeight.bold))),
-              const PopupMenuDivider(),
-              const PopupMenuItem(value: 'logout', child: Text('Sign out')),
-            ],
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('My deliveries')),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: FutureBuilder<List<DeliverySummary>>(

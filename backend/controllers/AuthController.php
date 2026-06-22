@@ -466,6 +466,12 @@ function handleUpdateMe(PDO $pdo, array $auth): void {
         ->execute(['sa' => trim((string) $body['shippingAddress']), 'id' => $auth['userId']]);
   }
 
+  // delivery personnel may also update their vehicle info (no-op for others)
+  if (array_key_exists('vehicleInfo', $body)) {
+    $pdo->prepare('UPDATE delivery_personnel SET vehicleInfo = :vi WHERE userId = :id')
+        ->execute(['vi' => trim((string) $body['vehicleInfo']), 'id' => $auth['userId']]);
+  }
+
   sendJson(200, true, ['fullName' => $fullName, 'phoneNumber' => $phone, 'username' => $username]);
 }
 
