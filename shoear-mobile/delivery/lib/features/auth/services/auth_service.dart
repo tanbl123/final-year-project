@@ -14,4 +14,27 @@ class AuthService {
     });
     return CourierSession.fromJson(data as Map<String, dynamic>);
   }
+
+  /// POST /auth/register/courier — self-apply as a courier. The account is
+  /// created as Pending (awaiting admin approval), so there's no auto-login;
+  /// returns the server's confirmation message.
+  Future<String> registerCourier({
+    required String fullName,
+    required String username,
+    required String email,
+    required String phoneNumber,
+    required String vehicleInfo,
+    required String password,
+  }) async {
+    final data = await api.post('/auth/register/courier', {
+      'fullName': fullName,
+      'username': username,
+      'email': email,
+      'phoneNumber': phoneNumber,
+      'vehicleInfo': vehicleInfo,
+      'password': password,
+    });
+    return (data as Map<String, dynamic>)['message']?.toString() ??
+        'Registration submitted. Your account is pending admin approval.';
+  }
 }

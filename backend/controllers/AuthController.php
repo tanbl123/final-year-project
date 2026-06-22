@@ -342,6 +342,72 @@ function handleRegisterCustomer(PDO $pdo): void {
   sendJson(201, true, ['message' => 'Account created. You can now log in.']);
 }
 
+// POST /auth/register/courier — self-service DELIVERY PERSONNEL sign-up from the
+// courier app. Like suppliers (and unlike customers) the account starts Pending
+// and must be approved by an admin before it can log in. Creates a `user` row +
+// a `delivery_personnel` row together. No email-code step: admin review is the
+// gate, and this keeps the mobile flow simple.
+function handleRegisterCourier(PDO $pdo): void {
+  $body        = getJsonBody();
+  $username    = trim($body['username'] ?? '');
+  $email       = trim($body['email'] ?? '');
+  $password    = $body['password'] ?? '';
+  $fullName    = trim($body['fullName'] ?? '');
+  $phoneNumber = trim($body['phoneNumber'] ?? '');
+  $vehicleInfo = trim($body['vehicleInfo'] ?? '');
+
+  if ($fullName === '' || $username === '' || $email === '' || $phoneNumber === '' || $vehicleInfo === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Name, username, email, phone number and vehicle info are required.']);
+  }
+  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please enter a valid email.']);
+  }
+  if (!preg_match('/^\+?[1-9]\d{7,14}$/', $phoneNumber)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid phone number in international format, e.g. +60123456789.']);
+  }
+  if (mb_strlen($vehicleInfo) > 100) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Vehicle info is too long (max 100 characters).']);
+  }
+  $fmtErr = usernameFormatError($username);
+  if ($fmtErr) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => $fmtErr]);
+  }
+  $pwErr = passwordPolicyError($password);
+  if ($pwErr) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => $pwErr]);
+  }
+
+  $chk = $pdo->prepare('SELECT 1 FROM `user` WHERE email = :e');
+  $chk->execute(['e' => $email]);
+  if ($chk->fetch()) {
+    sendJson(409, false, null, ['code' => 'DUPLICATE', 'message' => 'That email is already registered.']);
+  }
+  if (usernameTaken($pdo, $username)) {
+    sendJson(409, false, null, ['code' => 'DUPLICATE', 'message' => 'That username is already taken.']);
+  }
+
+  $pdo->beginTransaction();
+  try {
+    $userId = nextId($pdo, 'user', 'userId', 'USR');
+    $hash   = password_hash($password, PASSWORD_BCRYPT);
+    $pdo->prepare(
+      'INSERT INTO `user` (userId, username, password, email, fullName, phoneNumber, role, status)
+       VALUES (:id, :un, :pw, :em, :fn, :ph, "DeliveryPersonnel", "Pending")'
+    )->execute(['id' => $userId, 'un' => $username, 'pw' => $hash, 'em' => $email, 'fn' => $fullName, 'ph' => $phoneNumber]);
+
+    $deliveryPersonnelId = nextId($pdo, 'delivery_personnel', 'deliveryPersonnelId', 'DEL');
+    $pdo->prepare('INSERT INTO delivery_personnel (deliveryPersonnelId, userId, vehicleInfo) VALUES (:did, :uid, :vi)')
+        ->execute(['did' => $deliveryPersonnelId, 'uid' => $userId, 'vi' => $vehicleInfo]);
+
+    $pdo->commit();
+  } catch (Throwable $e) {
+    $pdo->rollBack();
+    sendJson(500, false, null, ['code' => 'SERVER', 'message' => 'Could not create the account. Please try again.']);
+  }
+
+  sendJson(201, true, ['message' => 'Registration submitted. Your account is pending admin approval.']);
+}
+
 // POST /auth/login  — verify email + password, return a JWT + basic profile.
 function handleLogin(PDO $pdo, string $secret): void {
   $body = getJsonBody();
@@ -374,11 +440,18 @@ function handleLogin(PDO $pdo, string $secret): void {
   $isActive           = $user['status'] === 'Active';
   $isRejectedSupplier = $user['role'] === 'Supplier' && $user['status'] === 'Rejected';
   if (!$isActive && !$isRejectedSupplier) {
-    $msg = $user['status'] === 'Pending'
-      ? 'Your account is pending admin approval. Please wait for approval.'
-      : ($user['status'] === 'Banned'
-          ? 'Your registration has been rejected and cannot be resubmitted.'
-          : 'Your account is ' . $user['status'] . '.');
+    if ($user['status'] === 'Pending') {
+      $msg = 'Your account is pending admin approval. Please wait for approval.';
+    } elseif ($user['status'] === 'Banned') {
+      $msg = 'Your registration has been rejected and cannot be resubmitted.';
+    } elseif ($user['status'] === 'Rejected') {
+      // a rejected (non-supplier) applicant — surface the reason so they know why
+      $msg = !empty($user['rejectionReason'])
+        ? 'Your application was rejected: ' . $user['rejectionReason']
+        : 'Your application was rejected.';
+    } else {
+      $msg = 'Your account is ' . $user['status'] . '.';
+    }
     sendJson(403, false, null, ['code' => 'NOT_ACTIVE', 'message' => $msg]);
   }
 

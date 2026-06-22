@@ -78,6 +78,8 @@ List responses include paging info:
 |--------|------|--------|---------|
 | POST | `/auth/register/send-code` | Public | **(Implemented)** Email a 6-digit verification code before the account is created. Always returns a generic success (no account enumeration); if the email already exists it gets an "account exists" notice instead of a code. Requires SMTP. |
 | POST | `/auth/register` | Public | **(Implemented, supplier)** Register. Supplier → `Pending` (await admin); requires a valid `verificationCode`. Customer/Delivery register on their mobile apps. |
+| POST | `/auth/register/customer` | Public | **(Implemented)** Customer self-service sign-up (mobile). `Active` immediately, no approval. |
+| POST | `/auth/register/courier` | Public | **(Implemented)** Courier self-application (delivery app). Body `{ fullName, username, email, phoneNumber, vehicleInfo, password }`. Creates a `DeliveryPersonnel` as `Pending` — awaits admin approval, no auto-login. |
 | POST | `/auth/login` | Public | Returns JWT + role + basic profile. |
 | POST | `/auth/logout` | Any | Client-side token discard (and optional server token blacklist). |
 | GET  | `/auth/me` | Any | **(Implemented)** Current user's profile (joins role-specific table). Includes `avatarUrl` (null = no photo). |
@@ -143,6 +145,12 @@ The supplier's `businessLicenseUrl` comes from first uploading the document:
 | GET   | `/admin/users` | Admin | **(Implemented)** List/filter users (`?role=Supplier&status=Pending&search=...`). |
 | GET   | `/admin/users/{userId}` | Admin | **(Implemented)** One user's full detail, incl. role-specific `profile`. |
 | PATCH | `/admin/users/{userId}/status` | Admin | **(Implemented)** Approve / reject / suspend / reactivate / delete. Body: `{ "status": "Active" }`. |
+| GET   | `/admin/suppliers/pending` | Admin | **(Implemented)** Supplier approval queue (with KYB fields + document URL). |
+| POST  | `/admin/suppliers/{userId}/approve` | Admin | **(Implemented)** Approve a pending supplier (→ `Active`). |
+| POST  | `/admin/suppliers/{userId}/reject` | Admin | **(Implemented)** Reject a pending supplier. Body `{ reason, terminal? }` — `terminal=true` bans. |
+| GET   | `/admin/couriers/pending` | Admin | **(Implemented)** Courier approval queue (self-applied delivery personnel, with vehicle info). |
+| POST  | `/admin/couriers/{userId}/approve` | Admin | **(Implemented)** Approve a pending courier (→ `Active`). |
+| POST  | `/admin/couriers/{userId}/reject` | Admin | **(Implemented)** Reject a pending courier. Body `{ reason, terminal? }` — reason shown at login; `terminal=true` bans. |
 
 This is how a `Pending` supplier or delivery person becomes `Active`. Guards:
 an admin cannot change **their own** account, and **Admin** accounts cannot be

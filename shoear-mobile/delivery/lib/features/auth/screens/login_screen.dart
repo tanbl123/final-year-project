@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:delivery/features/auth/state/auth_provider.dart';
+import 'package:delivery/features/auth/screens/register_screen.dart';
 
 /// Courier sign-in. The shell shows this whenever there's no session.
 class LoginScreen extends StatefulWidget {
@@ -59,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
               children: [
                 Icon(Icons.local_shipping, size: 48, color: theme.colorScheme.primary),
                 const SizedBox(height: 8),
-                const Text('ShoeAR Courier',
+                const Text('ShoeAR Express',
                     style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
                 const SizedBox(height: 4),
                 Text('Delivery personnel sign in',
@@ -113,6 +114,15 @@ class _LoginScreenState extends State<LoginScreen> {
                       ],
                     ),
                   ),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: _loading
+                      ? null
+                      : () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                          ),
+                  child: const Text('New here? Apply to be a courier'),
                 ),
               ],
             ),

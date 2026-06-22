@@ -16,6 +16,23 @@ export function rejectSupplier(userId, { reason, terminal = false } = {}) {
   return apiPost(`/admin/suppliers/${userId}/reject`, { reason, terminal }, getToken());
 }
 
+// ── courier (delivery personnel) approvals ───────────────────────────
+// Couriers awaiting approval (self-applied via the delivery app).
+export function getPendingCouriers() {
+  return apiGet('/admin/couriers/pending', getToken());
+}
+
+// Approve a pending courier (status → Active, so they can log in).
+export function approveCourier(userId) {
+  return apiPost(`/admin/couriers/${userId}/approve`, {}, getToken());
+}
+
+// Reject a pending courier. reason is required and shown to the courier at login;
+// terminal=true bans them permanently.
+export function rejectCourier(userId, { reason, terminal = false } = {}) {
+  return apiPost(`/admin/couriers/${userId}/reject`, { reason, terminal }, getToken());
+}
+
 // Products awaiting approval.
 export function getPendingProducts() {
   return apiGet('/admin/products/pending', getToken());

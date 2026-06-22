@@ -5,6 +5,7 @@ import { NavLink } from 'react-router-dom';
 const ADMIN_NAV = [
   { group: 'Main', items: [
     { to: '/admin', label: 'Suppliers', icon: '🏪', end: true },
+    { to: '/admin/couriers', label: 'Couriers', icon: '🛵' },
     { to: '/admin/changes', label: 'Changes', icon: '📝' },
     { to: '/admin/users', label: 'Users', icon: '👥' },
   ] },

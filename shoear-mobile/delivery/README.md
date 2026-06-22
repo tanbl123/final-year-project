@@ -69,6 +69,20 @@ defaults; for a physical device the OS will prompt on first use. The proof photo
 is uploaded straight to `POST /deliveries/{id}/proof` (multipart) — couriers
 don't use the supplier-only `/uploads` endpoint.
 
+## Courier sign-up (self-apply + admin approval)
+
+New couriers tap **"Apply to be a courier"** on the login screen and submit their
+details (name, username, email, phone, vehicle info, password). This mirrors how
+real platforms onboard drivers (Grab/Lalamove/Shopee SPX):
+
+1. The app calls `POST /auth/register/courier` → the account is created as
+   **`Pending`** (it cannot log in yet).
+2. An admin reviews it in the web portal under **Couriers** (`/admin/couriers`)
+   and **approves** (→ `Active`) or **rejects** (with a reason, optionally a
+   permanent ban).
+3. Once approved, the courier logs in normally. A rejected applicant sees the
+   reason at login.
+
 ## Test login (seeded couriers)
 
 From `database/seed_delivery.sql` — three Active delivery personnel, all with

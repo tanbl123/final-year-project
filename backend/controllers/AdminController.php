@@ -60,6 +60,64 @@ function handleRejectSupplier(PDO $pdo, string $userId): void {
   setSupplierStatus($pdo, $userId, $terminal ? 'Banned' : 'Rejected', $reason);
 }
 
+// ── Courier (delivery personnel) approvals ───────────────────────────
+// Same self-apply → admin-approve flow as suppliers, for DeliveryPersonnel.
+
+// GET /admin/couriers/pending — list courier accounts awaiting approval.
+function handleListPendingCouriers(PDO $pdo): void {
+  $stmt = $pdo->query(
+    "SELECT u.userId, d.deliveryPersonnelId, d.vehicleInfo,
+            u.username, u.email, u.fullName, u.phoneNumber, u.created_at
+       FROM `user` u
+       JOIN delivery_personnel d ON d.userId = u.userId
+      WHERE u.role = 'DeliveryPersonnel' AND u.status = 'Pending'
+      ORDER BY u.created_at ASC"
+  );
+  sendJson(200, true, ['couriers' => $stmt->fetchAll()]);
+}
+
+// Shared: move a currently-Pending courier to a new status. Optionally records a
+// rejection reason (shown to the courier at login) — passing null clears it.
+function setCourierStatus(PDO $pdo, string $userId, string $newStatus, ?string $reason = null): void {
+  $stmt = $pdo->prepare("SELECT status, role FROM `user` WHERE userId = :id");
+  $stmt->execute(['id' => $userId]);
+  $row = $stmt->fetch();
+
+  if (!$row || $row['role'] !== 'DeliveryPersonnel') {
+    sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Courier not found.']);
+  }
+  if ($row['status'] !== 'Pending') {
+    sendJson(409, false, null, ['code' => 'CONFLICT', 'message' => 'This account has already been reviewed.']);
+  }
+
+  $upd = $pdo->prepare("UPDATE `user` SET status = :s, rejectionReason = :r WHERE userId = :id");
+  $upd->execute(['s' => $newStatus, 'r' => $reason, 'id' => $userId]);
+
+  sendJson(200, true, ['userId' => $userId, 'status' => $newStatus]);
+}
+
+// POST /admin/couriers/{userId}/approve — clears any past rejection reason.
+function handleApproveCourier(PDO $pdo, string $userId): void {
+  setCourierStatus($pdo, $userId, 'Active', null);
+}
+
+// POST /admin/couriers/{userId}/reject — body: { reason, terminal? }.
+// terminal=true bans the applicant permanently; otherwise they're Rejected and
+// see the reason at login. A reason is required so the courier knows why.
+function handleRejectCourier(PDO $pdo, string $userId): void {
+  $body     = getJsonBody();
+  $reason   = trim($body['reason'] ?? '');
+  $terminal = !empty($body['terminal']);
+
+  if ($reason === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A rejection reason is required.']);
+  }
+  if (mb_strlen($reason) > 255) {
+    $reason = mb_substr($reason, 0, 255);
+  }
+  setCourierStatus($pdo, $userId, $terminal ? 'Banned' : 'Rejected', $reason);
+}
+
 // ── Product approvals ────────────────────────────────────────────────
 
 // GET /admin/products/pending — list products awaiting approval.

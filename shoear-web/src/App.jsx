@@ -27,6 +27,7 @@ import AdminProductApprovalsPage from './features/admin/pages/AdminProductApprov
 import AdminCategoriesPage from './features/admin/pages/AdminCategoriesPage';
 import AdminBusinessChangesPage from './features/admin/pages/AdminBusinessChangesPage';
 import AdminUsersPage from './features/admin/pages/AdminUsersPage';
+import AdminCouriersPage from './features/admin/pages/AdminCouriersPage';
 import AdminCommissionPage from './features/admin/pages/AdminCommissionPage';
 import AdminDeliveriesPage from './features/admin/pages/AdminDeliveriesPage';
 import AdminDeliveryIssuesPage from './features/admin/pages/AdminDeliveryIssuesPage';
@@ -121,6 +122,9 @@ const router = createBrowserRouter(
       } />
       <Route path="/admin/users" element={
         <ProtectedRoute role="Admin"><AdminUsersPage /></ProtectedRoute>
+      } />
+      <Route path="/admin/couriers" element={
+        <ProtectedRoute role="Admin"><AdminCouriersPage /></ProtectedRoute>
       } />
       <Route path="/admin/deliveries" element={
         <ProtectedRoute role="Admin"><AdminDeliveriesPage /></ProtectedRoute>

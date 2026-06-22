@@ -295,6 +295,12 @@ if ($method === 'POST' && $path === '/auth/register/customer') {
   handleRegisterCustomer($pdo);
 }
 
+// courier self-service sign-up (delivery app) — Pending, awaits admin approval
+if ($method === 'POST' && $path === '/auth/register/courier') {
+  $pdo = getPDO();
+  handleRegisterCourier($pdo);
+}
+
 if ($method === 'POST' && $path === '/auth/login') {
   $pdo = getPDO();
   handleLogin($pdo, $secret);
@@ -461,6 +467,28 @@ if ($method === 'POST' && preg_match('#^/admin/suppliers/([^/]+)/reject$#', $pat
   requireAdmin($auth);
   $pdo  = getPDO();
   handleRejectSupplier($pdo, $m[1]);
+}
+
+// courier approval queue (self-applied delivery personnel awaiting approval)
+if ($method === 'GET' && $path === '/admin/couriers/pending') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleListPendingCouriers($pdo);
+}
+
+if ($method === 'POST' && preg_match('#^/admin/couriers/([^/]+)/approve$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleApproveCourier($pdo, $m[1]);
+}
+
+if ($method === 'POST' && preg_match('#^/admin/couriers/([^/]+)/reject$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleRejectCourier($pdo, $m[1]);
 }
 
 // supplier business-detail change requests (re-approval queue)
