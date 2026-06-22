@@ -145,12 +145,44 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  // unsaved text-field edits (the photo uploads immediately, so it's never
+  // "unsaved"). Mirrors the web's `dirty` check.
+  bool get _dirty =>
+      _name.text.trim() != widget.fullName.trim() ||
+      _username.text.trim() != widget.username.trim() ||
+      _phone.text.trim() != widget.phone.trim() ||
+      _address.text.trim() != widget.address.trim();
+
+  // "Discard changes?" prompt — same wording as the web portal.
+  Future<bool> _confirmDiscard() async {
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Discard changes?'),
+        content: const Text('You have unsaved changes. Are you sure you want to discard them?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Keep editing')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Discard'),
+          ),
+        ],
+      ),
+    );
+    return leave ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      // if only the photo changed (no field save), still tell the caller to refresh
-      canPop: true,
-      onPopInvokedWithResult: (didPop, result) {},
+      // block an accidental back when there are unsaved field edits; confirm first
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final nav = Navigator.of(context);
+        if (!_dirty || await _confirmDiscard()) nav.pop();
+      },
       child: Scaffold(
         appBar: AppBar(title: const Text('Edit profile')),
         body: ListView(
