@@ -290,16 +290,24 @@ function handleVerifyOtp(PDO $pdo, array $auth, string $deliveryId): void {
   sendJson(200, true, ['deliveryId' => $deliveryId, 'deliveryStatus' => 'Delivered']);
 }
 
-// POST /deliveries/{deliveryId}/proof — body: { proofUrl }. Attach a
-// proof-of-delivery photo (uploaded via /uploads first).
+// POST /deliveries/{deliveryId}/proof — attach a proof-of-delivery photo.
+// Accepts EITHER a direct multipart upload (field `file`) — what the courier
+// app sends — OR a JSON `{ proofUrl }` that was already uploaded elsewhere.
 function handleUploadProof(PDO $pdo, array $auth, string $deliveryId): void {
   $courierId = requireDeliveryPersonnelId($pdo, $auth);
-  $body = getJsonBody();
-  $url  = trim($body['proofUrl'] ?? '');
-  if ($url === '') {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A proof image URL is required.']);
-  }
   requireOwnDelivery($pdo, $courierId, $deliveryId);
+
+  if (isset($_FILES['file'])) {
+    // courier snapped/picked a photo → store it, then attach
+    $url = storeUploadedFile($_FILES['file'], 'image');
+  } else {
+    $body = getJsonBody();
+    $url  = trim($body['proofUrl'] ?? '');
+    if ($url === '') {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A proof photo is required.']);
+    }
+  }
+
   $pdo->prepare('UPDATE delivery SET proofOfDelivery = :url WHERE deliveryId = :id')
       ->execute(['url' => $url, 'id' => $deliveryId]);
   sendJson(200, true, ['deliveryId' => $deliveryId, 'proofOfDelivery' => $url]);
