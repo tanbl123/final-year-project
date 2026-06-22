@@ -7,21 +7,27 @@ class AccountService {
   final ApiClient api;
   AccountService(this.api);
 
-  /// GET /auth/me — full profile (incl. delivery_personnel block w/ vehicleInfo).
+  /// GET /auth/me — full profile (incl. delivery_personnel block w/ vehicle fields).
   Future<Map<String, dynamic>> me() async => await api.get('/auth/me') as Map<String, dynamic>;
 
-  /// PUT /auth/me — update editable fields (+ vehicle info for couriers).
+  /// PUT /auth/me — update editable fields (+ vehicle details for couriers).
   Future<void> updateProfile({
     required String fullName,
     required String phoneNumber,
     required String username,
-    String? vehicleInfo,
+    String? vehicleType,
+    String? vehicleBrand,
+    String? vehicleModel,
+    String? vehiclePlate,
   }) async {
     await api.put('/auth/me', {
       'fullName': fullName,
       'phoneNumber': phoneNumber,
       'username': username,
-      if (vehicleInfo != null) 'vehicleInfo': vehicleInfo,
+      if (vehicleType  != null) 'vehicleType':  vehicleType,
+      if (vehicleBrand != null) 'vehicleBrand': vehicleBrand,
+      if (vehicleModel != null) 'vehicleModel': vehicleModel,
+      if (vehiclePlate != null) 'vehiclePlate': vehiclePlate,
     });
   }
 

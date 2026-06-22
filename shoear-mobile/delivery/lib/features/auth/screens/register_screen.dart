@@ -29,7 +29,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _username = TextEditingController();
   final _email = TextEditingController();
   final _phone = TextEditingController();
-  final _vehicle = TextEditingController();
+  String _vehicleType = 'Motorcycle';
+  final _vehicleBrand = TextEditingController();
+  final _vehicleModel = TextEditingController();
+  final _vehiclePlate = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
 
@@ -38,7 +41,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _usernameFocus = FocusNode();
   final _emailFocus = FocusNode();
   final _phoneFocus = FocusNode();
-  final _vehicleFocus = FocusNode();
+  final _vehicleBrandFocus = FocusNode();
+  final _vehicleModelFocus = FocusNode();
+  final _vehiclePlateFocus = FocusNode();
   final _passwordFocus = FocusNode();
   final _confirmFocus = FocusNode();
 
@@ -49,7 +54,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _usernameError;
   String? _emailError;
   String? _phoneError;
-  String? _vehicleError;
+  String? _vehicleBrandError;
+  String? _vehicleModelError;
+  String? _vehiclePlateError;
   String? _passwordError;
   String? _confirmError;
 
@@ -60,7 +67,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _usernameFocus.addListener(() => _onBlur(_usernameFocus, () => _usernameError = _validateUsername(_username.text)));
     _emailFocus.addListener(() => _onBlur(_emailFocus, () => _emailError = _validateEmail(_email.text)));
     _phoneFocus.addListener(() => _onBlur(_phoneFocus, () => _phoneError = _validatePhone(_phone.text)));
-    _vehicleFocus.addListener(() => _onBlur(_vehicleFocus, () => _vehicleError = _validateVehicle(_vehicle.text)));
+    _vehicleBrandFocus.addListener(() => _onBlur(_vehicleBrandFocus, () => _vehicleBrandError = _validateBrand(_vehicleBrand.text)));
+    _vehicleModelFocus.addListener(() => _onBlur(_vehicleModelFocus, () => _vehicleModelError = _validateModel(_vehicleModel.text)));
+    _vehiclePlateFocus.addListener(() => _onBlur(_vehiclePlateFocus, () => _vehiclePlateError = _validatePlate(_vehiclePlate.text)));
     _passwordFocus.addListener(() => _onBlur(_passwordFocus, () => _passwordError = _validatePassword(_password.text)));
     _confirmFocus.addListener(() => _onBlur(_confirmFocus, () => _confirmError = _validateConfirm()));
   }
@@ -71,10 +80,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
-    for (final c in [_fullName, _username, _email, _phone, _vehicle, _password, _confirm]) {
+    for (final c in [_fullName, _username, _email, _phone, _vehicleBrand, _vehicleModel, _vehiclePlate, _password, _confirm]) {
       c.dispose();
     }
-    for (final f in [_fullNameFocus, _usernameFocus, _emailFocus, _phoneFocus, _vehicleFocus, _passwordFocus, _confirmFocus]) {
+    for (final f in [_fullNameFocus, _usernameFocus, _emailFocus, _phoneFocus, _vehicleBrandFocus, _vehicleModelFocus, _vehiclePlateFocus, _passwordFocus, _confirmFocus]) {
       f.dispose();
     }
     super.dispose();
@@ -106,10 +115,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return null;
   }
 
-  String? _validateVehicle(String v) {
+  String? _validateBrand(String v) {
     final t = v.trim();
-    if (t.isEmpty) return 'Vehicle info is required.';
-    if (t.length > 100) return 'Vehicle info is too long (max 100 characters).';
+    if (t.isEmpty) return 'Vehicle brand is required.';
+    if (t.length > 50) return 'Brand is too long (max 50 characters).';
+    return null;
+  }
+
+  String? _validateModel(String v) {
+    final t = v.trim();
+    if (t.isEmpty) return 'Vehicle model is required.';
+    if (t.length > 50) return 'Model is too long (max 50 characters).';
+    return null;
+  }
+
+  String? _validatePlate(String v) {
+    final t = v.trim();
+    if (t.isEmpty) return 'Plate number is required.';
+    if (t.length > 20) return 'Plate number is too long (max 20 characters).';
     return null;
   }
 
@@ -126,19 +149,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _submit() async {
     setState(() {
-      _fullNameError = _validateFullName(_fullName.text);
-      _usernameError = _validateUsername(_username.text);
-      _emailError = _validateEmail(_email.text);
-      _phoneError = _validatePhone(_phone.text);
-      _vehicleError = _validateVehicle(_vehicle.text);
-      _passwordError = _validatePassword(_password.text);
-      _confirmError = _validateConfirm();
+      _fullNameError     = _validateFullName(_fullName.text);
+      _usernameError     = _validateUsername(_username.text);
+      _emailError        = _validateEmail(_email.text);
+      _phoneError        = _validatePhone(_phone.text);
+      _vehicleBrandError = _validateBrand(_vehicleBrand.text);
+      _vehicleModelError = _validateModel(_vehicleModel.text);
+      _vehiclePlateError = _validatePlate(_vehiclePlate.text);
+      _passwordError     = _validatePassword(_password.text);
+      _confirmError      = _validateConfirm();
     });
     if (_fullNameError != null ||
         _usernameError != null ||
         _emailError != null ||
         _phoneError != null ||
-        _vehicleError != null ||
+        _vehicleBrandError != null ||
+        _vehicleModelError != null ||
+        _vehiclePlateError != null ||
         _passwordError != null ||
         _confirmError != null) {
       return;
@@ -146,12 +173,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() => _loading = true);
     try {
       final message = await context.read<AuthProvider>().authService.registerCourier(
-            fullName: _fullName.text.trim(),
-            username: _username.text.trim(),
-            email: _email.text.trim(),
-            phoneNumber: _phone.text.trim(),
-            vehicleInfo: _vehicle.text.trim(),
-            password: _password.text,
+            fullName:     _fullName.text.trim(),
+            username:     _username.text.trim(),
+            email:        _email.text.trim(),
+            phoneNumber:  _phone.text.trim(),
+            vehicleType:  _vehicleType,
+            vehicleBrand: _vehicleBrand.text.trim(),
+            vehicleModel: _vehicleModel.text.trim(),
+            vehiclePlate: _vehiclePlate.text.trim(),
+            password:     _password.text,
           );
       if (!mounted) return;
       // Pending account — no auto-login. Pop back and tell them to wait.
@@ -167,6 +197,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
           _usernameError = msg;
         } else if (lower.contains('email')) {
           _emailError = msg;
+        } else if (lower.contains('brand')) {
+          _vehicleBrandError = msg;
+        } else if (lower.contains('model')) {
+          _vehicleModelError = msg;
+        } else if (lower.contains('plate')) {
+          _vehiclePlateError = msg;
         } else {
           _passwordError = msg;
         }
@@ -220,12 +256,45 @@ class _RegisterScreenState extends State<RegisterScreen> {
             error: _phoneError,
             onChanged: (v) => setState(() => _phoneError = _validatePhone(v)),
           ),
+          // ── Vehicle details ──
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: DropdownButtonFormField<String>(
+              value: _vehicleType,
+              decoration: const InputDecoration(
+                labelText: 'Vehicle type',
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'Motorcycle', child: Text('Motorcycle')),
+                DropdownMenuItem(value: 'Car',        child: Text('Car')),
+                DropdownMenuItem(value: 'Van',        child: Text('Van')),
+                DropdownMenuItem(value: 'Truck',      child: Text('Truck')),
+              ],
+              onChanged: (v) => setState(() => _vehicleType = v ?? 'Motorcycle'),
+            ),
+          ),
           _field(
-            controller: _vehicle,
-            focusNode: _vehicleFocus,
-            label: 'Vehicle info (e.g. Honda EX5 — ABC1234)',
-            error: _vehicleError,
-            onChanged: (v) => setState(() => _vehicleError = _validateVehicle(v)),
+            controller: _vehicleBrand,
+            focusNode: _vehicleBrandFocus,
+            label: 'Vehicle brand (e.g. Honda, Yamaha)',
+            error: _vehicleBrandError,
+            onChanged: (v) => setState(() => _vehicleBrandError = _validateBrand(v)),
+          ),
+          _field(
+            controller: _vehicleModel,
+            focusNode: _vehicleModelFocus,
+            label: 'Vehicle model (e.g. EX5, LC135)',
+            error: _vehicleModelError,
+            onChanged: (v) => setState(() => _vehicleModelError = _validateModel(v)),
+          ),
+          _field(
+            controller: _vehiclePlate,
+            focusNode: _vehiclePlateFocus,
+            label: 'Plate number (e.g. ABC 1234)',
+            error: _vehiclePlateError,
+            maxLength: 20,
+            onChanged: (v) => setState(() => _vehiclePlateError = _validatePlate(v)),
           ),
           TextField(
             controller: _password,

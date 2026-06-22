@@ -121,7 +121,10 @@ CREATE TABLE customer (
 CREATE TABLE delivery_personnel (
     deliveryPersonnelId VARCHAR(10)  NOT NULL,            -- DEL0001
     userId              VARCHAR(10)  NOT NULL,
-    vehicleInfo         VARCHAR(100) NULL,
+    vehicleType         ENUM('Motorcycle','Car','Van','Truck') NOT NULL DEFAULT 'Motorcycle',
+    vehicleBrand        VARCHAR(50) NOT NULL DEFAULT '',
+    vehicleModel        VARCHAR(50) NOT NULL DEFAULT '',
+    vehiclePlate        VARCHAR(20) NOT NULL DEFAULT '',
     PRIMARY KEY (deliveryPersonnelId),
     UNIQUE KEY uq_delivery_user (userId),
     CONSTRAINT fk_delivery_user FOREIGN KEY (userId) REFERENCES `user`(userId)

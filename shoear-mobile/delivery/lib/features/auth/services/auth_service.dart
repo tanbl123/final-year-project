@@ -23,7 +23,10 @@ class AuthService {
     required String username,
     required String email,
     required String phoneNumber,
-    required String vehicleInfo,
+    required String vehicleType,
+    required String vehicleBrand,
+    required String vehicleModel,
+    required String vehiclePlate,
     required String password,
   }) async {
     final data = await api.post('/auth/register/courier', {
@@ -31,7 +34,10 @@ class AuthService {
       'username': username,
       'email': email,
       'phoneNumber': phoneNumber,
-      'vehicleInfo': vehicleInfo,
+      'vehicleType':  vehicleType,
+      'vehicleBrand': vehicleBrand,
+      'vehicleModel': vehicleModel,
+      'vehiclePlate': vehiclePlate,
       'password': password,
     });
     return (data as Map<String, dynamic>)['message']?.toString() ??

@@ -40,7 +40,7 @@ function scoreCouriers(PDO $pdo): array {
     "SELECT dp.deliveryPersonnelId,
             u.fullName,
             u.userId,
-            dp.vehicleInfo,
+            dp.vehicleType, dp.vehicleBrand, dp.vehicleModel, dp.vehiclePlate,
             COUNT(d.deliveryId) AS activeLoad
        FROM delivery_personnel dp
        JOIN `user` u
@@ -48,7 +48,7 @@ function scoreCouriers(PDO $pdo): array {
        LEFT JOIN delivery d
          ON d.deliveryPersonnelId = dp.deliveryPersonnelId
         AND d.deliveryStatus IN ('Assigned', 'PickedUp', 'OutForDelivery')
-      GROUP BY dp.deliveryPersonnelId, u.fullName, u.userId, dp.vehicleInfo"
+      GROUP BY dp.deliveryPersonnelId, u.fullName, u.userId, dp.vehicleType, dp.vehicleBrand, dp.vehicleModel, dp.vehiclePlate"
   )->fetchAll();
 
   foreach ($rows as &$r) {

@@ -111,7 +111,9 @@ function AdminCouriersPage() {
                     <div>{c.email}</div>
                     <div className="text-muted small">{c.phoneNumber}</div>
                   </td>
-                  <td className="small">{c.vehicleInfo || '—'}</td>
+                  <td className="small">
+                    {c.vehicleType && c.vehicleBrand ? `${c.vehicleType} • ${c.vehicleBrand} ${c.vehicleModel} — ${c.vehiclePlate}` : '—'}
+                  </td>
                   <td className="text-muted small">{new Date(c.created_at).toLocaleDateString()}</td>
                   <td className="text-end text-nowrap">
                     <button

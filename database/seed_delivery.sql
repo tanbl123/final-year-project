@@ -29,11 +29,11 @@ VALUES
    '$2y$12$vmauRgZFXPo8McWGHLFdIOGkZiPPnRReu5ChzCouUQdVohlUAhghS',
    'chong.rider@shoear.com', 'Chong Wei', '0183334444', 'DeliveryPersonnel', 'Active');
 
-INSERT IGNORE INTO delivery_personnel (deliveryPersonnelId, userId, vehicleInfo)
+INSERT IGNORE INTO delivery_personnel (deliveryPersonnelId, userId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate)
 VALUES
-  ('DEL0001', 'USR0006', 'Honda EX5 motorcycle (VFV 1234)'),
-  ('DEL0002', 'USR0007', 'Yamaha LC135 motorcycle (WXY 5678)'),
-  ('DEL0003', 'USR0008', 'Perodua Bezza car (BLM 9012)');
+  ('DEL0001', 'USR0006', 'Motorcycle', 'Honda',   'EX5',    'VFV 1234'),
+  ('DEL0002', 'USR0007', 'Motorcycle', 'Yamaha',  'LC135',  'WXY 5678'),
+  ('DEL0003', 'USR0008', 'Car',        'Perodua', 'Bezza',  'BLM 9012');
 
 -- ── Two fresh PAID orders to populate the dispatch page ──
 -- These IDs sit after seed_sales.sql's ORD0001–ORD0005 / PAY0001–PAY0005.

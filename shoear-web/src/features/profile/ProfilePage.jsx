@@ -341,7 +341,11 @@ function ProfilePage() {
                 {me.role === 'DeliveryPersonnel' && me.profile && (
                   <>
                     <dt className="col-sm-4">Vehicle</dt>
-                    <dd className="col-sm-8">{me.profile.vehicleInfo || <span className="text-muted">—</span>}</dd>
+                    <dd className="col-sm-8">
+                      {me.profile.vehicleType && me.profile.vehicleBrand
+                        ? `${me.profile.vehicleType} • ${me.profile.vehicleBrand} ${me.profile.vehicleModel} — ${me.profile.vehiclePlate}`
+                        : <span className="text-muted">—</span>}
+                    </dd>
                   </>
                 )}
 

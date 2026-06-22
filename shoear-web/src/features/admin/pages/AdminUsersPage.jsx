@@ -254,7 +254,11 @@ function AdminUsersPage() {
                     {detail.role === 'DeliveryPersonnel' && detail.profile && (
                       <>
                         <dt className="col-4">Vehicle</dt>
-                        <dd className="col-8">{detail.profile.vehicleInfo || <span className="text-muted">—</span>}</dd>
+                        <dd className="col-8">
+                          {detail.profile.vehicleType && detail.profile.vehicleBrand
+                            ? `${detail.profile.vehicleType} • ${detail.profile.vehicleBrand} ${detail.profile.vehicleModel} — ${detail.profile.vehiclePlate}`
+                            : <span className="text-muted">—</span>}
+                        </dd>
                       </>
                     )}
                     <dt className="col-4">Joined</dt>

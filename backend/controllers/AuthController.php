@@ -354,10 +354,27 @@ function handleRegisterCourier(PDO $pdo): void {
   $password    = $body['password'] ?? '';
   $fullName    = trim($body['fullName'] ?? '');
   $phoneNumber = trim($body['phoneNumber'] ?? '');
-  $vehicleInfo = trim($body['vehicleInfo'] ?? '');
+  $vehicleType  = trim($body['vehicleType']  ?? 'Motorcycle');
+  $vehicleBrand = trim($body['vehicleBrand'] ?? '');
+  $vehicleModel = trim($body['vehicleModel'] ?? '');
+  $vehiclePlate = trim($body['vehiclePlate'] ?? '');
 
-  if ($fullName === '' || $username === '' || $email === '' || $phoneNumber === '' || $vehicleInfo === '') {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Name, username, email, phone number and vehicle info are required.']);
+  if ($fullName === '' || $username === '' || $email === '' || $phoneNumber === '' ||
+      $vehicleBrand === '' || $vehicleModel === '' || $vehiclePlate === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'All fields including vehicle details are required.']);
+  }
+  $allowedTypes = ['Motorcycle', 'Car', 'Van', 'Truck'];
+  if (!in_array($vehicleType, $allowedTypes, true)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Invalid vehicle type.']);
+  }
+  if (mb_strlen($vehicleBrand) > 50) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Vehicle brand is too long (max 50 characters).']);
+  }
+  if (mb_strlen($vehicleModel) > 50) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Vehicle model is too long (max 50 characters).']);
+  }
+  if (mb_strlen($vehiclePlate) > 20) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Plate number is too long (max 20 characters).']);
   }
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please enter a valid email.']);
@@ -367,9 +384,6 @@ function handleRegisterCourier(PDO $pdo): void {
   }
   if (mb_strlen($fullName) > 120) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Full name is too long (max 120 characters).']);
-  }
-  if (mb_strlen($vehicleInfo) > 100) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Vehicle info is too long (max 100 characters).']);
   }
   $fmtErr = usernameFormatError($username);
   if ($fmtErr) {
@@ -399,8 +413,8 @@ function handleRegisterCourier(PDO $pdo): void {
     )->execute(['id' => $userId, 'un' => $username, 'pw' => $hash, 'em' => $email, 'fn' => $fullName, 'ph' => $phoneNumber]);
 
     $deliveryPersonnelId = nextId($pdo, 'delivery_personnel', 'deliveryPersonnelId', 'DEL');
-    $pdo->prepare('INSERT INTO delivery_personnel (deliveryPersonnelId, userId, vehicleInfo) VALUES (:did, :uid, :vi)')
-        ->execute(['did' => $deliveryPersonnelId, 'uid' => $userId, 'vi' => $vehicleInfo]);
+    $pdo->prepare('INSERT INTO delivery_personnel (deliveryPersonnelId, userId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate) VALUES (:did, :uid, :vt, :vb, :vm, :vp)')
+        ->execute(['did' => $deliveryPersonnelId, 'uid' => $userId, 'vt' => $vehicleType, 'vb' => $vehicleBrand, 'vm' => $vehicleModel, 'vp' => $vehiclePlate]);
 
     $pdo->commit();
   } catch (Throwable $e) {
@@ -499,7 +513,7 @@ function handleMe(PDO $pdo, array $auth): void {
   } elseif ($u['role'] === 'Customer') {
     $p = $pdo->prepare('SELECT customerId, shippingAddress FROM customer WHERE userId = :id');
   } elseif ($u['role'] === 'DeliveryPersonnel') {
-    $p = $pdo->prepare('SELECT deliveryPersonnelId, vehicleInfo FROM delivery_personnel WHERE userId = :id');
+    $p = $pdo->prepare('SELECT deliveryPersonnelId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate FROM delivery_personnel WHERE userId = :id');
   } else {
     $p = null;
   }
@@ -542,10 +556,17 @@ function handleUpdateMe(PDO $pdo, array $auth): void {
         ->execute(['sa' => trim((string) $body['shippingAddress']), 'id' => $auth['userId']]);
   }
 
-  // delivery personnel may also update their vehicle info (no-op for others)
-  if (array_key_exists('vehicleInfo', $body)) {
-    $pdo->prepare('UPDATE delivery_personnel SET vehicleInfo = :vi WHERE userId = :id')
-        ->execute(['vi' => trim((string) $body['vehicleInfo']), 'id' => $auth['userId']]);
+  // delivery personnel may also update their vehicle details (no-op for others)
+  if (array_key_exists('vehicleType', $body) || array_key_exists('vehicleBrand', $body) ||
+      array_key_exists('vehicleModel', $body) || array_key_exists('vehiclePlate', $body)) {
+    $allowedTypes = ['Motorcycle', 'Car', 'Van', 'Truck'];
+    $vType  = trim((string) ($body['vehicleType']  ?? 'Motorcycle'));
+    $vBrand = trim((string) ($body['vehicleBrand'] ?? ''));
+    $vModel = trim((string) ($body['vehicleModel'] ?? ''));
+    $vPlate = trim((string) ($body['vehiclePlate'] ?? ''));
+    if (!in_array($vType, $allowedTypes, true)) $vType = 'Motorcycle';
+    $pdo->prepare('UPDATE delivery_personnel SET vehicleType = :vt, vehicleBrand = :vb, vehicleModel = :vm, vehiclePlate = :vp WHERE userId = :id')
+        ->execute(['vt' => $vType, 'vb' => $vBrand, 'vm' => $vModel, 'vp' => $vPlate, 'id' => $auth['userId']]);
   }
 
   sendJson(200, true, ['fullName' => $fullName, 'phoneNumber' => $phone, 'username' => $username]);

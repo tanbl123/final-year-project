@@ -66,7 +66,7 @@ function handleRejectSupplier(PDO $pdo, string $userId): void {
 // GET /admin/couriers/pending — list courier accounts awaiting approval.
 function handleListPendingCouriers(PDO $pdo): void {
   $stmt = $pdo->query(
-    "SELECT u.userId, d.deliveryPersonnelId, d.vehicleInfo,
+    "SELECT u.userId, d.deliveryPersonnelId, d.vehicleType, d.vehicleBrand, d.vehicleModel, d.vehiclePlate,
             u.username, u.email, u.fullName, u.phoneNumber, u.created_at
        FROM `user` u
        JOIN delivery_personnel d ON d.userId = u.userId
@@ -218,7 +218,7 @@ function handleGetUser(PDO $pdo, string $userId): void {
   } elseif ($u['role'] === 'Customer') {
     $p = $pdo->prepare('SELECT customerId, shippingAddress FROM customer WHERE userId = :id');
   } elseif ($u['role'] === 'DeliveryPersonnel') {
-    $p = $pdo->prepare('SELECT deliveryPersonnelId, vehicleInfo FROM delivery_personnel WHERE userId = :id');
+    $p = $pdo->prepare('SELECT deliveryPersonnelId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate FROM delivery_personnel WHERE userId = :id');
   } else {
     $p = null;
   }

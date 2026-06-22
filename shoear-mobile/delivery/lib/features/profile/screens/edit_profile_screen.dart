@@ -14,7 +14,10 @@ class EditProfileScreen extends StatefulWidget {
   final String fullName;
   final String username;
   final String phone;
-  final String vehicle;
+  final String vehicleType;
+  final String vehicleBrand;
+  final String vehicleModel;
+  final String vehiclePlate;
   final String? avatarUrl;
 
   const EditProfileScreen({
@@ -22,7 +25,10 @@ class EditProfileScreen extends StatefulWidget {
     required this.fullName,
     required this.username,
     required this.phone,
-    required this.vehicle,
+    required this.vehicleType,
+    required this.vehicleBrand,
+    required this.vehicleModel,
+    required this.vehiclePlate,
     required this.avatarUrl,
   });
 
@@ -34,7 +40,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _name = TextEditingController(text: widget.fullName);
   late final TextEditingController _username = TextEditingController(text: widget.username);
   late final TextEditingController _phone = TextEditingController(text: widget.phone);
-  late final TextEditingController _vehicle = TextEditingController(text: widget.vehicle);
+  late String _vehicleType = widget.vehicleType;
+  late final TextEditingController _vehicleBrand = TextEditingController(text: widget.vehicleBrand);
+  late final TextEditingController _vehicleModel = TextEditingController(text: widget.vehicleModel);
+  late final TextEditingController _vehiclePlate = TextEditingController(text: widget.vehiclePlate);
 
   final _nameFocus = FocusNode();
   final _usernameFocus = FocusNode();
@@ -51,7 +60,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   @override
   void initState() {
     super.initState();
-    for (final c in [_name, _username, _phone, _vehicle]) {
+    for (final c in [_name, _username, _phone, _vehicleBrand, _vehicleModel, _vehiclePlate]) {
       c.addListener(() => setState(() {}));
     }
     _nameFocus.addListener(() => _onBlur(_nameFocus, () => _nameError = _validateName(_name.text)));
@@ -81,7 +90,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   void dispose() {
-    for (final c in [_name, _username, _phone, _vehicle]) {
+    for (final c in [_name, _username, _phone, _vehicleBrand, _vehicleModel, _vehiclePlate]) {
       c.dispose();
     }
     for (final f in [_nameFocus, _usernameFocus, _phoneFocus]) {
@@ -94,7 +103,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _name.text.trim() != widget.fullName.trim() ||
       _username.text.trim() != widget.username.trim() ||
       _phone.text.trim() != widget.phone.trim() ||
-      _vehicle.text.trim() != widget.vehicle.trim();
+      _vehicleType  != widget.vehicleType  ||
+      _vehicleBrand.text.trim() != widget.vehicleBrand.trim() ||
+      _vehicleModel.text.trim() != widget.vehicleModel.trim() ||
+      _vehiclePlate.text.trim() != widget.vehiclePlate.trim();
 
   Future<bool> _confirmDiscard() async {
     final leave = await showDialog<bool>(
@@ -183,7 +195,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             fullName: _name.text.trim(),
             phoneNumber: _phone.text.trim(),
             username: _username.text.trim(),
-            vehicleInfo: _vehicle.text.trim(),
+            vehicleType:  _vehicleType,
+            vehicleBrand: _vehicleBrand.text.trim(),
+            vehicleModel: _vehicleModel.text.trim(),
+            vehiclePlate: _vehiclePlate.text.trim(),
           );
       await context.read<AuthProvider>().applyProfile(fullName: _name.text.trim());
       if (mounted) Navigator.of(context).pop(true);
@@ -234,7 +249,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 keyboard: TextInputType.phone,
                 error: _phoneError,
                 onChanged: (v) => setState(() => _phoneError = _validatePhone(v))),
-            _field(_vehicle, 'Vehicle (e.g. Honda EX5)'),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: DropdownButtonFormField<String>(
+                value: _vehicleType,
+                decoration: const InputDecoration(
+                  labelText: 'Vehicle type',
+                  border: OutlineInputBorder(),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'Motorcycle', child: Text('Motorcycle')),
+                  DropdownMenuItem(value: 'Car',        child: Text('Car')),
+                  DropdownMenuItem(value: 'Van',        child: Text('Van')),
+                  DropdownMenuItem(value: 'Truck',      child: Text('Truck')),
+                ],
+                onChanged: (v) => setState(() => _vehicleType = v ?? 'Motorcycle'),
+              ),
+            ),
+            _field(_vehicleBrand, 'Brand (e.g. Honda, Yamaha)'),
+            _field(_vehicleModel, 'Model (e.g. EX5, LC135)'),
+            _field(_vehiclePlate, 'Plate number (e.g. ABC 1234)', maxLength: 20),
             const SizedBox(height: 8),
             FilledButton(
               onPressed: (_saving || !_dirty) ? null : _save,
@@ -283,7 +317,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Widget _field(TextEditingController c, String label,
-          {FocusNode? focusNode, int maxLines = 1, TextInputType? keyboard, String? error, void Function(String)? onChanged}) =>
+          {FocusNode? focusNode, int maxLines = 1, int? maxLength, TextInputType? keyboard, String? error, void Function(String)? onChanged}) =>
       Padding(
         padding: const EdgeInsets.only(bottom: 16),
         child: TextField(
@@ -291,6 +325,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           focusNode: focusNode,
           keyboardType: keyboard,
           maxLines: maxLines,
+          maxLength: maxLength,
           onChanged: onChanged,
           decoration: InputDecoration(
             labelText: label,

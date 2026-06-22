@@ -235,7 +235,7 @@ function AdminDeliveriesPage() {
                         <span className="flex-grow-1">
                           <span className="fw-semibold">{c.fullName}</span>
                           <span className="text-muted small"> · {c.deliveryPersonnelId}</span>
-                          {c.vehicleInfo && <div className="text-muted small">{c.vehicleInfo}</div>}
+                          {c.vehicleType && c.vehicleBrand && <div className="text-muted small">{`${c.vehicleType} • ${c.vehicleBrand} ${c.vehicleModel} — ${c.vehiclePlate}`}</div>}
                         </span>
                         {i === 0 && c.deliveryPersonnelId !== assignTarget.deliveryPersonnelId && (
                           <span className="badge text-bg-success">Suggested</span>
