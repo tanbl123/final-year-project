@@ -101,6 +101,16 @@ If `flutterfire configure` did **not** add the plugin, add it manually:
   id("com.google.gms.google-services")
   ```
 
+### C3b. Fix the app display name
+`flutter create .` sets the Android app label to the project name (`customer`),
+so the notification-permission dialog reads "Allow **customer** to send you
+notifications?". Open **`android/app/src/main/AndroidManifest.xml`** and change:
+```xml
+android:label="customer"   →   android:label="ShoeAR"
+```
+Re-apply this after any future `flutter create .` (the `android/` folder is
+gitignored, so it's regenerated locally).
+
 ### C4. Run and test push
 1. `flutter run` on a real device or emulator (with the XAMPP backend reachable —
    `10.0.2.2` for the emulator).

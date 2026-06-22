@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
+import 'package:customer/firebase_options.dart';
 import 'package:customer/features/notification/services/notification_service.dart';
 
 /// Firebase Cloud Messaging client (background push).
@@ -24,7 +25,7 @@ class PushService {
   /// Initialise Firebase once at startup. Safe to call without Firebase set up.
   Future<void> init() async {
     try {
-      await Firebase.initializeApp();
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
       _available = true;
       // FCM shows tray notifications itself when the app is backgrounded; in the
       // foreground we just refresh the bell.
