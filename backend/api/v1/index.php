@@ -241,6 +241,12 @@ if ($method === 'POST' && preg_match('#^/deliveries/([^/]+)/proof$#', $path, $m)
   handleUploadProof($pdo, $auth, $m[1]);
 }
 
+if ($method === 'POST' && preg_match('#^/deliveries/([^/]+)/report-issue$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleReportIssue($pdo, $auth, $m[1]);
+}
+
 // ── customer wishlist (require a Customer token) ──
 if ($method === 'GET' && $path === '/wishlist') {
   $auth = requireAuth($secret);
@@ -578,6 +584,21 @@ if ($method === 'POST' && preg_match('#^/admin/deliveries/([^/]+)/assign$#', $pa
   requireAdmin($auth);
   $pdo  = getPDO();
   handleAssignDelivery($pdo, $m[1]);
+}
+
+// ── admin delivery-issue queue (the courier "report an issue" reports) ──
+if ($method === 'GET' && $path === '/admin/delivery-issues') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleListDeliveryIssues($pdo);
+}
+
+if ($method === 'PATCH' && preg_match('#^/admin/delivery-issues/([^/]+)/resolve$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleResolveDeliveryIssue($pdo, $m[1]);
 }
 
 // ── file uploads (multipart): images + 3D models for products ──

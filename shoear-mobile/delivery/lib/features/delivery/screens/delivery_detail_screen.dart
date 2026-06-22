@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import 'package:delivery/features/delivery/models/delivery.dart';
 import 'package:delivery/features/delivery/services/delivery_service.dart';
+import 'package:delivery/features/delivery/screens/report_issue_screen.dart';
 import 'package:delivery/features/delivery/widgets/status_chip.dart';
 
 /// One delivery: pickup + drop-off info, items, and the status workflow
@@ -197,6 +198,26 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
       );
 
   /// Status-driven action buttons.
+  Future<void> _reportIssue(String orderId) async {
+    final reported = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ReportIssueScreen(deliveryId: widget.deliveryId, orderId: orderId),
+      ),
+    );
+    if (reported == true && mounted) {
+      _toast('Issue reported. Support has been notified.');
+      _reload();
+    }
+  }
+
+  // a "Report an issue" button shown while the delivery is still active
+  Widget _reportIssueButton(String orderId) => OutlinedButton.icon(
+        onPressed: () => _reportIssue(orderId),
+        icon: const Icon(Icons.report_gmailerrorred_outlined, color: Colors.red),
+        label: const Text('Report an issue', style: TextStyle(color: Colors.red)),
+        style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
+      );
+
   List<Widget> _actions(DeliveryDetail d) {
     if (_busy) {
       return const [Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator()))];
@@ -210,6 +231,8 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
             label: const Text('Mark as picked up'),
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
           ),
+          const SizedBox(height: 8),
+          _reportIssueButton(d.orderId),
         ];
       case 'PickedUp':
         return [
@@ -219,6 +242,8 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
             label: const Text('Start delivery (out for delivery)'),
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
           ),
+          const SizedBox(height: 8),
+          _reportIssueButton(d.orderId),
         ];
       case 'OutForDelivery':
         return [
@@ -252,11 +277,7 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
             label: Text(d.proofOfDelivery == null ? 'Upload proof photo' : 'Replace proof photo'),
           ),
           const SizedBox(height: 8),
-          TextButton.icon(
-            onPressed: () => _setStatus('Failed'),
-            icon: const Icon(Icons.report_gmailerrorred_outlined, color: Colors.red),
-            label: const Text('Mark delivery failed', style: TextStyle(color: Colors.red)),
-          ),
+          _reportIssueButton(d.orderId),
         ];
       default:
         // Delivered / Failed — terminal

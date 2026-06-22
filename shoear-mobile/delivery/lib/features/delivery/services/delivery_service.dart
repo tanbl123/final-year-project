@@ -47,4 +47,24 @@ class DeliveryService {
     final data = await api.uploadFile('/deliveries/$deliveryId/proof', photo) as Map<String, dynamic>;
     return data['proofOfDelivery']?.toString() ?? '';
   }
+
+  /// POST /deliveries/{id}/report-issue — structured reason (+ optional note/photo).
+  Future<void> reportIssue(String deliveryId, String reason, {String? note, File? photo}) async {
+    await api.postMultipart('/deliveries/$deliveryId/report-issue', {
+      'reason': reason,
+      if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+    }, file: photo);
+  }
 }
+
+/// The reasons a courier can report, shared by the report-issue UI.
+/// (value sent to the API, label shown to the courier)
+const deliveryIssueReasons = <(String, String)>[
+  ('customer_unreachable', 'Customer unreachable'),
+  ('customer_unavailable', 'Customer not available'),
+  ('customer_refused', 'Customer refused delivery'),
+  ('wrong_address', 'Wrong / incomplete address'),
+  ('package_damaged', 'Package damaged or missing'),
+  ('vehicle_emergency', 'Vehicle breakdown / emergency'),
+  ('other', 'Other'),
+];

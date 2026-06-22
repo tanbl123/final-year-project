@@ -102,6 +102,19 @@ export function assignDelivery(deliveryId, deliveryPersonnelId) {
   return apiPost(`/admin/deliveries/${deliveryId}/assign`, { deliveryPersonnelId }, getToken());
 }
 
+// Delivery issues reported by couriers. Optional { status: 'Open' | 'Resolved' }.
+export function getDeliveryIssues(filters = {}) {
+  const qs = new URLSearchParams();
+  if (filters.status) qs.set('status', filters.status);
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return apiGet(`/admin/delivery-issues${suffix}`, getToken());
+}
+
+// Mark a reported issue resolved.
+export function resolveDeliveryIssue(issueId) {
+  return apiPatch(`/admin/delivery-issues/${issueId}/resolve`, {}, getToken());
+}
+
 // ── reports ──────────────────────────────────────────────────────────
 // Platform commission across all suppliers (paid orders only).
 export function getCommissionReport() {

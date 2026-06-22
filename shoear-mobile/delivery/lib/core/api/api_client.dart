@@ -62,6 +62,19 @@ class ApiClient {
     return _unwrap(res);
   }
 
+  /// Multipart POST with text fields + an OPTIONAL file (field `file`). Used by
+  /// "report an issue" (reason/note + optional photo).
+  Future<dynamic> postMultipart(String path, Map<String, String> fields, {File? file}) async {
+    final uri = Uri.parse('$baseUrl$path');
+    final req = http.MultipartRequest('POST', uri)
+      ..headers.addAll(_headers())
+      ..fields.addAll(fields);
+    if (file != null) req.files.add(await http.MultipartFile.fromPath('file', file.path));
+    final streamed = await req.send();
+    final res = await http.Response.fromStream(streamed);
+    return _unwrap(res);
+  }
+
   /// Multipart POST of a single file (field `file`). Used for the
   /// proof-of-delivery photo → POST /deliveries/{id}/proof.
   Future<dynamic> uploadFile(String path, File file) async {

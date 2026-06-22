@@ -531,6 +531,24 @@ CREATE TABLE device_token (
     KEY idx_device_user (userId)
 ) ENGINE=InnoDB;
 
+-- Delivery issues reported by couriers (the "report an issue" flow). See
+-- migrations/2026_06_22_delivery_issue.sql.
+CREATE TABLE delivery_issue (
+    issueId             VARCHAR(10)  NOT NULL,                 -- ISS0001
+    deliveryId          VARCHAR(10)  NOT NULL,
+    orderId             VARCHAR(10)  NOT NULL,
+    deliveryPersonnelId VARCHAR(10)  NULL,
+    reason              VARCHAR(60)  NOT NULL,
+    note                VARCHAR(255) NULL,
+    photoUrl            VARCHAR(255) NULL,
+    issueStatus         ENUM('Open','Resolved') NOT NULL DEFAULT 'Open',
+    createdAt           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    resolvedAt          DATETIME     NULL,
+    PRIMARY KEY (issueId),
+    KEY idx_issue_status (issueStatus, createdAt),
+    KEY idx_issue_delivery (deliveryId)
+) ENGINE=InnoDB;
+
 -- =====================================================================
 --  END OF SCHEMA
 -- =====================================================================

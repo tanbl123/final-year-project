@@ -351,7 +351,10 @@ updates (Section 11) drive the later stages.
 | GET   | `/deliveries/{deliveryId}` | Delivery(Owner) | **(Implemented)** Detail: **pickup** (the parcel's supplier + `pickupAddress`), customer contact + address, and only THIS supplier's items (OTP **not** returned to the courier). |
 | PATCH | `/deliveries/{deliveryId}/status` | Delivery(Owner) | **(Implemented)** `Assigned→PickedUp→OutForDelivery` (or `→Failed`); the order status is rolled up from all its parcels; going `OutForDelivery` generates this parcel's OTP. |
 | POST  | `/deliveries/{deliveryId}/verify-otp` | Delivery(Owner) | **(Implemented)** Body: `{ "otpCode": "1234" }`. On match (must be OutForDelivery) → this parcel `Delivered`; order → `Delivered` only once **every** parcel is delivered. |
-| POST  | `/deliveries/{deliveryId}/proof` | Delivery(Owner) | **(Implemented)** Attach a proof-of-delivery photo URL (uploaded via `/uploads`). |
+| POST  | `/deliveries/{deliveryId}/proof` | Delivery(Owner) | **(Implemented)** Attach a proof-of-delivery photo (multipart `file`, or JSON `{ proofUrl }`). |
+| POST  | `/deliveries/{deliveryId}/report-issue` | Delivery(Owner) | **(Implemented)** Report a problem. Multipart `reason`,`note?`,`file?` (or JSON). Records a `delivery_issue`; a fail-reason → parcel `Failed`, `vehicle_emergency` → back to dispatch (`Pending`, unassigned); customer is notified. Reasons: `customer_unreachable`,`customer_unavailable`,`customer_refused`,`wrong_address`,`package_damaged`,`vehicle_emergency`,`other`. |
+| GET   | `/admin/delivery-issues` | Admin | **(Implemented)** Reported-issue queue (Open first); optional `?status=Open\|Resolved`. |
+| PATCH | `/admin/delivery-issues/{issueId}/resolve` | Admin | **(Implemented)** Mark a reported issue resolved. |
 
 > **Split fulfilment (one parcel per supplier).** An order can contain items
 > from several suppliers, so on payment the order is split into **one delivery
