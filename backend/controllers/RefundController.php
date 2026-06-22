@@ -50,7 +50,7 @@ function handleSetRefundStatus(PDO $pdo, string $refundId): void {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Invalid status.']);
   }
 
-  $stmt = $pdo->prepare('SELECT orderId, refundStatus FROM refund WHERE refundId = :id');
+  $stmt = $pdo->prepare('SELECT orderId, customerId, refundStatus FROM refund WHERE refundId = :id');
   $stmt->execute(['id' => $refundId]);
   $refund = $stmt->fetch();
   if (!$refund) {
@@ -83,6 +83,11 @@ function handleSetRefundStatus(PDO $pdo, string $refundId): void {
   } catch (Throwable $e) {
     if ($pdo->inTransaction()) { $pdo->rollBack(); }
     sendJson(500, false, null, ['code' => 'DB_ERROR', 'message' => 'Could not update the refund.']);
+  }
+
+  // notify the buyer of the outcome (best-effort; after commit)
+  if (function_exists('notifyRefundStatusChange')) {
+    notifyRefundStatusChange($pdo, $refund['customerId'], $refund['orderId'], $status);
   }
 
   sendJson(200, true, ['refundId' => $refundId, 'status' => $status]);

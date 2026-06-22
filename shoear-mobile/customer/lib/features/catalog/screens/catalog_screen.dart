@@ -11,6 +11,8 @@ import 'package:customer/features/catalog/services/catalog_service.dart';
 import 'package:customer/features/auth/state/auth_provider.dart';
 import 'package:customer/features/auth/screens/login_screen.dart';
 import 'package:customer/features/catalog/screens/product_detail_screen.dart';
+import 'package:customer/features/notification/state/notification_provider.dart';
+import 'package:customer/features/notification/screens/notifications_screen.dart';
 
 /// Home screen: a searchable grid of approved products. Browsable as a guest;
 /// an account menu in the app bar handles sign in / sign out.
@@ -90,7 +92,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('👟 ShoeAR'),
-        actions: [_filterAction(context), _accountAction(context)],
+        actions: [_notificationsAction(context), _filterAction(context), _accountAction(context)],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Padding(
@@ -153,6 +155,24 @@ class _CatalogScreenState extends State<CatalogScreen> {
               itemBuilder: (context, i) => _ProductCard(product: items[i]),
             );
           },
+        ),
+      ),
+    );
+  }
+
+  // bell with an unread badge; only for signed-in customers (guests have none)
+  Widget _notificationsAction(BuildContext context) {
+    final loggedIn = context.watch<AuthProvider>().isLoggedIn;
+    if (!loggedIn) return const SizedBox.shrink();
+    final unread = context.watch<NotificationProvider>().unread;
+    return Badge(
+      isLabelVisible: unread > 0,
+      label: Text(unread > 99 ? '99+' : '$unread'),
+      child: IconButton(
+        icon: const Icon(Icons.notifications_outlined),
+        tooltip: 'Notifications',
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const NotificationsScreen()),
         ),
       ),
     );

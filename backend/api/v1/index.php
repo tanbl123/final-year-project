@@ -9,6 +9,8 @@ require __DIR__ . '/../../lib/storage.php';
 require __DIR__ . '/../../lib/stripe.php';
 require __DIR__ . '/../../lib/mail.php';
 require __DIR__ . '/../../lib/delivery.php';
+require __DIR__ . '/../../lib/notifications.php';
+require __DIR__ . '/../../lib/push.php';
 require __DIR__ . '/../../controllers/AuthController.php';
 require __DIR__ . '/../../controllers/AdminController.php';
 require __DIR__ . '/../../controllers/ProductController.php';
@@ -26,6 +28,7 @@ require __DIR__ . '/../../controllers/CatalogController.php';
 require __DIR__ . '/../../controllers/CartController.php';
 require __DIR__ . '/../../controllers/WishlistController.php';
 require __DIR__ . '/../../controllers/PaymentController.php';
+require __DIR__ . '/../../controllers/NotificationController.php';
 
 // ── Always answer with JSON, even on a PHP error ──
 // A stray warning/notice or an uncaught error would otherwise print into the
@@ -174,6 +177,31 @@ if ($method === 'GET' && $path === '/refunds') {
   $auth = requireAuth($secret);
   $pdo  = getPDO();
   handleListCustomerRefunds($pdo, $auth);
+}
+
+// ── in-app notifications (the bell) + device push token (any logged-in user) ──
+if ($method === 'GET' && $path === '/notifications') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleListNotifications($pdo, $auth);
+}
+
+if ($method === 'POST' && $path === '/notifications/read-all') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleMarkAllNotificationsRead($pdo, $auth);
+}
+
+if ($method === 'POST' && $path === '/notifications/device') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleRegisterDevice($pdo, $auth);
+}
+
+if ($method === 'PATCH' && preg_match('#^/notifications/([^/]+)/read$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleMarkNotificationRead($pdo, $auth, $m[1]);
 }
 
 // ── delivery personnel / courier (require a DeliveryPersonnel token) ──

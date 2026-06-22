@@ -498,5 +498,38 @@ CREATE TABLE password_reset (
 ) ENGINE=InnoDB;
 
 -- =====================================================================
+--  9. NOTIFICATIONS
+-- =====================================================================
+
+-- In-app notifications shown in the customer app's bell. The backend inserts a
+-- row whenever an order or refund changes status. See
+-- migrations/2026_06_22_notifications.sql.
+CREATE TABLE notification (
+    notificationId VARCHAR(10)  NOT NULL,                  -- NTF0001
+    userId         VARCHAR(10)  NOT NULL,                  -- recipient (the customer's userId)
+    type           VARCHAR(40)  NOT NULL,                  -- 'order' | 'refund' | 'system'
+    title          VARCHAR(120) NOT NULL,
+    body           VARCHAR(255) NOT NULL,
+    orderId        VARCHAR(10)  NULL,                       -- deep-link target (optional)
+    isRead         TINYINT(1)   NOT NULL DEFAULT 0,
+    createdAt      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (notificationId),
+    KEY idx_notification_user (userId, createdAt)
+) ENGINE=InnoDB;
+
+-- Device push tokens (Firebase Cloud Messaging) for real background push. Push
+-- is a swap seam (backend/lib/push.php): it only fires once FCM is configured.
+CREATE TABLE device_token (
+    deviceTokenId VARCHAR(10)  NOT NULL,                    -- DVT0001
+    userId        VARCHAR(10)  NOT NULL,
+    token         VARCHAR(255) NOT NULL,                    -- the FCM registration token
+    platform      VARCHAR(20)  NOT NULL DEFAULT 'android',  -- 'android' | 'ios'
+    updatedAt     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (deviceTokenId),
+    UNIQUE KEY uq_device_token (token),
+    KEY idx_device_user (userId)
+) ENGINE=InnoDB;
+
+-- =====================================================================
 --  END OF SCHEMA
 -- =====================================================================

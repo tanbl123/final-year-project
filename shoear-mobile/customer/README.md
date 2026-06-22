@@ -106,6 +106,38 @@ platform :ios, '13.0'
 > PaymentIntent** before marking the order Paid. With no Stripe key configured,
 > the server returns `STRIPE_NOT_CONFIGURED` (PayPal still works, simulated).
 
+## Notifications
+
+The app has an **in-app notification centre** (the 🔔 bell on the Home screen):
+the backend writes a notification whenever an order or refund changes status
+(payment received, shipped, out for delivery, delivered, refund approved /
+rejected / completed) and the app lists them with an unread badge. This works
+out of the box — **no Firebase needed** — over the same REST API
+(`GET /notifications`, `PATCH /notifications/{id}/read`, `POST /notifications/read-all`).
+
+### Optional: real background push (FCM)
+
+To also deliver a system push when the app is closed (Android needs Firebase
+Cloud Messaging; iOS needs APNs), turn on the swap seam:
+
+**1. Backend** — create a Firebase project, generate a service-account key
+(Project settings → Service accounts → Generate new private key), and in
+`backend/config.local.php` add:
+```php
+'fcm_service_account' => '/absolute/path/to/serviceAccount.json',
+```
+The backend then pushes to every registered device whenever it creates a
+notification. With this unset, push is a silent no-op and the in-app bell still
+works.
+
+**2. App** — add `firebase_messaging` + `firebase_core` to `pubspec.yaml`, drop
+the Android `google-services.json` (and the iOS plist) into the generated
+platform folders, then on login request permission, read the FCM token and send
+it once via `NotificationService.registerDevice(token)` (already implemented →
+`POST /notifications/device`). Handle taps with the push's `data.orderId` to
+deep-link to the order. (Not wired by default so the app still runs without
+Firebase.)
+
 ## Test login
 
 Browsing works without logging in (the catalog is public). To test sign-in, use

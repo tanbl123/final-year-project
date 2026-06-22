@@ -9,9 +9,11 @@ import 'package:customer/features/cart/services/cart_service.dart';
 import 'package:customer/features/order/services/order_service.dart';
 import 'package:customer/features/review/services/review_service.dart';
 import 'package:customer/features/wishlist/services/wishlist_service.dart';
+import 'package:customer/features/notification/services/notification_service.dart';
 import 'package:customer/features/auth/state/auth_provider.dart';
 import 'package:customer/features/cart/state/cart_provider.dart';
 import 'package:customer/features/wishlist/state/wishlist_provider.dart';
+import 'package:customer/features/notification/state/notification_provider.dart';
 import 'package:customer/features/shell/main_shell.dart';
 
 void main() {
@@ -44,6 +46,11 @@ class ShoeArApp extends StatelessWidget {
         ChangeNotifierProxyProvider<AuthProvider, WishlistProvider>(
           create: (_) => WishlistProvider(WishlistService(api)),
           update: (_, auth, wl) => wl!..syncWithAuth(auth.isLoggedIn),
+        ),
+        // notifications load on login and clear on logout, like cart/wishlist
+        ChangeNotifierProxyProvider<AuthProvider, NotificationProvider>(
+          create: (_) => NotificationProvider(NotificationService(api)),
+          update: (_, auth, notif) => notif!..syncWithAuth(auth.isLoggedIn),
         ),
       ],
       child: MaterialApp(

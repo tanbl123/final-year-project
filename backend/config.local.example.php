@@ -18,6 +18,13 @@ return [
   // Only if your React app runs somewhere other than the default:
   // 'app_url' => 'http://localhost:5173',
 
+  // OPTIONAL — Firebase Cloud Messaging for real background push notifications.
+  // Leave this unset to keep in-app notifications only (no push). To enable:
+  // Firebase console → Project settings → Service accounts → Generate new
+  // private key, save the JSON, and point this at its absolute path. See
+  // backend/lib/push.php.
+  // 'fcm_service_account' => 'C:/xampp/htdocs/shoear/backend/firebase-service-account.json',
+
   // Optional: override the FAKE test bank account the payout demo attaches to
   // each supplier (only needed if Stripe rejects the built-in default for your
   // country — see Stripe's "test bank account numbers" docs).

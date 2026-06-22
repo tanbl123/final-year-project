@@ -149,6 +149,11 @@ function handlePayOrder(PDO $pdo, array $config, array $auth, string $orderId): 
     sendJson(500, false, null, ['code' => 'DB_ERROR', 'message' => 'Payment could not be completed.']);
   }
 
+  // notify the buyer their payment went through (best-effort; after commit)
+  if (function_exists('notifyOrderStatusChange')) {
+    notifyOrderStatusChange($pdo, $orderId, 'Paid');
+  }
+
   sendJson(200, true, [
     'orderId'       => $orderId,
     'status'        => 'Paid',

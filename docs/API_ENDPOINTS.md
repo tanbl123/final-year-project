@@ -411,6 +411,27 @@ updates (Section 11) drive the later stages.
 
 ---
 
+## 13b. NOTIFICATIONS  (Customer app — the bell)
+
+| Method | Path | Access | Purpose |
+|--------|------|--------|---------|
+| GET   | `/notifications` | Customer | **(Implemented)** The user's notifications (newest first, max 100) + `unreadCount` for the bell badge. |
+| PATCH | `/notifications/{id}/read` | Customer(Owner) | **(Implemented)** Mark one notification read. |
+| POST  | `/notifications/read-all` | Customer | **(Implemented)** Mark all the user's notifications read. |
+| POST  | `/notifications/device` | Customer | **(Implemented)** Register this device's FCM token for background push. Body: `{ token, platform? }`. |
+
+> The backend writes a notification row on every order/refund status change
+> (`recomputeOrderStatus` → Shipped/OutForDelivery/Delivered, payment → Paid,
+> refund → Approved/Rejected/Completed). See `backend/lib/notifications.php`.
+>
+> **Push is a swap seam** (`backend/lib/push.php`, mirroring storage): when a
+> notification is created it ALSO dispatches a Firebase Cloud Messaging push to
+> the user's registered devices — but only if `fcm_service_account` is set in
+> `config.local.php`. Unset (the default), push is a silent no-op and the
+> in-app bell works on its own.
+
+---
+
 ## 14. COMMISSION  (Admin web)
 
 | Method | Path | Access | Purpose |

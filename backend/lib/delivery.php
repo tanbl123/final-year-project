@@ -207,7 +207,16 @@ function recomputeOrderStatus(PDO $pdo, string $orderId): void {
   elseif ($anyPicked)  { $orderStatus = 'Shipped'; }
 
   if ($orderStatus !== null) {
+    // read the current status first so we only notify on a real transition
+    $cur = $pdo->prepare('SELECT orderStatus FROM `order` WHERE orderId = :oid');
+    $cur->execute(['oid' => $orderId]);
+    $previous = $cur->fetchColumn();
+
     $pdo->prepare('UPDATE `order` SET orderStatus = :os WHERE orderId = :oid')
         ->execute(['os' => $orderStatus, 'oid' => $orderId]);
+
+    if ($previous !== $orderStatus && function_exists('notifyOrderStatusChange')) {
+      notifyOrderStatusChange($pdo, $orderId, $orderStatus);
+    }
   }
 }
