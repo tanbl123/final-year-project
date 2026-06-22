@@ -118,10 +118,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                 : const Text('Login'),
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        TextButton(
+                        const SizedBox(height: 10),
+                        OutlinedButton(
                           onPressed: _loading ? null : _openForgotPassword,
-                          child: const Text('Forgot password?'),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Text('Forgot password?'),
+                          ),
                         ),
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 12),
