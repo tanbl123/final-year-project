@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { fetchCategories, uploadFile } from '../productService';
-import ConfirmDialog from '../../../components/ConfirmDialog';
-import ClearableInput from '../../../components/ClearableInput';
+import ConfirmDialog from '../../../../components/ConfirmDialog';
+import ClearableInput from '../../../../components/ClearableInput';
 
 // A blank size row. Suppliers add one row per size they sell.
 const emptyVariant = () => ({ size: '', stock: '' });

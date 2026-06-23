@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { getSupplierOrder } from '../orderService';
+import { getSupplierOrder } from './orderService';
 import BackButton from '../../../components/BackButton';
 
 const STATUS_COLORS = {

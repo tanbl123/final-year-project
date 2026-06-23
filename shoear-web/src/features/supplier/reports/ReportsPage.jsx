@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getSalesReport } from '../reportService';
+import { getSalesReport } from './reportService';
 
 const rm = (n) => 'RM ' + Number(n || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 

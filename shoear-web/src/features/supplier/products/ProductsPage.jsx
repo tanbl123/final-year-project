@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import ProductCard from '../components/ProductCard';
-import ProductFilterBar from '../components/ProductFilterBar';
+import ProductCard from './components/ProductCard';
+import ProductFilterBar from './components/ProductFilterBar';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Toast from '../../../components/Toast';
 import Pagination from '../../../components/Pagination';
 import { usePagination } from '../../../hooks/usePagination';
-import { fetchProducts, deleteProduct } from '../productService';
+import { fetchProducts, deleteProduct } from './productService';
 
 const EMPTY_FILTERS = { name: '', brand: '', maxPrice: '', categoryId: '', status: '' };
 const PAGE_SIZE = 12;

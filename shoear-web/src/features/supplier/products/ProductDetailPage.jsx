@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useLocation, useNavigate, Link } from 'react-router-dom';
-import { fetchProductById } from '../productService';
+import { fetchProductById } from './productService';
 import { replyToReview, deleteReviewReply } from '../../admin/reviewService';
 import BackButton from '../../../components/BackButton';
 import Toast from '../../../components/Toast';

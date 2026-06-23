@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useBlocker } from 'react-router-dom';
-import { getInventory, updateInventory } from '../productService';
+import { getInventory, updateInventory } from './productService';
 import { useUnsavedChangesWarning } from '../../../hooks/useUnsavedChangesWarning';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Toast from '../../../components/Toast';

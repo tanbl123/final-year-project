@@ -1,4 +1,4 @@
-import { apiGet, getToken } from '../../api/client';
+import { apiGet, getToken } from '../../../api/client';
 
 // Orders that contain the logged-in supplier's products (their share only).
 export function getSupplierOrders(filters = {}) {

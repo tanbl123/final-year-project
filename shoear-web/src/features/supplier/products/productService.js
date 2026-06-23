@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiPatch, apiDelete, apiUpload, getToken } from '../../api/client';
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete, apiUpload, getToken } from '../../../api/client';
 
 // All product data now comes from the real PHP API (with the JWT token).
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import ProductForm from '../components/ProductForm';
-import { fetchProductById, updateProduct } from '../productService';
+import ProductForm from './components/ProductForm';
+import { fetchProductById, updateProduct } from './productService';
 import BackButton from '../../../components/BackButton';
 
 // Edit an existing product. Loads the current values, hands them to the shared

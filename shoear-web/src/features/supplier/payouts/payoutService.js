@@ -1,4 +1,4 @@
-import { apiGet, apiPost, getToken } from '../../api/client';
+import { apiGet, apiPost, getToken } from '../../../api/client';
 
 // Current Stripe Connect payout status for the signed-in supplier.
 // Resolves with { connected, payoutsEnabled, configured, detailsSubmitted? }.

@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
-import ProductForm from '../components/ProductForm';
-import { createProduct } from '../productService';
+import ProductForm from './components/ProductForm';
+import { createProduct } from './productService';
 import BackButton from '../../../components/BackButton';
 
 // Dedicated page for creating a product (instead of an inline panel on the

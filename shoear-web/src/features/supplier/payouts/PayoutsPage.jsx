@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getPayoutStatus, startStripeOnboarding, openStripeDashboard } from '../payoutService';
+import { getPayoutStatus, startStripeOnboarding, openStripeDashboard } from './payoutService';
 
 function PayoutsPage() {
   const [status, setStatus] = useState(null);

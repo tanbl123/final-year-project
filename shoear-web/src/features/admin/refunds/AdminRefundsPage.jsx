@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getRefunds, setRefundStatus } from '../../supplier/refundService';
+import { getRefunds, setRefundStatus } from '../../supplier/refunds/refundService';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Toast from '../../../components/Toast';
 import Pagination from '../../../components/Pagination';

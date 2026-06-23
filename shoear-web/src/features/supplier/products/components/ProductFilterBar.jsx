@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { fetchCategories } from '../productService';
-import ClearableInput from '../../../components/ClearableInput';
+import ClearableInput from '../../../../components/ClearableInput';
 
 // The old "add" bar lived here (name / brand / price / category). It now
 // FILTERS the product list instead of creating products. Changes are pushed
