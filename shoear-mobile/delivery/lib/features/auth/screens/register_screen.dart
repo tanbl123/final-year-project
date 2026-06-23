@@ -130,9 +130,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _validatePlate(String v) {
     final t = v.trim();
     if (t.isEmpty) return 'Plate number is required.';
-    if (!RegExp(r'^[A-Za-z0-9 \-]{3,20}$').hasMatch(t)) {
-      return 'Use letters, numbers, spaces or hyphens (3–20 chars).';
-    }
+    if (t.length < 3) return 'Plate number must be at least 3 characters.';
+    if (!RegExp(r'^[A-Za-z0-9 \-]+$').hasMatch(t)) return 'Only letters, numbers, spaces or hyphens.';
     return null;
   }
 
