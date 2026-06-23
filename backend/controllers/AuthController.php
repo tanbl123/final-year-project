@@ -320,6 +320,35 @@ function handleRegisterCustomer(PDO $pdo): void {
     sendJson(409, false, null, ['code' => 'DUPLICATE', 'message' => 'That username is already taken.']);
   }
 
+  // ── email ownership: require a valid, unexpired verification code ──
+  $verificationCode = trim($body['verificationCode'] ?? '');
+  if ($verificationCode === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A verification code is required.']);
+  }
+  $vstmt = $pdo->prepare('SELECT codeHash, attempts, (expires_at < NOW()) AS expired
+                            FROM email_verification WHERE email = :e');
+  $vstmt->execute(['e' => $email]);
+  $vrow = $vstmt->fetch();
+  if (!$vrow) {
+    sendJson(400, false, null, ['code' => 'NO_CODE',
+      'message' => 'Please request a verification code for this email first.']);
+  }
+  if ((int) $vrow['attempts'] >= VERIFY_MAX_ATTEMPTS) {
+    $pdo->prepare('DELETE FROM email_verification WHERE email = :e')->execute(['e' => $email]);
+    sendJson(429, false, null, ['code' => 'TOO_MANY',
+      'message' => 'Too many incorrect attempts. Please request a new code.']);
+  }
+  if ((int) $vrow['expired'] === 1) {
+    sendJson(400, false, null, ['code' => 'CODE_EXPIRED',
+      'message' => 'Your verification code has expired. Please request a new one.']);
+  }
+  if (!password_verify($verificationCode, $vrow['codeHash'])) {
+    $pdo->prepare('UPDATE email_verification SET attempts = attempts + 1 WHERE email = :e')->execute(['e' => $email]);
+    $left = VERIFY_MAX_ATTEMPTS - ((int) $vrow['attempts'] + 1);
+    $msg  = $left > 0 ? "Incorrect code. $left attempt(s) left." : 'Incorrect code. Please request a new one.';
+    sendJson(400, false, null, ['code' => 'BAD_CODE', 'message' => $msg]);
+  }
+
   $pdo->beginTransaction();
   try {
     $userId = nextId($pdo, 'user', 'userId', 'USR');
@@ -345,8 +374,8 @@ function handleRegisterCustomer(PDO $pdo): void {
 // POST /auth/register/courier — self-service DELIVERY PERSONNEL sign-up from the
 // courier app. Like suppliers (and unlike customers) the account starts Pending
 // and must be approved by an admin before it can log in. Creates a `user` row +
-// a `delivery_personnel` row together. No email-code step: admin review is the
-// gate, and this keeps the mobile flow simple.
+// a `delivery_personnel` row together. Requires a valid verification code emailed
+// via /auth/register/send-code.
 function handleRegisterCourier(PDO $pdo): void {
   $body        = getJsonBody();
   $username    = trim($body['username'] ?? '');
@@ -406,6 +435,35 @@ function handleRegisterCourier(PDO $pdo): void {
     sendJson(409, false, null, ['code' => 'DUPLICATE', 'message' => 'That username is already taken.']);
   }
 
+  // ── email ownership: require a valid, unexpired verification code ──
+  $verificationCode = trim($body['verificationCode'] ?? '');
+  if ($verificationCode === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A verification code is required.']);
+  }
+  $vstmt = $pdo->prepare('SELECT codeHash, attempts, (expires_at < NOW()) AS expired
+                            FROM email_verification WHERE email = :e');
+  $vstmt->execute(['e' => $email]);
+  $vrow = $vstmt->fetch();
+  if (!$vrow) {
+    sendJson(400, false, null, ['code' => 'NO_CODE',
+      'message' => 'Please request a verification code for this email first.']);
+  }
+  if ((int) $vrow['attempts'] >= VERIFY_MAX_ATTEMPTS) {
+    $pdo->prepare('DELETE FROM email_verification WHERE email = :e')->execute(['e' => $email]);
+    sendJson(429, false, null, ['code' => 'TOO_MANY',
+      'message' => 'Too many incorrect attempts. Please request a new code.']);
+  }
+  if ((int) $vrow['expired'] === 1) {
+    sendJson(400, false, null, ['code' => 'CODE_EXPIRED',
+      'message' => 'Your verification code has expired. Please request a new one.']);
+  }
+  if (!password_verify($verificationCode, $vrow['codeHash'])) {
+    $pdo->prepare('UPDATE email_verification SET attempts = attempts + 1 WHERE email = :e')->execute(['e' => $email]);
+    $left = VERIFY_MAX_ATTEMPTS - ((int) $vrow['attempts'] + 1);
+    $msg  = $left > 0 ? "Incorrect code. $left attempt(s) left." : 'Incorrect code. Please request a new one.';
+    sendJson(400, false, null, ['code' => 'BAD_CODE', 'message' => $msg]);
+  }
+
   $pdo->beginTransaction();
   try {
     $userId = nextId($pdo, 'user', 'userId', 'USR');
@@ -424,6 +482,9 @@ function handleRegisterCourier(PDO $pdo): void {
     $pdo->rollBack();
     sendJson(500, false, null, ['code' => 'SERVER', 'message' => 'Could not create the account. Please try again.']);
   }
+
+  // code consumed — clear it so it can't be replayed
+  $pdo->prepare('DELETE FROM email_verification WHERE email = :e')->execute(['e' => $email]);
 
   sendJson(201, true, ['message' => 'Registration submitted. Your account is pending admin approval.']);
 }

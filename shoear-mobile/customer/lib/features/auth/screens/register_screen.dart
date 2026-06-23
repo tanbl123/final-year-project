@@ -1,12 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'package:customer/features/auth/services/account_service.dart';
 import 'package:customer/features/auth/state/auth_provider.dart';
 
-// Password policy mirrors the web/registration backend: 8+ chars with at least
-// one lowercase, uppercase, digit and special character. Returns an error
-// string, or null when valid.
 String? _passwordPolicyError(String pw) {
   if (pw.length < 8) return 'Password must be at least 8 characters.';
   if (!RegExp(r'[a-z]').hasMatch(pw)) return 'Password must include a lowercase letter.';
@@ -16,7 +15,10 @@ String? _passwordPolicyError(String pw) {
   return null;
 }
 
-/// Customer self-service sign-up. On success the account is created and we log
+enum _Step { form, verify }
+
+/// Customer self-service sign-up. Step 1 collects the form; step 2 verifies
+/// the email with a 6-digit code. On success the account is created and we log
 /// the customer straight in, then pop back.
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -26,42 +28,44 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _fullName = TextEditingController();
+  _Step _step = _Step.form;
+
   final _username = TextEditingController();
-  final _email = TextEditingController();
-  final _phone = TextEditingController();
-  final _address = TextEditingController();
+  final _email    = TextEditingController();
+  final _phone    = TextEditingController();
+  final _address  = TextEditingController();
   final _password = TextEditingController();
-  final _confirm = TextEditingController();
+  final _confirm  = TextEditingController();
+  final _code     = TextEditingController();
 
-  // a focus node per validated field so we can validate on blur (like the web)
-  final _fullNameFocus = FocusNode();
   final _usernameFocus = FocusNode();
-  final _emailFocus = FocusNode();
-  final _phoneFocus = FocusNode();
+  final _emailFocus    = FocusNode();
+  final _phoneFocus    = FocusNode();
   final _passwordFocus = FocusNode();
-  final _confirmFocus = FocusNode();
+  final _confirmFocus  = FocusNode();
 
-  bool _obscure = true;
-  bool _loading = false;
-  // per-field inline errors
-  String? _fullNameError;
+  bool _obscure   = true;
+  bool _loading   = false;
+  bool _resending = false;
+
   String? _usernameError;
   String? _emailError;
   String? _phoneError;
   String? _passwordError;
   String? _confirmError;
+  String? _codeError;
+
+  int    _resendIn = 0;
+  Timer? _resendTimer;
 
   @override
   void initState() {
     super.initState();
-    // validate a field when it loses focus (real-time, on blur)
-    _fullNameFocus.addListener(() => _onBlur(_fullNameFocus, () => _fullNameError = _validateFullName(_fullName.text)));
     _usernameFocus.addListener(() => _onBlur(_usernameFocus, () => _usernameError = _validateUsername(_username.text)));
-    _emailFocus.addListener(() => _onBlur(_emailFocus, () => _emailError = _validateEmail(_email.text)));
-    _phoneFocus.addListener(() => _onBlur(_phoneFocus, () => _phoneError = _validatePhone(_phone.text)));
+    _emailFocus.addListener(()    => _onBlur(_emailFocus,    () => _emailError    = _validateEmail(_email.text)));
+    _phoneFocus.addListener(()    => _onBlur(_phoneFocus,    () => _phoneError    = _validatePhone(_phone.text)));
     _passwordFocus.addListener(() => _onBlur(_passwordFocus, () => _passwordError = _validatePassword(_password.text)));
-    _confirmFocus.addListener(() => _onBlur(_confirmFocus, () => _confirmError = _validateConfirm()));
+    _confirmFocus.addListener(()  => _onBlur(_confirmFocus,  () => _confirmError  = _validateConfirm()));
   }
 
   void _onBlur(FocusNode node, VoidCallback validate) {
@@ -70,18 +74,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   void dispose() {
-    for (final c in [_fullName, _username, _email, _phone, _address, _password, _confirm]) {
-      c.dispose();
-    }
-    for (final f in [_fullNameFocus, _usernameFocus, _emailFocus, _phoneFocus, _passwordFocus, _confirmFocus]) {
-      f.dispose();
-    }
+    _resendTimer?.cancel();
+    for (final c in [_username, _email, _phone, _address, _password, _confirm, _code]) c.dispose();
+    for (final f in [_usernameFocus, _emailFocus, _phoneFocus, _passwordFocus, _confirmFocus]) f.dispose();
     super.dispose();
   }
 
-  // ── field validators (same rules as the web register form) ──
-  String? _validateFullName(String v) => v.trim().isEmpty ? 'Full name is required.' : null;
+  void _startResendCooldown() {
+    _resendTimer?.cancel();
+    setState(() => _resendIn = 60);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) return;
+      setState(() => _resendIn--);
+      if (_resendIn <= 0) t.cancel();
+    });
+  }
 
+  // ── field validators ──
   String? _validateUsername(String v) {
     final t = v.trim();
     if (t.isEmpty) return 'Username is required.';
@@ -99,10 +108,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _validatePhone(String v) {
     final t = v.trim();
     if (t.isEmpty) return 'Phone number is required.';
-    // E.164: optional leading +, then 8–15 digits, no leading zero
-    if (!RegExp(r'^\+?[1-9]\d{7,14}$').hasMatch(t)) {
-      return 'Enter a valid phone number, e.g. +60123456789.';
-    }
+    if (!RegExp(r'^\+?[1-9]\d{7,14}$').hasMatch(t)) return 'Enter a valid phone number, e.g. +60123456789.';
     return null;
   }
 
@@ -117,47 +123,70 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return null;
   }
 
-  Future<void> _submit() async {
+  // Step 1 → validate form and email the 6-digit code
+  Future<void> _sendCode() async {
     setState(() {
-      _fullNameError = _validateFullName(_fullName.text);
       _usernameError = _validateUsername(_username.text);
-      _emailError = _validateEmail(_email.text);
-      _phoneError = _validatePhone(_phone.text);
+      _emailError    = _validateEmail(_email.text);
+      _phoneError    = _validatePhone(_phone.text);
       _passwordError = _validatePassword(_password.text);
-      _confirmError = _validateConfirm();
+      _confirmError  = _validateConfirm();
     });
-    if (_fullNameError != null ||
-        _usernameError != null ||
-        _emailError != null ||
-        _phoneError != null ||
-        _passwordError != null ||
-        _confirmError != null) {
-      return;
-    }
+    if (_usernameError != null || _emailError != null || _phoneError != null ||
+        _passwordError != null || _confirmError != null) return;
+
     setState(() => _loading = true);
     try {
+      await context.read<AccountService>().sendRegisterCode(_email.text.trim());
+      if (!mounted) return;
+      setState(() { _code.clear(); _codeError = null; _step = _Step.verify; });
+      _startResendCooldown();
+    } catch (e) {
+      if (!mounted) return;
+      final msg = e.toString();
+      setState(() => _emailError = msg.toLowerCase().contains('already registered')
+          ? msg : 'Could not send the code. Please try again.');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  // Step 2 → verify code and create account
+  Future<void> _submit() async {
+    final code = _code.text.trim();
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      setState(() => _codeError = 'Enter the 6-digit code from your email.');
+      return;
+    }
+    setState(() { _codeError = null; _loading = true; });
+    try {
       await context.read<AccountService>().registerCustomer(
-            username: _username.text.trim(),
-            email: _email.text.trim(),
-            password: _password.text,
-            fullName: _fullName.text.trim(),
-            phoneNumber: _phone.text.trim(),
-            shippingAddress: _address.text.trim(),
+            username:         _username.text.trim(),
+            email:            _email.text.trim(),
+            password:         _password.text,
+            phoneNumber:      _phone.text.trim(),
+            verificationCode: code,
+            shippingAddress:  _address.text.trim(),
           );
-      // created — log straight in with the new credentials
-      await context.read<AuthProvider>().login(_username.text.trim(), _password.text);
+      // account created — log straight in
+      await context.read<AuthProvider>().login(_email.text.trim(), _password.text);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      // route the server error to the most likely field, else under the password
-      final msg = e.toString();
+      final msg   = e.toString();
       final lower = msg.toLowerCase();
+      if (!mounted) return;
       setState(() {
-        if (lower.contains('username')) {
+        if (lower.contains('code') || lower.contains('expired') ||
+            lower.contains('no_code') || lower.contains('attempts')) {
+          _codeError = msg;
+        } else if (lower.contains('username')) {
+          _step = _Step.form;
           _usernameError = msg;
         } else if (lower.contains('email')) {
+          _step = _Step.form;
           _emailError = msg;
         } else {
-          _passwordError = msg;
+          _codeError = msg;
         }
       });
     } finally {
@@ -165,65 +194,83 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  Future<void> _resend() async {
+    if (_resendIn > 0 || _resending) return;
+    setState(() { _codeError = null; _resending = true; });
+    try {
+      await context.read<AccountService>().sendRegisterCode(_email.text.trim());
+      if (!mounted) return;
+      _startResendCooldown();
+    } catch (e) {
+      if (mounted) setState(() => _codeError = e.toString());
+    } finally {
+      if (mounted) setState(() => _resending = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Create account')),
-      body: ListView(
+      appBar: AppBar(
+        title: Text(_step == _Step.form ? 'Create account' : 'Verify email'),
+        leading: _step == _Step.verify
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => setState(() { _step = _Step.form; _codeError = null; }),
+              )
+            : null,
+      ),
+      body: _step == _Step.form ? _formStep() : _verifyStep(),
+    );
+  }
+
+  Widget _formStep() => ListView(
         padding: const EdgeInsets.all(20),
         children: [
           _field(
-            controller: _fullName,
-            focusNode: _fullNameFocus,
-            label: 'Full name',
-            error: _fullNameError,
-            onChanged: (v) => setState(() => _fullNameError = _validateFullName(v)),
-          ),
-          _field(
             controller: _username,
-            focusNode: _usernameFocus,
-            label: 'Username',
-            error: _usernameError,
+            focusNode:  _usernameFocus,
+            label:  'Username',
+            error:  _usernameError,
             onChanged: (v) => setState(() => _usernameError = _validateUsername(v)),
           ),
           _field(
             controller: _email,
-            focusNode: _emailFocus,
-            label: 'Email',
+            focusNode:  _emailFocus,
+            label:    'Email',
             keyboard: TextInputType.emailAddress,
-            error: _emailError,
+            error:    _emailError,
             onChanged: (v) => setState(() => _emailError = _validateEmail(v)),
           ),
           _field(
             controller: _phone,
-            focusNode: _phoneFocus,
-            label: 'Phone number',
+            focusNode:  _phoneFocus,
+            label:    'Phone number',
             keyboard: TextInputType.phone,
-            error: _phoneError,
+            error:    _phoneError,
             onChanged: (v) => setState(() => _phoneError = _validatePhone(v)),
           ),
           _field(
             controller: _address,
-            focusNode: null,
-            label: 'Shipping address (optional)',
-            error: null,
+            focusNode:  null,
+            label:    'Shipping address (optional)',
+            error:    null,
             maxLines: 2,
             onChanged: (_) {},
           ),
           TextField(
-            controller: _password,
-            focusNode: _passwordFocus,
+            controller:  _password,
+            focusNode:   _passwordFocus,
             obscureText: _obscure,
             onChanged: (v) => setState(() {
               _passwordError = _validatePassword(v);
-              // password & confirm are linked — keep the confirm error in sync
               if (_confirm.text.isNotEmpty) _confirmError = _validateConfirm();
             }),
             decoration: InputDecoration(
-              labelText: 'Password',
-              border: const OutlineInputBorder(),
+              labelText:  'Password',
+              border:     const OutlineInputBorder(),
               helperText: '8+ chars with upper, lower, number & symbol',
-              errorText: _passwordError,
+              errorText:  _passwordError,
               suffixIcon: IconButton(
                 icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
                 onPressed: () => setState(() => _obscure = !_obscure),
@@ -232,17 +279,61 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
           const SizedBox(height: 16),
           TextField(
-            controller: _confirm,
-            focusNode: _confirmFocus,
+            controller:  _confirm,
+            focusNode:   _confirmFocus,
             obscureText: _obscure,
-            onChanged: (_) => setState(() => _confirmError = _validateConfirm()),
-            decoration: InputDecoration(
+            onChanged:   (_) => setState(() => _confirmError = _validateConfirm()),
+            decoration:  InputDecoration(
               labelText: 'Confirm password',
-              border: const OutlineInputBorder(),
+              border:    const OutlineInputBorder(),
               errorText: _confirmError,
             ),
           ),
           const SizedBox(height: 24),
+          FilledButton(
+            onPressed: _loading ? null : _sendCode,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: _loading
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Send verification code'),
+            ),
+          ),
+        ],
+      );
+
+  Widget _verifyStep() => ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Text.rich(TextSpan(
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            children: [
+              const TextSpan(text: "We've sent a 6-digit code to "),
+              TextSpan(text: _email.text.trim(), style: const TextStyle(fontWeight: FontWeight.bold)),
+              const TextSpan(text: '. Enter it below to create your account.'),
+            ],
+          )),
+          const SizedBox(height: 20),
+          TextField(
+            controller:     _code,
+            keyboardType:   TextInputType.number,
+            textAlign:      TextAlign.center,
+            autofocus:      true,
+            maxLength:      6,
+            style:          const TextStyle(fontSize: 22, letterSpacing: 8),
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(6),
+            ],
+            onChanged: _codeError == null ? null : (_) => setState(() => _codeError = null),
+            decoration: InputDecoration(
+              labelText:   'Verification code',
+              border:      const OutlineInputBorder(),
+              counterText: '',
+              errorText:   _codeError,
+            ),
+          ),
+          const SizedBox(height: 20),
           FilledButton(
             onPressed: _loading ? null : _submit,
             child: Padding(
@@ -252,10 +343,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   : const Text('Create account'),
             ),
           ),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed: (_resendIn > 0 || _resending) ? null : _resend,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(_resending ? 'Sending…'
+                  : _resendIn > 0 ? 'Resend code (${_resendIn}s)' : 'Resend code'),
+            ),
+          ),
         ],
-      ),
-    );
-  }
+      );
 
   Widget _field({
     required TextEditingController controller,
@@ -269,14 +367,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
       Padding(
         padding: const EdgeInsets.only(bottom: 16),
         child: TextField(
-          controller: controller,
-          focusNode: focusNode,
+          controller:  controller,
+          focusNode:   focusNode,
           keyboardType: keyboard,
-          maxLines: maxLines,
-          onChanged: onChanged,
-          decoration: InputDecoration(
+          maxLines:    maxLines,
+          onChanged:   onChanged,
+          decoration:  InputDecoration(
             labelText: label,
-            border: const OutlineInputBorder(),
+            border:    const OutlineInputBorder(),
             errorText: error,
           ),
         ),

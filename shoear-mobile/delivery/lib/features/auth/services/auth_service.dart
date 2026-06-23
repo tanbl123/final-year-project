@@ -15,6 +15,12 @@ class AuthService {
     return CourierSession.fromJson(data as Map<String, dynamic>);
   }
 
+  /// POST /auth/register/send-code — email a 6-digit verification code to the
+  /// address the courier is about to register with.
+  Future<void> sendRegisterCode(String email) async {
+    await api.post('/auth/register/send-code', {'email': email});
+  }
+
   /// POST /auth/register/courier — self-apply as a courier. The account is
   /// created as Pending (awaiting admin approval), so there's no auto-login;
   /// returns the server's confirmation message.
@@ -28,6 +34,7 @@ class AuthService {
     required String vehicleModel,
     required String vehiclePlate,
     required String password,
+    required String verificationCode,
   }) async {
     final data = await api.post('/auth/register/courier', {
       'fullName': fullName,
@@ -39,6 +46,7 @@ class AuthService {
       'vehicleModel': vehicleModel,
       'vehiclePlate': vehiclePlate,
       'password': password,
+      'verificationCode': verificationCode,
     });
     return (data as Map<String, dynamic>)['message']?.toString() ??
         'Registration submitted. Your account is pending admin approval.';
