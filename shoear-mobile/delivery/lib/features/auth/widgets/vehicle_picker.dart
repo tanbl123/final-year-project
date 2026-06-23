@@ -152,47 +152,40 @@ class _VehiclePickerState extends State<VehiclePicker> {
         onReturnToList: () => setState(() => _brandManual = false),
       );
     }
-    final value = _brands!.contains(widget.brand.text) ? widget.brand.text : null;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: DropdownButtonFormField<String>(
-        value: value,
-        isExpanded: true,
-        decoration: InputDecoration(
-          labelText: 'Vehicle brand',
-          border: const OutlineInputBorder(),
-          errorText: widget.brandError,
-        ),
-        items: [
-          ..._brands!.map((b) => DropdownMenuItem(value: b, child: Text(b))),
-          const DropdownMenuItem(value: _other, child: Text('Other (type manually)')),
-        ],
-        onChanged: (v) {
-          if (v == _other) {
-            setState(() {
-              _brandManual = true;
-              widget.brand.clear();
-              widget.model.clear();
-              _models = null;
-              _modelManual = false;
-            });
-            widget.onBrandChanged?.call();
-            widget.onModelChanged?.call();
-            return;
-          }
-          if (v == null) return;
+    return _selectorField(
+      label: 'Vehicle brand',
+      value: widget.brand.text.trim().isEmpty ? null : widget.brand.text,
+      hint: 'Select a brand',
+      error: widget.brandError,
+      onTap: () async {
+        final picked = await _openSearchSheet(
+          title: 'Select a brand',
+          options: _brands!,
+        );
+        if (picked == null) return;
+        if (picked == _other) {
           setState(() {
-            widget.brand.text = v;
+            _brandManual = true;
+            widget.brand.clear();
             widget.model.clear();
             _models = null;
             _modelManual = false;
-            _loadingModels = true;
           });
           widget.onBrandChanged?.call();
           widget.onModelChanged?.call();
-          _loadModels(v);
-        },
-      ),
+          return;
+        }
+        setState(() {
+          widget.brand.text = picked;
+          widget.model.clear();
+          _models = null;
+          _modelManual = false;
+          _loadingModels = true;
+        });
+        widget.onBrandChanged?.call();
+        widget.onModelChanged?.call();
+        _loadModels(picked);
+      },
     );
   }
 
@@ -222,39 +215,130 @@ class _VehiclePickerState extends State<VehiclePicker> {
         onReturnToList: () => setState(() => _modelManual = false),
       );
     }
-    final value = _models!.contains(widget.model.text) ? widget.model.text : null;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: DropdownButtonFormField<String>(
-        value: value,
-        isExpanded: true,
-        decoration: InputDecoration(
-          labelText: 'Vehicle model',
-          border: const OutlineInputBorder(),
-          errorText: widget.modelError,
-        ),
-        items: [
-          ..._models!.map((m) => DropdownMenuItem(value: m, child: Text(m))),
-          const DropdownMenuItem(value: _other, child: Text('Other (type manually)')),
-        ],
-        onChanged: (v) {
-          if (v == _other) {
-            setState(() {
-              _modelManual = true;
-              widget.model.clear();
-            });
-            widget.onModelChanged?.call();
-            return;
-          }
-          if (v == null) return;
-          setState(() => widget.model.text = v);
+    return _selectorField(
+      label: 'Vehicle model',
+      value: widget.model.text.trim().isEmpty ? null : widget.model.text,
+      hint: 'Select a model',
+      error: widget.modelError,
+      onTap: () async {
+        final picked = await _openSearchSheet(
+          title: 'Select a model',
+          options: _models!,
+        );
+        if (picked == null) return;
+        if (picked == _other) {
+          setState(() {
+            _modelManual = true;
+            widget.model.clear();
+          });
           widget.onModelChanged?.call();
-        },
-      ),
+          return;
+        }
+        setState(() => widget.model.text = picked);
+        widget.onModelChanged?.call();
+      },
     );
   }
 
   // ── shared bits ──
+
+  // A read-only field that looks like a dropdown but opens the search sheet.
+  Widget _selectorField({
+    required String label,
+    required String? value,
+    required String hint,
+    required String? error,
+    required VoidCallback onTap,
+  }) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: InkWell(
+          onTap: onTap,
+          child: InputDecorator(
+            isEmpty: value == null,
+            decoration: InputDecoration(
+              labelText: label,
+              hintText: hint,
+              border: const OutlineInputBorder(),
+              errorText: error,
+              suffixIcon: const Icon(Icons.arrow_drop_down),
+            ),
+            child: value == null ? null : Text(value, overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      );
+
+  // A searchable, height-capped (≈70%) bottom sheet. Returns the chosen string,
+  // the [_other] sentinel for manual entry, or null if dismissed.
+  Future<String?> _openSearchSheet({
+    required String title,
+    required List<String> options,
+  }) {
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        var query = '';
+        return StatefulBuilder(
+          builder: (ctx, setSheet) {
+            final filtered = query.isEmpty
+                ? options
+                : options.where((o) => o.toLowerCase().contains(query.toLowerCase())).toList();
+            return Padding(
+              // push the sheet above the keyboard when the search field is focused
+              padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+              child: SizedBox(
+                height: MediaQuery.of(ctx).size.height * 0.7,
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      child: Text(title, style: Theme.of(ctx).textTheme.titleMedium),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: TextField(
+                        autofocus: true,
+                        onChanged: (v) => setSheet(() => query = v),
+                        decoration: const InputDecoration(
+                          hintText: 'Search…',
+                          prefixIcon: Icon(Icons.search),
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Expanded(
+                      child: filtered.isEmpty
+                          ? Center(
+                              child: Text('No matches for "$query"',
+                                  style: TextStyle(color: Theme.of(ctx).hintColor)))
+                          : ListView.builder(
+                              itemCount: filtered.length,
+                              itemBuilder: (_, i) => ListTile(
+                                title: Text(filtered[i]),
+                                onTap: () => Navigator.pop(ctx, filtered[i]),
+                              ),
+                            ),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      leading: const Icon(Icons.edit_outlined),
+                      title: const Text('Other (type manually)'),
+                      onTap: () => Navigator.pop(ctx, _other),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _loadingBox(String label) => Padding(
         padding: const EdgeInsets.only(bottom: 16),
         child: InputDecorator(
