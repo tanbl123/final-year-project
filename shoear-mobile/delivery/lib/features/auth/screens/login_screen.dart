@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'package:delivery/features/auth/state/auth_provider.dart';
 import 'package:delivery/features/auth/screens/register_screen.dart';
+import 'package:delivery/features/auth/screens/forgot_password_screen.dart';
 
 /// Courier sign-in. The shell shows this whenever there's no session.
 class LoginScreen extends StatefulWidget {
@@ -19,6 +20,17 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
   String? _identifierError;
   String? _passwordError;
+
+  Future<void> _openForgotPassword() async {
+    final reset = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+    );
+    if (reset == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Your password has been reset — please log in.')),
+      );
+    }
+  }
 
   @override
   void dispose() {
@@ -109,6 +121,14 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: _loading
                                 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                                 : const Text('Login'),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        OutlinedButton(
+                          onPressed: _loading ? null : _openForgotPassword,
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Text('Forgot password?'),
                           ),
                         ),
                       ],
