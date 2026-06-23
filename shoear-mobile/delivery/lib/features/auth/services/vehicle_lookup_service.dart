@@ -35,7 +35,12 @@ class VehicleLookupService {
 
   // Shared fetch: pull `field` out of every row of the `Results` array.
   Future<List<String>> _names(Uri uri, String field) async {
-    final res = await http.get(uri).timeout(const Duration(seconds: 12));
+    // NHTSA's firewall 403s requests with a non-browser User-Agent (Dart's
+    // default is `Dart/x.x (dart:io)`), so send a browser-like one + Accept.
+    final res = await http.get(uri, headers: const {
+      'User-Agent': 'Mozilla/5.0 (Linux; Android) ShoeARExpress/1.0',
+      'Accept': 'application/json',
+    }).timeout(const Duration(seconds: 12));
     if (res.statusCode != 200) {
       throw Exception('Vehicle lookup failed (${res.statusCode}).');
     }
