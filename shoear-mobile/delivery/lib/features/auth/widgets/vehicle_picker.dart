@@ -104,12 +104,19 @@ class _VehiclePickerState extends State<VehiclePicker> {
 
   Future<void> _loadModels(String make) async {
     try {
-      final models = await _service.modelsForMake(make);
+      final models = await _service.modelsForMake(widget.vehicleType, make);
       if (!mounted) return;
       setState(() {
+        // No models catalogued for this brand → drop straight to manual entry.
+        if (models.isEmpty) {
+          _models = null;
+          _loadingModels = false;
+          _modelManual = true;
+          return;
+        }
         _models = models;
         _loadingModels = false;
-        // Editing: a saved model the API doesn't list → show it as manual text.
+        // Editing: a saved model not in the list → show it as manual text.
         final current = widget.model.text.trim();
         if (current.isNotEmpty && !models.contains(current)) _modelManual = true;
       });
