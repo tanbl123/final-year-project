@@ -1,108 +1,163 @@
-import 'dart:convert';
-
-import 'package:http/http.dart' as http;
-
-/// Fetches vehicle makes/models from the NHTSA vPIC API
-/// (https://vpic.nhtsa.dot.gov/api/). No API key required.
+/// Vehicle brand/model catalogue for the courier registration form.
 ///
-/// NHTSA is US-market only, so Malaysian brands (Perodua, Proton, Modenas,
-/// SYM) are supplemented from a small local list and merged into the results.
-/// If the API is unreachable the local brands are returned as a fallback so
-/// Malaysian couriers are never blocked from registering.
+/// Hardcoded for reliability — the NHTSA vPIC API (the only free option that
+/// covers motorcycles) times out consistently from Malaysia due to US-server
+/// latency and large payload sizes. The local list is curated for the
+/// Malaysian market; the VehiclePicker's "Other (type manually)" escape hatch
+/// covers any brand or model not listed here.
 class VehicleLookupService {
-  static const _base = 'https://vpic.nhtsa.dot.gov/api/vehicles';
-
-  static const Map<String, String> _typeForApi = {
-    'Motorcycle': 'motorcycle',
-    'Car': 'car',
-    'Van': 'truck',
-    'Truck': 'truck',
-  };
-
-  // Malaysian/regional brands absent from the NHTSA (US-only) database.
-  static const Map<String, List<String>> _localBrands = {
-    'Motorcycle': ['Modenas', 'SYM'],
-    'Car': ['Perodua', 'Proton'],
-    'Van': [],
-    'Truck': [],
-  };
-
-  // Models for brands that NHTSA doesn't carry.
-  static const Map<String, List<String>> _localModels = {
-    'Modenas': [
-      'Boss 185', 'CT100B', 'Dominar 400', 'Elegan 250', 'GT128',
-      'Kriss 110', 'Kriss 110R', 'V15',
+  static const Map<String, List<String>> _brandsByType = {
+    'Motorcycle': [
+      'Aprilia', 'Benelli', 'BMW', 'Ducati', 'Harley-Davidson', 'Honda',
+      'Kawasaki', 'KTM', 'Modenas', 'Royal Enfield', 'Suzuki', 'SYM',
+      'Triumph', 'Yamaha',
     ],
-    'SYM': [
-      'Bonus 110', 'CITYCOM S 300i', 'Fiamma 50', 'Jet14 200',
-      'Sport Rider 150', 'VF3i 185',
+    'Car': [
+      'Audi', 'BMW', 'BYD', 'Chery', 'Daihatsu', 'Ford', 'Honda', 'Hyundai',
+      'Kia', 'Mazda', 'Mercedes-Benz', 'Mitsubishi', 'Nissan', 'Perodua',
+      'Proton', 'Subaru', 'Suzuki', 'Toyota', 'Volkswagen', 'Volvo',
     ],
-    'Perodua': [
-      'Ativa', 'Axia', 'Bezza', 'Kancil', 'Kelisa', 'Kenari',
-      'Kembara', 'Myvi', 'Nautica', 'Viva',
+    'Van': [
+      'Ford', 'Hyundai', 'Maxus', 'Mercedes-Benz', 'Nissan', 'Peugeot',
+      'Renault', 'Toyota', 'Volkswagen',
     ],
-    'Proton': [
-      'Ertiga', 'Exora', 'Gen-2', 'Iriz', 'Perdana', 'Persona',
-      'Preve', 'Saga', 'Satria Neo', 'Suprima S', 'Waja', 'Wira',
-      'X50', 'X70', 'X90',
+    'Truck': [
+      'DAF', 'Hino', 'Isuzu', 'MAN', 'Mercedes-Benz', 'Mitsubishi Fuso',
+      'Nissan', 'Renault', 'Scania', 'Toyota', 'Volvo',
     ],
   };
 
-  /// All makes for the given vehicle type, merging NHTSA results with the
-  /// local Malaysian supplement, de-duplicated and sorted A–Z.
+  static const Map<String, Map<String, List<String>>> _modelsByTypeAndBrand = {
+    'Motorcycle': {
+      'Honda': [
+        'CB150R', 'CB500F', 'CB650R', 'CBR150R', 'CBR250RR', 'CBR600RR',
+        'CRF150L', 'EX5 Dream', 'Revo', 'RS150R', 'Vario 150', 'Wave 110',
+        'Wave Alpha', 'Winner X',
+      ],
+      'Yamaha': [
+        'Crypton', 'Ego Avantiz', 'Ego S', 'Exciter 150', 'FZ25', 'LC135',
+        'MT-07', 'MT-09', 'MT-15', 'NMax 155', 'R15', 'R25', 'XMax 250',
+        'Y15ZR',
+      ],
+      'Kawasaki': [
+        'Ninja 250', 'Ninja 400', 'Ninja 650', 'Ninja ZX-10R', 'Ninja ZX-6R',
+        'Versys 650', 'W175', 'Z400', 'Z650', 'Z900',
+      ],
+      'Suzuki': [
+        'Address 115', 'Belang R150', 'Burgman 400', 'GSX-R150', 'GSX-S150',
+        'Hayabusa', 'Raider R150', 'Skydrive 125',
+      ],
+      'Modenas': [
+        'Boss 185', 'CT100B', 'Dominar 400', 'Elegan 250', 'GT128',
+        'Kriss 110', 'Kriss 110R', 'V15',
+      ],
+      'SYM': [
+        'Bonus 110', 'CITYCOM S 300i', 'Fiamma 50', 'Jet14 200',
+        'Sport Rider 150', 'VF3i 185',
+      ],
+      'KTM': ['200 Duke', '390 Adventure', '390 Duke', '690 Duke', '890 Duke'],
+      'Benelli': ['302R', '502C', 'TNT 135', 'TNT 249S', 'TNT 302'],
+      'BMW': ['G 310 GS', 'G 310 R', 'R 1250 GS', 'S 1000 RR'],
+      'Ducati': ['Monster 937', 'Panigale V2', 'Panigale V4', 'Scrambler 800'],
+      'Harley-Davidson': [
+        'Fat Bob', 'Fat Boy', 'Iron 883', 'Road King', 'Street 750',
+      ],
+      'Royal Enfield': [
+        'Classic 350', 'Himalayan', 'Meteor 350', 'Thunderbird X',
+      ],
+      'Triumph': [
+        'Bonneville T100', 'Speed Triple', 'Street Triple', 'Tiger 900',
+      ],
+      'Aprilia': ['RS 660', 'RS4 125', 'Tuono 660'],
+    },
+    'Car': {
+      'Perodua': [
+        'Ativa', 'Axia', 'Bezza', 'Kancil', 'Kelisa', 'Kenari', 'Kembara',
+        'Myvi', 'Nautica', 'Viva',
+      ],
+      'Proton': [
+        'Ertiga', 'Exora', 'Gen-2', 'Iriz', 'Perdana', 'Persona', 'Preve',
+        'Saga', 'Satria Neo', 'Suprima S', 'Waja', 'Wira', 'X50', 'X70',
+        'X90',
+      ],
+      'Toyota': [
+        'Alphard', 'Altis', 'Avanza', 'C-HR', 'Camry', 'Corolla Cross',
+        'Fortuner', 'GR86', 'Harrier', 'Vellfire', 'Veloz', 'Vios', 'Yaris',
+      ],
+      'Honda': [
+        'Accord', 'BR-V', 'City', 'City Hatchback', 'Civic', 'CR-V', 'HR-V',
+        'Jazz', 'Odyssey', 'WR-V',
+      ],
+      'Nissan': [
+        'Almera', 'Grand Livina', 'Kicks', 'Navara', 'Note', 'Serena',
+        'X-Trail',
+      ],
+      'Mitsubishi': [
+        'ASX', 'Eclipse Cross', 'Outlander', 'Pajero Sport', 'Xpander',
+      ],
+      'Mazda': [
+        'CX-3', 'CX-30', 'CX-5', 'CX-60', 'CX-8', 'Mazda2', 'Mazda3',
+        'Mazda6', 'MX-5',
+      ],
+      'Hyundai': [
+        'Elantra', 'i10', 'i20', 'Ioniq 5', 'Ioniq 6', 'Kona', 'Santa Fe',
+        'Tucson',
+      ],
+      'Kia': ['Carnival', 'EV6', 'Niro', 'Seltos', 'Sonet', 'Sorento', 'Sportage'],
+      'Suzuki': ['Baleno', 'Ertiga', 'Ignis', 'Jimny', 'Swift', 'Vitara'],
+      'Mercedes-Benz': [
+        'A-Class', 'C-Class', 'CLA', 'E-Class', 'GLA', 'GLC', 'GLE',
+        'S-Class',
+      ],
+      'BMW': [
+        '1 Series', '2 Series', '3 Series', '5 Series', '7 Series', 'X1',
+        'X3', 'X5',
+      ],
+      'Audi': ['A3', 'A4', 'A6', 'Q2', 'Q3', 'Q5', 'Q7', 'Q8'],
+      'Volkswagen': ['Golf', 'Passat', 'Polo', 'Tiguan'],
+      'Volvo': ['S60', 'S90', 'XC40', 'XC60', 'XC90'],
+      'Ford': ['EcoSport', 'Everest', 'Fiesta', 'Focus', 'Mustang', 'Ranger'],
+      'Subaru': ['BRZ', 'Forester', 'Impreza', 'Outback', 'WRX', 'XV'],
+      'Daihatsu': ['Gran Max', 'Rocky', 'Sirion', 'Terios'],
+      'BYD': ['Atto 3', 'Dolphin', 'Seal', 'Tang'],
+      'Chery': ['Omoda 5', 'Tiggo 5x', 'Tiggo 7 Pro', 'Tiggo 8 Pro'],
+    },
+    'Van': {
+      'Toyota': ['Hiace', 'Hiace Commuter', 'HiAce Super Grandia'],
+      'Nissan': ['NV200', 'NV350 Urvan', 'Urvan'],
+      'Mercedes-Benz': ['Sprinter', 'Viano', 'Vito'],
+      'Ford': ['Transit', 'Transit Connect', 'Transit Custom'],
+      'Volkswagen': ['Caravelle', 'Multivan', 'Transporter'],
+      'Hyundai': ['H-1', 'Starex', 'Staria'],
+      'Maxus': ['G10', 'T60', 'V80'],
+      'Renault': ['Master', 'Trafic'],
+      'Peugeot': ['Boxer', 'Expert', 'Partner'],
+    },
+    'Truck': {
+      'Isuzu': ['D-Max', 'ELF 150', 'ELF 250', 'Forward', 'FVR', 'NMR', 'NQR', 'NRR'],
+      'Hino': ['300 Series', '500 Series', '700 Series'],
+      'Mitsubishi Fuso': ['Canter', 'Fighter', 'Rosa', 'Super Great'],
+      'MAN': ['TGA', 'TGM', 'TGS', 'TGX'],
+      'Scania': ['G Series', 'P Series', 'R Series', 'S Series'],
+      'Mercedes-Benz': ['Actros', 'Arocs', 'Atego', 'Axor'],
+      'Volvo': ['FH', 'FL', 'FM', 'FMX'],
+      'Toyota': ['Hilux', 'Land Cruiser 70'],
+      'Nissan': ['Navara', 'NT400', 'NT500'],
+      'DAF': ['CF', 'LF', 'XF'],
+      'Renault': ['C-Range', 'D-Range', 'K-Range', 'T-Range'],
+    },
+  };
+
+  /// Brands for the given vehicle type, sorted A–Z.
   Future<List<String>> makesForType(String vehicleType) async {
-    final local = List<String>.from(_localBrands[vehicleType] ?? []);
-    try {
-      final apiType = _typeForApi[vehicleType] ?? 'car';
-      final uri = Uri.parse('$_base/GetMakesForVehicleType/$apiType?format=json');
-      final apiMakes = await _names(uri, 'MakeName');
-      // Merge API + local, deduplicate, sort A–Z.
-      final combined = {...apiMakes, ...local}.toList()
-        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-      return combined;
-    } catch (e) {
-      // ignore: avoid_print
-      print('[VehicleLookup] makesForType($vehicleType) failed: $e');
-      // API unreachable — return local brands so the form still works offline.
-      return local..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    }
+    return List<String>.from(_brandsByType[vehicleType] ?? []);
   }
 
-  /// Models for the given make, de-duplicated and sorted A–Z.
-  /// Local models (Malaysian brands) take priority over the API.
-  /// Returns an empty list when no data is available; VehiclePicker will
-  /// automatically switch to a free-text field in that case.
+  /// Models for the given type + brand combination, sorted A–Z.
+  /// Returns an empty list when the brand is not in the catalogue — the
+  /// VehiclePicker will automatically switch to a free-text field instead.
   Future<List<String>> modelsForMake(String vehicleType, String make) async {
-    if (_localModels.containsKey(make)) {
-      return List<String>.from(_localModels[make]!);
-    }
-    try {
-      final uri = Uri.parse(
-          '$_base/GetModelsForMake/${Uri.encodeComponent(make)}?format=json');
-      return await _names(uri, 'Model_Name');
-    } catch (_) {
-      return []; // VehiclePicker treats empty list as "switch to manual entry"
-    }
-  }
-
-  // Shared fetch helper: pull [field] out of every row of the Results array.
-  Future<List<String>> _names(Uri uri, String field) async {
-    // NHTSA blocks Dart's default User-Agent, so send a browser-like one.
-    final res = await http.get(uri, headers: const {
-      'User-Agent': 'Mozilla/5.0 (Linux; Android) ShoeARExpress/1.0',
-      'Accept': 'application/json',
-    }).timeout(const Duration(seconds: 15));
-    if (res.statusCode != 200) {
-      throw Exception('Vehicle lookup failed (${res.statusCode}).');
-    }
-    final body = jsonDecode(res.body) as Map<String, dynamic>;
-    final results = (body['Results'] as List?) ?? const [];
-    final names = results
-        .map((e) => (e as Map<String, dynamic>)[field]?.toString().trim() ?? '')
-        .where((s) => s.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    return names;
+    return List<String>.from(
+        _modelsByTypeAndBrand[vehicleType]?[make] ?? []);
   }
 }
