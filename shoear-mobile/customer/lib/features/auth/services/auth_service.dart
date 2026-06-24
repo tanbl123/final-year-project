@@ -15,4 +15,12 @@ class AuthService {
     });
     return UserSession.fromJson(data as Map<String, dynamic>);
   }
+
+  /// POST /auth/google — verify a Google ID token server-side and return a session.
+  /// The token is obtained via the google_sign_in package. On success the backend
+  /// links (or creates) a Customer account and issues a JWT.
+  Future<UserSession> googleAuth(String idToken) async {
+    final data = await api.post('/auth/google', {'idToken': idToken});
+    return UserSession.fromJson(data as Map<String, dynamic>);
+  }
 }

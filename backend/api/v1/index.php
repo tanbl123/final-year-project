@@ -317,6 +317,12 @@ if ($method === 'POST' && $path === '/auth/login') {
   handleLogin($pdo, $secret);
 }
 
+// Google Sign-In for the customer app — public (idToken IS the credential)
+if ($method === 'POST' && $path === '/auth/google') {
+  $pdo = getPDO();
+  handleGoogleAuth($pdo, $secret, $config);
+}
+
 // forgot-password: email a reset code, then reset with that code (both public)
 if ($method === 'POST' && $path === '/auth/forgot-password') {
   $pdo = getPDO();
@@ -375,6 +381,13 @@ if ($method === 'POST' && $path === '/auth/change-password') {
   $auth = requireAuth($secret);
   $pdo  = getPDO();
   handleChangePassword($pdo, $auth);
+}
+
+// set / update phone number (needed at checkout for Google Sign-In users)
+if ($method === 'PATCH' && $path === '/auth/me/phone') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleUpdatePhone($pdo, $auth);
 }
 
 // ── supplier payouts via Stripe Connect ──

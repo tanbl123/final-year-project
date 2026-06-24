@@ -56,10 +56,11 @@ DROP TABLE IF EXISTS `user`;
 CREATE TABLE `user` (
     userId        VARCHAR(10)  NOT NULL,                 -- USR0001
     username      VARCHAR(50)  NOT NULL,
-    password      VARCHAR(255) NOT NULL,                 -- store a HASH only (bcrypt/argon2)
+    password      VARCHAR(255) NULL,                     -- NULL for Google Sign-In-only accounts
+    googleId      VARCHAR(255) NULL,                     -- Google sub claim; NULL for email/password accounts
     email         VARCHAR(120) NOT NULL,
     fullName      VARCHAR(120) NOT NULL,
-    phoneNumber   VARCHAR(20)  NOT NULL,
+    phoneNumber   VARCHAR(20)  NULL,                     -- NULL for Google users until collected at checkout
     avatarUrl     VARCHAR(255) NULL,                     -- profile picture URL (NULL = initials fallback)
     role          ENUM('Admin','Supplier','Customer','DeliveryPersonnel') NOT NULL,
     -- Pending  : supplier/delivery awaiting admin approval
@@ -76,7 +77,8 @@ CREATE TABLE `user` (
     updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (userId),
     UNIQUE KEY uq_user_username (username),
-    UNIQUE KEY uq_user_email (email)
+    UNIQUE KEY uq_user_email (email),
+    UNIQUE KEY uq_user_googleid (googleId)
 ) ENGINE=InnoDB;
 
 CREATE TABLE admin (

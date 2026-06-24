@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 
 import 'package:customer/features/auth/services/account_service.dart';
 import 'package:customer/features/auth/state/auth_provider.dart';
+import 'package:customer/features/auth/screens/login_screen.dart';
 
 String? _passwordPolicyError(String pw) {
   if (pw.length < 8) return 'Password must be at least 8 characters.';
@@ -17,9 +19,10 @@ String? _passwordPolicyError(String pw) {
 
 enum _Step { form, verify }
 
-/// Customer self-service sign-up. Step 1 collects the form; step 2 verifies
-/// the email with a 6-digit code. On success the account is created and we log
-/// the customer straight in, then pop back.
+/// Customer self-service sign-up.
+/// Step 1 collects the form; step 2 verifies the email with a 6-digit code.
+/// On success the account is created and we log the customer straight in.
+/// Alternatively, tap "Continue with Google" to skip the form entirely.
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -54,6 +57,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _passwordError;
   String? _confirmError;
   String? _codeError;
+  String? _googleError;
 
   int    _resendIn = 0;
   Timer? _resendTimer;
@@ -131,6 +135,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _phoneError    = _validatePhone(_phone.text);
       _passwordError = _validatePassword(_password.text);
       _confirmError  = _validateConfirm();
+      _googleError   = null;
     });
     if (_usernameError != null || _emailError != null || _phoneError != null ||
         _passwordError != null || _confirmError != null) return;
@@ -164,6 +169,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             username:         _username.text.trim(),
             email:            _email.text.trim(),
             password:         _password.text,
+            fullName:         _username.text.trim(),
             phoneNumber:      _phone.text.trim(),
             verificationCode: code,
             shippingAddress:  _address.text.trim(),
@@ -208,6 +214,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  Future<void> _signInWithGoogle() async {
+    setState(() { _googleError = null; _loading = true; });
+    try {
+      final googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+      final auth = await googleUser.authentication;
+      final idToken = auth.idToken;
+      if (idToken == null) {
+        if (mounted) setState(() {
+          _googleError = 'Google did not return an ID token. Please try again.';
+          _loading = false;
+        });
+        return;
+      }
+      await context.read<AuthProvider>().loginWithGoogle(idToken);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) setState(() { _googleError = e.toString(); _loading = false; });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -224,83 +254,119 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _formStep() => ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          _field(
-            controller: _username,
-            focusNode:  _usernameFocus,
-            label:  'Username',
-            error:  _usernameError,
-            onChanged: (v) => setState(() => _usernameError = _validateUsername(v)),
-          ),
-          _field(
-            controller: _email,
-            focusNode:  _emailFocus,
-            label:    'Email',
-            keyboard: TextInputType.emailAddress,
-            error:    _emailError,
-            onChanged: (v) => setState(() => _emailError = _validateEmail(v)),
-          ),
-          _field(
-            controller: _phone,
-            focusNode:  _phoneFocus,
-            label:    'Phone number',
-            keyboard: TextInputType.phone,
-            error:    _phoneError,
-            onChanged: (v) => setState(() => _phoneError = _validatePhone(v)),
-          ),
-          _field(
-            controller: _address,
-            focusNode:  null,
-            label:    'Shipping address (optional)',
-            error:    null,
-            maxLines: 2,
-            onChanged: (_) {},
-          ),
-          TextField(
-            controller:  _password,
-            focusNode:   _passwordFocus,
-            obscureText: _obscure,
-            onChanged: (v) => setState(() {
-              _passwordError = _validatePassword(v);
-              if (_confirm.text.isNotEmpty) _confirmError = _validateConfirm();
-            }),
-            decoration: InputDecoration(
-              labelText:  'Password',
-              border:     const OutlineInputBorder(),
-              helperText: '8+ chars with upper, lower, number & symbol',
-              errorText:  _passwordError,
-              suffixIcon: IconButton(
-                icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
-                onPressed: () => setState(() => _obscure = !_obscure),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller:  _confirm,
-            focusNode:   _confirmFocus,
-            obscureText: _obscure,
-            onChanged:   (_) => setState(() => _confirmError = _validateConfirm()),
-            decoration:  InputDecoration(
-              labelText: 'Confirm password',
-              border:    const OutlineInputBorder(),
-              errorText: _confirmError,
-            ),
-          ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _loading ? null : _sendCode,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              child: _loading
-                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Send verification code'),
-            ),
-          ),
+  Widget _formStep() {
+    final theme = Theme.of(context);
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        // ── Google Sign-In as an alternative to the form ──
+        _GoogleButton(
+          onPressed: _loading ? null : _signInWithGoogle,
+          label: 'Continue with Google',
+        ),
+        if (_googleError != null) ...[
+          const SizedBox(height: 8),
+          Text(_googleError!,
+              style: TextStyle(color: theme.colorScheme.error, fontSize: 13)),
         ],
-      );
+        const Padding(
+          padding: EdgeInsets.symmetric(vertical: 16),
+          child: Row(children: [
+            Expanded(child: Divider()),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Text('or sign up with email'),
+            ),
+            Expanded(child: Divider()),
+          ]),
+        ),
+        // ── form fields ──
+        _field(
+          controller: _username,
+          focusNode:  _usernameFocus,
+          label:  'Username',
+          error:  _usernameError,
+          onChanged: (v) => setState(() => _usernameError = _validateUsername(v)),
+        ),
+        _field(
+          controller: _email,
+          focusNode:  _emailFocus,
+          label:    'Email',
+          keyboard: TextInputType.emailAddress,
+          error:    _emailError,
+          onChanged: (v) => setState(() => _emailError = _validateEmail(v)),
+        ),
+        _field(
+          controller: _phone,
+          focusNode:  _phoneFocus,
+          label:    'Phone number',
+          keyboard: TextInputType.phone,
+          error:    _phoneError,
+          onChanged: (v) => setState(() => _phoneError = _validatePhone(v)),
+        ),
+        _field(
+          controller: _address,
+          focusNode:  null,
+          label:    'Shipping address (optional)',
+          error:    null,
+          maxLines: 2,
+          onChanged: (_) {},
+        ),
+        TextField(
+          controller:  _password,
+          focusNode:   _passwordFocus,
+          obscureText: _obscure,
+          onChanged: (v) => setState(() {
+            _passwordError = _validatePassword(v);
+            if (_confirm.text.isNotEmpty) _confirmError = _validateConfirm();
+          }),
+          decoration: InputDecoration(
+            labelText:  'Password',
+            border:     const OutlineInputBorder(),
+            helperText: '8+ chars with upper, lower, number & symbol',
+            errorText:  _passwordError,
+            suffixIcon: IconButton(
+              icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+              onPressed: () => setState(() => _obscure = !_obscure),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller:  _confirm,
+          focusNode:   _confirmFocus,
+          obscureText: _obscure,
+          onChanged:   (_) => setState(() => _confirmError = _validateConfirm()),
+          decoration:  InputDecoration(
+            labelText: 'Confirm password',
+            border:    const OutlineInputBorder(),
+            errorText: _confirmError,
+          ),
+        ),
+        const SizedBox(height: 24),
+        FilledButton(
+          onPressed: _loading ? null : _sendCode,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: _loading
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Send verification code'),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text('Already have an account?',
+              style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13)),
+          TextButton(
+            onPressed: _loading ? null : () => Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                ),
+            child: const Text('Sign in'),
+          ),
+        ]),
+      ],
+    );
+  }
 
   Widget _verifyStep() => ListView(
         padding: const EdgeInsets.all(20),
@@ -379,4 +445,46 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
       );
+}
+
+/// Reusable Google-branded sign-in button.
+class _GoogleButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+  final String label;
+  const _GoogleButton({required this.onPressed, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        backgroundColor: Colors.white,
+        side: const BorderSide(color: Color(0xFFDDDDDD)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 22,
+              height: 22,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xFF4285F4),
+              ),
+              child: const Center(
+                child: Text('G',
+                    style: TextStyle(
+                        color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(label, style: const TextStyle(color: Colors.black87, fontSize: 15)),
+          ],
+        ),
+      ),
+    );
+  }
 }

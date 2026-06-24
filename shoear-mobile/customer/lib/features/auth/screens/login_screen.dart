@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 import 'package:customer/features/auth/state/auth_provider.dart';
 import 'package:customer/features/auth/screens/register_screen.dart';
@@ -19,6 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
   String? _identifierError;
   String? _passwordError;
+  String? _googleError;
 
   @override
   void dispose() {
@@ -31,6 +33,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _identifierError = _identifier.text.trim().isEmpty ? 'Email is required.' : null;
       _passwordError = _password.text.isEmpty ? 'Password is required.' : null;
+      _googleError = null;
     });
     if (_identifierError != null || _passwordError != null) return;
 
@@ -39,10 +42,34 @@ class _LoginScreenState extends State<LoginScreen> {
       await context.read<AuthProvider>().login(_identifier.text.trim(), _password.text);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      // auth failures aren't tied to one field — surface under the password
       if (mounted) setState(() => _passwordError = e.toString());
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _signInWithGoogle() async {
+    setState(() { _googleError = null; _loading = true; });
+    try {
+      final googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) {
+        // user cancelled the picker
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+      final auth = await googleUser.authentication;
+      final idToken = auth.idToken;
+      if (idToken == null) {
+        if (mounted) setState(() {
+          _googleError = 'Google did not return an ID token. Please try again.';
+          _loading = false;
+        });
+        return;
+      }
+      await context.read<AuthProvider>().loginWithGoogle(idToken);
+      if (mounted) Navigator.of(context).pop();
+    } catch (e) {
+      if (mounted) setState(() { _googleError = e.toString(); _loading = false; });
     }
   }
 
@@ -82,10 +109,34 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
+                        // ── Google Sign-In ──
+                        _GoogleButton(
+                          onPressed: _loading ? null : _signInWithGoogle,
+                          label: 'Continue with Google',
+                        ),
+                        if (_googleError != null) ...[
+                          const SizedBox(height: 8),
+                          Text(_googleError!,
+                              style: TextStyle(color: theme.colorScheme.error, fontSize: 13)),
+                        ],
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Row(children: [
+                            Expanded(child: Divider()),
+                            Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 12),
+                              child: Text('or'),
+                            ),
+                            Expanded(child: Divider()),
+                          ]),
+                        ),
+                        // ── Email / password ──
                         TextField(
                           controller: _identifier,
                           textInputAction: TextInputAction.next,
-                          onChanged: _identifierError == null ? null : (_) => setState(() => _identifierError = null),
+                          onChanged: _identifierError == null
+                              ? null
+                              : (_) => setState(() => _identifierError = null),
                           decoration: InputDecoration(
                             labelText: 'Email',
                             border: const OutlineInputBorder(),
@@ -96,7 +147,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextField(
                           controller: _password,
                           obscureText: _obscure,
-                          onChanged: _passwordError == null ? null : (_) => setState(() => _passwordError = null),
+                          onChanged: _passwordError == null
+                              ? null
+                              : (_) => setState(() => _passwordError = null),
                           onSubmitted: (_) => _submit(),
                           decoration: InputDecoration(
                             labelText: 'Password',
@@ -114,7 +167,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             child: _loading
-                                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                ? const SizedBox(
+                                    height: 20, width: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2))
                                 : const Text('Login'),
                           ),
                         ),
@@ -132,7 +187,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         Text('New to ShoeAR?',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13)),
+                            style: TextStyle(
+                                color: theme.colorScheme.onSurfaceVariant, fontSize: 13)),
                         const SizedBox(height: 8),
                         OutlinedButton(
                           onPressed: _loading
@@ -152,6 +208,48 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Reusable Google-branded sign-in button following Material guidelines.
+class _GoogleButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+  final String label;
+  const _GoogleButton({required this.onPressed, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        backgroundColor: Colors.white,
+        side: const BorderSide(color: Color(0xFFDDDDDD)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 22,
+              height: 22,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Color(0xFF4285F4),
+              ),
+              child: const Center(
+                child: Text('G',
+                    style: TextStyle(
+                        color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text(label, style: const TextStyle(color: Colors.black87, fontSize: 15)),
+          ],
         ),
       ),
     );

@@ -66,6 +66,12 @@ class AccountService {
     await api.post('/auth/change-password', {'currentPassword': current, 'newPassword': next});
   }
 
+  /// PATCH /auth/me/phone — set or update the phone number. Used at checkout
+  /// for Google Sign-In users who haven't provided a phone number yet.
+  Future<void> updatePhone(String phoneNumber) async {
+    await api.patch('/auth/me/phone', {'phoneNumber': phoneNumber});
+  }
+
   /// DELETE /auth/me — close the account (soft-delete server-side).
   Future<void> deleteAccount() async {
     await api.delete('/auth/me');

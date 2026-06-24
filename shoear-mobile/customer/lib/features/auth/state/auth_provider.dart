@@ -40,12 +40,27 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  /// Log in and persist the session. Throws [ApiException] on failure.
+  /// Log in with email/username + password and persist the session.
   Future<void> login(String identifier, String password) async {
     final session = await authService.login(identifier, password);
     if (session.user.role != 'Customer') {
       throw ApiException('Please sign in with a customer account.');
     }
+    await _persist(session);
+  }
+
+  /// Google Sign-In — verify the ID token server-side, then persist the session.
+  /// If the email already has a ShoeAR account the Google ID is linked to it;
+  /// otherwise a new Customer account is created immediately.
+  Future<void> loginWithGoogle(String idToken) async {
+    final session = await authService.googleAuth(idToken);
+    if (session.user.role != 'Customer') {
+      throw ApiException('Please sign in with a customer account.');
+    }
+    await _persist(session);
+  }
+
+  Future<void> _persist(UserSession session) async {
     _session = session;
     api.setToken(session.token);
     final prefs = await SharedPreferences.getInstance();
@@ -60,7 +75,32 @@ class AuthProvider extends ChangeNotifier {
     if (s == null) return;
     _session = UserSession(
       token: s.token,
-      user: AuthUser(userId: s.user.userId, role: s.user.role, fullName: fullName, status: s.user.status),
+      user: AuthUser(
+        userId:      s.user.userId,
+        role:        s.user.role,
+        fullName:    fullName,
+        status:      s.user.status,
+        phoneNumber: s.user.phoneNumber,
+      ),
+    );
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kUser, jsonEncode(_session!.user.toJson()));
+    notifyListeners();
+  }
+
+  /// Update the cached phone number after the user sets it at checkout.
+  Future<void> applyPhone(String phoneNumber) async {
+    final s = _session;
+    if (s == null) return;
+    _session = UserSession(
+      token: s.token,
+      user: AuthUser(
+        userId:      s.user.userId,
+        role:        s.user.role,
+        fullName:    s.user.fullName,
+        status:      s.user.status,
+        phoneNumber: phoneNumber,
+      ),
     );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kUser, jsonEncode(_session!.user.toJson()));

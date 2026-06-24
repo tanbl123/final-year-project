@@ -30,6 +30,13 @@ return [
   // 'your-project-id.appspot.com' (or '...firebasestorage.app').
   // 'firebase_storage_bucket' => 'your-project-id.appspot.com',
 
+  // Google Sign-In for the customer mobile app.
+  // Google Cloud Console → APIs & Services → Credentials → your OAuth 2.0 client ID
+  // (Android client, package name com.example.customer). Paste the client ID here so
+  // the backend can verify the audience (aud) of each ID token. If omitted, any valid
+  // Google ID token is accepted (fine for dev; add it before going to production).
+  // 'google_client_id' => '123456789-abc.apps.googleusercontent.com',
+
   // Optional: override the FAKE test bank account the payout demo attaches to
   // each supplier (only needed if Stripe rejects the built-in default for your
   // country — see Stripe's "test bank account numbers" docs).

@@ -483,6 +483,137 @@ function handleRegisterCourier(PDO $pdo): void {
   sendJson(201, true, ['message' => 'Registration submitted. Your account is pending admin approval.']);
 }
 
+// POST /auth/google — Sign in (or sign up) a CUSTOMER via a Google ID token.
+// The mobile app obtains the token from the Google Sign-In SDK and sends it here
+// for server-side verification against Google's tokeninfo endpoint. On success,
+// returns the same JWT + user envelope as /auth/login. If the email already has a
+// ShoeAR account the Google ID is linked to it; otherwise a new Customer account
+// is created (Active immediately, no email-code step needed).
+function handleGoogleAuth(PDO $pdo, string $secret, array $config): void {
+  $body    = getJsonBody();
+  $idToken = trim($body['idToken'] ?? '');
+
+  if ($idToken === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Google ID token is required.']);
+  }
+
+  // Verify with Google's tokeninfo endpoint (no client secret required).
+  $ch = curl_init('https://oauth2.googleapis.com/tokeninfo?id_token=' . urlencode($idToken));
+  curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 10]);
+  $res      = curl_exec($ch);
+  $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+  curl_close($ch);
+
+  if ($res === false || $httpCode !== 200) {
+    sendJson(401, false, null, ['code' => 'AUTH', 'message' => 'Invalid Google ID token.']);
+  }
+  $payload = json_decode((string) $res, true);
+  if (!is_array($payload) || empty($payload['sub']) || empty($payload['email'])) {
+    sendJson(401, false, null, ['code' => 'AUTH', 'message' => 'Could not verify Google identity.']);
+  }
+
+  // Optional audience check — prevents another app's tokens being accepted here.
+  $clientId = $config['google_client_id'] ?? null;
+  if ($clientId !== null && ($payload['aud'] ?? '') !== $clientId) {
+    sendJson(401, false, null, ['code' => 'AUTH', 'message' => 'Google token audience mismatch.']);
+  }
+
+  $googleId = (string) $payload['sub'];
+  $email    = strtolower(trim((string) $payload['email']));
+  $fullName = trim((string) ($payload['name'] ?? ''));
+  $avatar   = isset($payload['picture']) ? (string) $payload['picture'] : null;
+
+  // 1. Look up by googleId (already linked)
+  $stmt = $pdo->prepare(
+    'SELECT userId, role, fullName, phoneNumber, status, rejectionReason, googleId AS gid
+       FROM `user` WHERE googleId = :g LIMIT 1'
+  );
+  $stmt->execute(['g' => $googleId]);
+  $user = $stmt->fetch();
+
+  // 2. Fall back to email match (implicit link — first Google sign-in for this email)
+  if (!$user) {
+    $stmt = $pdo->prepare(
+      'SELECT userId, role, fullName, phoneNumber, status, rejectionReason, googleId AS gid
+         FROM `user` WHERE email = :e LIMIT 1'
+    );
+    $stmt->execute(['e' => $email]);
+    $user = $stmt->fetch();
+  }
+
+  if ($user) {
+    if ($user['role'] !== 'Customer') {
+      sendJson(403, false, null, ['code' => 'WRONG_ROLE',
+        'message' => 'This email belongs to a non-customer account and cannot be used here.']);
+    }
+    if ($user['status'] !== 'Active') {
+      sendJson(403, false, null, ['code' => 'NOT_ACTIVE',
+        'message' => 'Your account is ' . $user['status'] . '.']);
+    }
+    // link googleId on first Google sign-in for an existing email account
+    if (empty($user['gid'])) {
+      $pdo->prepare('UPDATE `user` SET googleId = :g WHERE userId = :id')
+          ->execute(['g' => $googleId, 'id' => $user['userId']]);
+    }
+    // back-fill Google profile picture when none set yet
+    if ($avatar) {
+      $pdo->prepare('UPDATE `user` SET avatarUrl = :url WHERE userId = :id AND avatarUrl IS NULL')
+          ->execute(['url' => $avatar, 'id' => $user['userId']]);
+    }
+  } else {
+    // brand-new user — create Customer account (Active immediately)
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Google did not provide a valid email.']);
+    }
+    $pdo->beginTransaction();
+    try {
+      $userId   = nextId($pdo, 'user', 'userId', 'USR');
+      $namePart = $fullName !== '' ? $fullName : explode('@', $email)[0];
+      $username = firstFreeUsername($pdo, usernameSlug($namePart));
+      $pdo->prepare(
+        'INSERT INTO `user` (userId, username, password, googleId, email, fullName, phoneNumber, avatarUrl, role, status)
+         VALUES (:id, :un, NULL, :gid, :em, :fn, NULL, :av, "Customer", "Active")'
+      )->execute([
+        'id' => $userId, 'un' => $username, 'gid' => $googleId,
+        'em' => $email,  'fn' => ($namePart !== '' ? $namePart : $email), 'av' => $avatar,
+      ]);
+      $customerId = nextId($pdo, 'customer', 'customerId', 'CUS');
+      $pdo->prepare('INSERT INTO customer (customerId, userId, shippingAddress) VALUES (:cid, :uid, NULL)')
+          ->execute(['cid' => $customerId, 'uid' => $userId]);
+      $pdo->commit();
+    } catch (Throwable $e) {
+      $pdo->rollBack();
+      sendJson(500, false, null, ['code' => 'SERVER', 'message' => 'Could not create the account. Please try again.']);
+    }
+    $stmt = $pdo->prepare(
+      'SELECT userId, role, fullName, phoneNumber, status, rejectionReason
+         FROM `user` WHERE userId = :id'
+    );
+    $stmt->execute(['id' => $userId]);
+    $user = $stmt->fetch();
+  }
+
+  $now   = time();
+  $token = jwt_encode([
+    'userId' => $user['userId'],
+    'role'   => $user['role'],
+    'iat'    => $now,
+    'exp'    => $now + (7 * 24 * 60 * 60),
+  ], $secret);
+
+  sendJson(200, true, [
+    'token' => $token,
+    'user'  => [
+      'userId'          => $user['userId'],
+      'role'            => $user['role'],
+      'fullName'        => $user['fullName'],
+      'phoneNumber'     => $user['phoneNumber'],
+      'status'          => $user['status'],
+      'rejectionReason' => $user['rejectionReason'],
+    ],
+  ]);
+}
+
 // POST /auth/login  — verify email + password, return a JWT + basic profile.
 function handleLogin(PDO $pdo, string $secret): void {
   $body = getJsonBody();
@@ -498,14 +629,14 @@ function handleLogin(PDO $pdo, string $secret): void {
   // look up by email OR username (prepared statement → safe from SQL injection).
   // Two distinct placeholders: with emulation off, PDO won't reuse one twice.
   $stmt = $pdo->prepare(
-    'SELECT userId, password, role, fullName, status, rejectionReason
+    'SELECT userId, password, role, fullName, phoneNumber, status, rejectionReason
        FROM `user` WHERE email = :email OR username = :username'
   );
   $stmt->execute(['email' => $identifier, 'username' => $identifier]);
   $user = $stmt->fetch();
 
-  // same message whichever was wrong (don't leak which)
-  if (!$user || !password_verify($password, $user['password'])) {
+  // null password = Google-only account; same generic error so we don't leak
+  if (!$user || $user['password'] === null || !password_verify($password, $user['password'])) {
     sendJson(401, false, null, ['code' => 'AUTH', 'message' => 'Invalid email/username or password.']);
   }
 
@@ -542,10 +673,11 @@ function handleLogin(PDO $pdo, string $secret): void {
   sendJson(200, true, [
     'token' => $token,
     'user'  => [
-      'userId'   => $user['userId'],
-      'role'     => $user['role'],
-      'fullName' => $user['fullName'],
-      'status'   => $user['status'],
+      'userId'          => $user['userId'],
+      'role'            => $user['role'],
+      'fullName'        => $user['fullName'],
+      'phoneNumber'     => $user['phoneNumber'],
+      'status'          => $user['status'],
       'rejectionReason' => $user['rejectionReason'],
     ],
   ]);
@@ -678,6 +810,12 @@ function handleChangePassword(PDO $pdo, array $auth): void {
   $row = $stmt->fetch();
   if (!$row) {
     sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Account not found.']);
+  }
+
+  // Google-only accounts have no password — they must use forgot-password to set one
+  if ($row['password'] === null) {
+    sendJson(400, false, null, ['code' => 'NO_PASSWORD',
+      'message' => 'Your account uses Google Sign-In and has no password. Use "Forgot password" to set one first.']);
   }
 
   // must prove they know the existing password before we change it
@@ -843,10 +981,11 @@ function handleResetPassword(PDO $pdo): void {
   }
 
   // and it must differ from the current password (same rule as change-password)
+  // Guard against null (Google-only accounts) to avoid a TypeError in PHP 8+
   $cur = $pdo->prepare('SELECT password FROM `user` WHERE email = :e');
   $cur->execute(['e' => $email]);
   $curRow = $cur->fetch();
-  if ($curRow && password_verify($new, $curRow['password'])) {
+  if ($curRow && $curRow['password'] !== null && password_verify($new, $curRow['password'])) {
     sendJson(400, false, null, ['code' => 'VALIDATION',
       'message' => 'Your new password must be different from your current password.']);
   }
@@ -863,4 +1002,24 @@ function handleResetPassword(PDO $pdo): void {
   // code consumed — clear it so it can't be replayed
   $pdo->prepare('DELETE FROM password_reset WHERE email = :e')->execute(['e' => $email]);
   sendJson(200, true, ['message' => 'Your password has been reset. You can now log in.']);
+}
+
+// PATCH /auth/me/phone — set or update the phone number. Used at checkout for
+// Google Sign-In customers who haven't provided a phone number yet.
+function handleUpdatePhone(PDO $pdo, array $auth): void {
+  $body  = getJsonBody();
+  $phone = trim($body['phoneNumber'] ?? '');
+
+  if ($phone === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Phone number is required.']);
+  }
+  if (!preg_match('/^\+?[1-9]\d{7,14}$/', $phone)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION',
+      'message' => 'Enter a valid phone number in international format, e.g. +60123456789.']);
+  }
+
+  $pdo->prepare('UPDATE `user` SET phoneNumber = :ph WHERE userId = :id')
+      ->execute(['ph' => $phone, 'id' => $auth['userId']]);
+
+  sendJson(200, true, ['phoneNumber' => $phone]);
 }
