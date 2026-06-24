@@ -20,7 +20,8 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
   String? _identifierError;
   String? _passwordError;
-  String? _loginError;   // shown under password; turns BOTH fields red
+  String? _loginError;               // message shown under password field
+  bool   _identifierLoginRed = false; // red outline on identifier after failed login
   String? _googleError;
 
   @override
@@ -43,9 +44,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _submit() async {
     setState(() {
-      _identifierError = _validateIdentifier(_identifier.text);
-      _passwordError = _validatePassword(_password.text);
-      _googleError = null;
+      _identifierError    = _validateIdentifier(_identifier.text);
+      _passwordError      = _validatePassword(_password.text);
+      _loginError         = null;
+      _identifierLoginRed = false;
+      _googleError        = null;
     });
     if (_identifierError != null || _passwordError != null) return;
 
@@ -54,7 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await context.read<AuthProvider>().login(_identifier.text.trim(), _password.text);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      if (mounted) setState(() => _loginError = e.toString());
+      if (mounted) setState(() { _loginError = e.toString(); _identifierLoginRed = true; });
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -129,18 +132,19 @@ class _LoginScreenState extends State<LoginScreen> {
                           builder: (_, val, __) => TextField(
                             controller:      _identifier,
                             textInputAction: TextInputAction.next,
-                            onChanged: (v) => setState(() { _identifierError = _validateIdentifier(v); _loginError = null; }),
+                            onChanged: (v) => setState(() { _identifierError = _validateIdentifier(v); _identifierLoginRed = false; }),
                             decoration: InputDecoration(
                               labelText: 'Email or username',
                               border:    const OutlineInputBorder(),
                               helperText: ' ',
-                              errorText: _identifierError ?? (_loginError != null ? '' : null),
+                              errorText: _identifierError ?? (_identifierLoginRed ? '' : null),
                               suffixIcon: val.text.isNotEmpty
                                   ? IconButton(
                                       icon: const Icon(Icons.clear, size: 18),
                                       onPressed: () => setState(() {
                                         _identifier.clear();
-                                        _identifierError = _validateIdentifier('');
+                                        _identifierError    = null;
+                                        _identifierLoginRed = false;
                                       }),
                                     )
                                   : null,
@@ -151,7 +155,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextField(
                           controller: _password,
                           obscureText: _obscure,
-                          onChanged: (val) => setState(() { _passwordError = _validatePassword(val); _loginError = null; }),
+                          onChanged: (val) => setState(() { _passwordError = _validatePassword(val); _loginError = null; _identifierLoginRed = false; }),
                           onSubmitted: (_) => _submit(),
                           decoration: InputDecoration(
                             labelText: 'Password',
