@@ -351,7 +351,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: _loading
                 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Text('Send verification code'),
+                : const Text('Submit'),
           ),
         ),
         const SizedBox(height: 12),
