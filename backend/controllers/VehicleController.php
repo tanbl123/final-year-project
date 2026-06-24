@@ -107,6 +107,41 @@ function _sendAndDetach(mixed $data): void {
     }
 }
 
+// Normalize a make name for display. NHTSA returns makes in ALL CAPS
+// ("WHIZZER", "HONDA") while models come back title-cased ("Whizzer"), which
+// looks inconsistent in the picker. Title-case each word, but keep vowel-less
+// tokens uppercase so acronym brands stay intact (BMW, KTM, SYM, TVS, GMC).
+function _normalizeMakeName(string $name): string {
+    $words = preg_split('/\s+/', trim($name));
+    $out = [];
+    foreach ($words as $w) {
+        if ($w === '') continue;
+        if (!preg_match('/[AEIOUaeiou]/', $w)) {
+            $out[] = strtoupper($w);            // BMW, KTM, SYM …
+        } else {
+            // Title-case each alphabetic run (handles hyphens: Harley-Davidson)
+            $out[] = preg_replace_callback(
+                '/[A-Za-z]+/',
+                fn($m) => ucfirst(strtolower($m[0])),
+                $w
+            );
+        }
+    }
+    return implode(' ', $out);
+}
+
+// Normalize + dedupe a list of make names, then re-sort A–Z.
+function _normalizeMakeList(array $makes): array {
+    $seen = [];
+    foreach ($makes as $m) {
+        $norm = _normalizeMakeName((string) $m);
+        $seen[$norm] = true;          // keyed dedupe (case-folded by normalization)
+    }
+    $list = array_keys($seen);
+    sort($list);
+    return $list;
+}
+
 // ── Route handlers ────────────────────────────────────────────────────────────
 
 // GET /vehicles/makes/{vehicleType}
@@ -143,7 +178,7 @@ function handleGetVehicleMakes(PDO $pdo, string $vehicleType): void {
         $makes = $stmt->fetchAll(PDO::FETCH_COLUMN);
     }
 
-    sendJson(200, true, array_values($makes));
+    sendJson(200, true, _normalizeMakeList($makes));
 }
 
 // GET /vehicles/models/{vehicleType}/{make}
