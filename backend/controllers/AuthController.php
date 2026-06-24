@@ -1013,6 +1013,26 @@ function handleResetPassword(PDO $pdo): void {
 
 // PATCH /auth/me/phone — set or update the phone number. Used at checkout for
 // Google Sign-In customers who haven't provided a phone number yet.
+function handleUpdateName(PDO $pdo, array $auth): void {
+  $body = getJsonBody();
+  $name = trim($body['fullName'] ?? '');
+
+  if ($name === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Full name is required.']);
+  }
+  if (mb_strlen($name) < 2) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Full name must be at least 2 characters.']);
+  }
+  if (mb_strlen($name) > 120) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Full name is too long (max 120 characters).']);
+  }
+
+  $pdo->prepare('UPDATE `user` SET fullName = :fn WHERE userId = :id')
+      ->execute(['fn' => $name, 'id' => $auth['userId']]);
+
+  sendJson(200, true, ['fullName' => $name]);
+}
+
 function handleUpdatePhone(PDO $pdo, array $auth): void {
   $body  = getJsonBody();
   $phone = trim($body['phoneNumber'] ?? '');

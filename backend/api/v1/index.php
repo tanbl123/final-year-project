@@ -390,6 +390,12 @@ if ($method === 'PATCH' && $path === '/auth/me/phone') {
   handleUpdatePhone($pdo, $auth);
 }
 
+if ($method === 'PATCH' && $path === '/auth/me/name') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleUpdateName($pdo, $auth);
+}
+
 // ── supplier payouts via Stripe Connect ──
 if ($method === 'POST' && $path === '/supplier/stripe/onboard') {
   $auth = requireAuth($secret);

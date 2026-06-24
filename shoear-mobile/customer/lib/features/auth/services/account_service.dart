@@ -68,6 +68,13 @@ class AccountService {
     await api.patch('/auth/me/phone', {'phoneNumber': phoneNumber});
   }
 
+  /// PATCH /auth/me/name — update the customer's display name. Used at checkout
+  /// so email-registered customers (whose fullName defaults to their username)
+  /// can provide their real name before placing an order.
+  Future<void> updateFullName(String fullName) async {
+    await api.patch('/auth/me/name', {'fullName': fullName});
+  }
+
   /// DELETE /auth/me — close the account (soft-delete server-side).
   Future<void> deleteAccount() async {
     await api.delete('/auth/me');

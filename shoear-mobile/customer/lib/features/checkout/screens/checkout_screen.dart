@@ -18,17 +18,28 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
+  final _nameCtrl    = TextEditingController();
   final _addressCtrl = TextEditingController();
   final _phoneCtrl   = TextEditingController();
   String _method      = 'Stripe';
   bool _loadingAddr   = true;
   bool _placing       = false;
+  bool _nameTouched   = false;
   bool _phoneTouched  = false;
   bool _addrTouched   = false;
+  String? _nameError;
   String? _addrError;
   String? _phoneError;
 
   bool get _needsPhone => context.read<AuthProvider>().user?.phoneNumber == null;
+
+  String? _validateName(String value) {
+    final v = value.trim();
+    if (v.isEmpty) return 'Full name is required.';
+    if (v.length < 2) return 'Please enter your full name.';
+    if (v.length > 120) return 'Name is too long (max 120 characters).';
+    return null;
+  }
 
   String? _validatePhone(String value) {
     final v = value.trim();
@@ -50,11 +61,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   @override
   void initState() {
     super.initState();
+    // Pre-fill name from session; email-registered customers have username as
+    // fullName so the field will be editable but pre-populated.
+    final sessionName = context.read<AuthProvider>().user?.fullName ?? '';
+    _nameCtrl.text = sessionName;
     _prefillAddress();
   }
 
   @override
   void dispose() {
+    _nameCtrl.dispose();
     _addressCtrl.dispose();
     _phoneCtrl.dispose();
     super.dispose();
@@ -74,14 +90,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _placeOrder() async {
-    // Mark both touched so errors show immediately on submit.
+    // Mark all touched so errors show immediately on submit.
     setState(() {
+      _nameTouched  = true;
       _addrTouched  = true;
       _phoneTouched = true;
+      _nameError    = _validateName(_nameCtrl.text);
       _addrError    = _validateAddress(_addressCtrl.text);
       if (_needsPhone) _phoneError = _validatePhone(_phoneCtrl.text);
     });
 
+    if (_nameError != null) return;
     if (_addrError != null) return;
     if (_needsPhone && _phoneError != null) return;
 
@@ -124,6 +143,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       final receipt = await orders.getReceipt(created.orderId);
       await cart.refresh();
+
+      // Persist name to DB and update session (silent — order already placed).
+      final newName = _nameCtrl.text.trim();
+      final currentName = context.read<AuthProvider>().user?.fullName ?? '';
+      if (newName != currentName) {
+        try {
+          await context.read<AccountService>().updateFullName(newName);
+          if (mounted) await context.read<AuthProvider>().applyProfile(fullName: newName);
+        } catch (_) {
+          // non-fatal — order is placed, name update failure is acceptable
+        }
+      }
+
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => ReceiptScreen(receipt: receipt)),
@@ -167,6 +199,30 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // ── Full name (always shown) ─────────────────────────
+                      _FieldLabel(
+                        icon: Icons.person_outline,
+                        label: 'Full Name',
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller:     _nameCtrl,
+                        textCapitalization: TextCapitalization.words,
+                        decoration: InputDecoration(
+                          hintText:   'e.g. Ahmad bin Abdullah',
+                          border:     const OutlineInputBorder(),
+                          errorText:  _nameError,
+                          prefixIcon: const Icon(Icons.person_outline),
+                          filled:     true,
+                          fillColor:  Colors.white,
+                        ),
+                        onChanged: (v) {
+                          if (!_nameTouched) setState(() => _nameTouched = true);
+                          setState(() => _nameError = _validateName(v));
+                        },
+                      ),
+                      const SizedBox(height: 20),
+
                       if (needsPhone) ...[
                         _FieldLabel(
                           icon: Icons.phone_outlined,
