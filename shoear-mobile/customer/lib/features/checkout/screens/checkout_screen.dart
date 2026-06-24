@@ -6,14 +6,10 @@ import 'package:customer/features/auth/services/account_service.dart';
 import 'package:customer/features/auth/state/auth_provider.dart';
 import 'package:customer/features/order/services/order_service.dart';
 import 'package:customer/features/cart/state/cart_provider.dart';
+import 'package:customer/features/cart/models/cart.dart';
+import 'package:customer/core/widgets/product_image.dart';
 import 'package:customer/features/checkout/screens/receipt_screen.dart';
 
-/// Review the cart, confirm a delivery address, pick a (simulated) payment
-/// method, then place + pay the order in one step.
-///
-/// For users who haven't set a phone number yet (Google Sign-In users or
-/// email users who skipped it at registration), a required phone field is
-/// shown before checkout (phone is needed for delivery contact).
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
 
@@ -48,9 +44,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   Future<void> _prefillAddress() async {
     try {
       final saved = await context.read<OrderService>().savedShippingAddress();
-      if (mounted && saved != null && _addressCtrl.text.isEmpty) _addressCtrl.text = saved;
+      if (mounted && saved != null && _addressCtrl.text.isEmpty) {
+        _addressCtrl.text = saved;
+      }
     } catch (_) {
-      // non-fatal — they can just type the address
+      // non-fatal
     } finally {
       if (mounted) setState(() => _loadingAddr = false);
     }
@@ -71,7 +69,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
-    // Google users who haven't provided a phone must do so before ordering
     if (_needsPhone) {
       final phone = _phoneCtrl.text.trim();
       if (phone.isEmpty) {
@@ -139,136 +136,488 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cart  = context.watch<CartProvider>().cart;
-    final theme = Theme.of(context);
+    final cart       = context.watch<CartProvider>().cart;
     final needsPhone = context.select<AuthProvider, bool>(
       (a) => a.user?.phoneNumber == null,
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Checkout')),
+      backgroundColor: Colors.grey.shade100,
+      appBar: AppBar(
+        title: const Text('Checkout'),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+      ),
       body: (cart == null || cart.items.isEmpty)
           ? const Center(child: Text('Your cart is empty.'))
           : ListView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
               children: [
-                Text('Order summary', style: theme.textTheme.titleMedium),
-                const SizedBox(height: 8),
-                for (final it in cart.items)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text('${it.productName}  ·  ${it.size}  ·  x${it.quantity}',
-                              maxLines: 2, overflow: TextOverflow.ellipsis),
+                // ── 1. Delivery information ────────────────────────────────
+                _SectionCard(
+                  icon: Icons.location_on_outlined,
+                  title: 'Delivery Information',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (needsPhone) ...[
+                        _FieldLabel(
+                          icon: Icons.phone_outlined,
+                          label: 'Contact Phone Number',
                         ),
-                        const SizedBox(width: 8),
-                        Text('RM ${it.subtotal.toStringAsFixed(2)}'),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Your account was created with Google. Add a phone number so the courier can reach you.',
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade600),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller:   _phoneCtrl,
+                          keyboardType: TextInputType.phone,
+                          decoration: InputDecoration(
+                            hintText:  '+60123456789',
+                            border:    const OutlineInputBorder(),
+                            errorText: _phoneError,
+                            prefixIcon: const Icon(Icons.phone_outlined),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          onChanged: (_) {
+                            if (_phoneError != null) {
+                              setState(() => _phoneError = null);
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 20),
                       ],
-                    ),
-                  ),
-                const Divider(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text('Total', style: theme.textTheme.titleMedium),
-                    Text('RM ${cart.total.toStringAsFixed(2)}',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.primary)),
-                  ],
-                ),
-
-                // ── Phone number (Google users only) ──
-                if (needsPhone) ...[
-                  const SizedBox(height: 24),
-                  Text('Contact phone number', style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Your account was created with Google. Please add a phone number so the courier can reach you.',
-                    style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller:   _phoneCtrl,
-                    keyboardType: TextInputType.phone,
-                    decoration: InputDecoration(
-                      hintText: '+60123456789',
-                      border:   const OutlineInputBorder(),
-                      errorText: _phoneError,
-                    ),
-                    onChanged: (_) {
-                      if (_phoneError != null) setState(() => _phoneError = null);
-                    },
-                  ),
-                ],
-
-                const SizedBox(height: 24),
-                Text('Delivery address', style: theme.textTheme.titleMedium),
-                const SizedBox(height: 8),
-                _loadingAddr
-                    ? const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: LinearProgressIndicator())
-                    : TextField(
-                        controller: _addressCtrl,
-                        minLines: 2,
-                        maxLines: 4,
-                        decoration: InputDecoration(
-                          hintText: 'Where should we deliver your order?',
-                          border: const OutlineInputBorder(),
-                          errorText: _addrError,
-                        ),
-                        onChanged: (_) {
-                          if (_addrError != null) setState(() => _addrError = null);
-                        },
+                      _FieldLabel(
+                        icon: Icons.home_outlined,
+                        label: 'Delivery Address',
                       ),
+                      const SizedBox(height: 8),
+                      _loadingAddr
+                          ? const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 14),
+                              child: LinearProgressIndicator())
+                          : TextField(
+                              controller: _addressCtrl,
+                              minLines:   3,
+                              maxLines:   4,
+                              decoration: InputDecoration(
+                                hintText: 'Street, city, postcode, state',
+                                border:   const OutlineInputBorder(),
+                                errorText: _addrError,
+                                filled:    true,
+                                fillColor: Colors.white,
+                                prefixIcon: const Padding(
+                                  padding: EdgeInsets.only(bottom: 40),
+                                  child: Icon(Icons.edit_location_alt_outlined),
+                                ),
+                              ),
+                              onChanged: (_) {
+                                if (_addrError != null) {
+                                  setState(() => _addrError = null);
+                                }
+                              },
+                            ),
+                    ],
+                  ),
+                ),
 
-                const SizedBox(height: 24),
-                Text('Payment method', style: theme.textTheme.titleMedium),
-                const SizedBox(height: 4),
-                RadioListTile<String>(
-                  value: 'Stripe',
-                  groupValue: _method,
-                  onChanged: (v) => setState(() => _method = v!),
-                  title: const Text('Card (Stripe)'),
-                  secondary: const Icon(Icons.credit_card),
-                  contentPadding: EdgeInsets.zero,
+                const SizedBox(height: 12),
+
+                // ── 2. Order items ─────────────────────────────────────────
+                _SectionCard(
+                  icon: Icons.shopping_bag_outlined,
+                  title: 'Order Items (${cart.items.length})',
+                  child: Column(
+                    children: [
+                      for (int i = 0; i < cart.items.length; i++) ...[
+                        if (i > 0) const Divider(height: 16),
+                        _OrderItemRow(item: cart.items[i]),
+                      ],
+                    ],
+                  ),
                 ),
-                RadioListTile<String>(
-                  value: 'PayPal',
-                  groupValue: _method,
-                  onChanged: (v) => setState(() => _method = v!),
-                  title: const Text('PayPal'),
-                  secondary: const Icon(Icons.account_balance_wallet),
-                  contentPadding: EdgeInsets.zero,
+
+                const SizedBox(height: 12),
+
+                // ── 3. Payment method ──────────────────────────────────────
+                _SectionCard(
+                  icon: Icons.payment_outlined,
+                  title: 'Payment Method',
+                  child: Column(
+                    children: [
+                      _PaymentOption(
+                        value:      'Stripe',
+                        groupValue: _method,
+                        icon:       Icons.credit_card,
+                        label:      'Credit / Debit Card',
+                        subtitle:   'Secured by Stripe',
+                        onChanged:  (v) => setState(() => _method = v),
+                      ),
+                      const SizedBox(height: 8),
+                      _PaymentOption(
+                        value:      'PayPal',
+                        groupValue: _method,
+                        icon:       Icons.account_balance_wallet_outlined,
+                        label:      'PayPal',
+                        subtitle:   'Simulated payment',
+                        onChanged:  (v) => setState(() => _method = v),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Test mode: use card 4242 4242 4242 4242, any future expiry, any CVC.',
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                      ),
+                    ],
+                  ),
                 ),
-                Text(
-                  'Card payments use Stripe in test mode (try card 4242 4242 4242 4242). PayPal is simulated.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+
+                const SizedBox(height: 12),
+
+                // ── 4. Price breakdown ─────────────────────────────────────
+                _SectionCard(
+                  icon: Icons.receipt_long_outlined,
+                  title: 'Price Details',
+                  child: Column(
+                    children: [
+                      _PriceRow(
+                        label: 'Subtotal (${cart.items.fold<int>(0, (s, i) => s + i.quantity)} item${cart.items.fold<int>(0, (s, i) => s + i.quantity) == 1 ? '' : 's'})',
+                        value: 'RM ${cart.total.toStringAsFixed(2)}',
+                      ),
+                      const SizedBox(height: 6),
+                      _PriceRow(
+                        label: 'Shipping fee',
+                        value: 'Free',
+                        valueColor: Colors.green.shade600,
+                      ),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 10),
+                        child: Divider(height: 1),
+                      ),
+                      _PriceRow(
+                        label: 'Total',
+                        value: 'RM ${cart.total.toStringAsFixed(2)}',
+                        bold: true,
+                        valueColor: Theme.of(context).colorScheme.primary,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
+
+      // ── Place order bar ─────────────────────────────────────────────────
       bottomNavigationBar: (cart == null || cart.items.isEmpty)
           ? null
           : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.07),
+                        blurRadius: 12,
+                        offset: const Offset(0, -3)),
+                  ],
+                ),
                 child: FilledButton.icon(
                   onPressed: _placing ? null : _placeOrder,
                   icon: _placing
                       ? const SizedBox(
-                          width: 18, height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Icon(Icons.lock),
-                  label: Text(_placing
-                      ? 'Processing…'
-                      : 'Place order · RM ${cart.total.toStringAsFixed(2)}'),
-                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.lock_outline, size: 18),
+                  label: Text(
+                    _placing
+                        ? 'Processing…'
+                        : 'Place Order  ·  RM ${cart.total.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(52),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
                 ),
               ),
             ),
+    );
+  }
+}
+
+// ── Shared section card ──────────────────────────────────────────────────────
+
+class _SectionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Widget child;
+
+  const _SectionCard({
+    required this.icon,
+    required this.title,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // section header
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Row(
+              children: [
+                Icon(icon, size: 18, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(title,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: child,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Field label with icon ────────────────────────────────────────────────────
+
+class _FieldLabel extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _FieldLabel({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 15, color: Colors.grey.shade600),
+        const SizedBox(width: 6),
+        Text(label,
+            style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                color: Colors.grey.shade800)),
+      ],
+    );
+  }
+}
+
+// ── Order item row ────────────────────────────────────────────────────────────
+
+class _OrderItemRow extends StatelessWidget {
+  final CartItem item;
+  const _OrderItemRow({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+              width: 56, height: 56, child: ProductImage(url: item.imageUrl)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(item.brand.toUpperCase(),
+                  style: TextStyle(
+                      fontSize: 10,
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.8)),
+              Text(item.productName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 13)),
+              Row(
+                children: [
+                  _Tag('Size ${item.size}'),
+                  const SizedBox(width: 6),
+                  _Tag('Qty ${item.quantity}'),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text('RM ${item.subtotal.toStringAsFixed(2)}',
+            style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.primary)),
+      ],
+    );
+  }
+}
+
+class _Tag extends StatelessWidget {
+  final String label;
+  const _Tag(this.label);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Text(label,
+          style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
+    );
+  }
+}
+
+// ── Payment option card ───────────────────────────────────────────────────────
+
+class _PaymentOption extends StatelessWidget {
+  final String value;
+  final String groupValue;
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final ValueChanged<String> onChanged;
+
+  const _PaymentOption({
+    required this.value,
+    required this.groupValue,
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme    = Theme.of(context);
+    final selected = value == groupValue;
+
+    return GestureDetector(
+      onTap: () => onChanged(value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: selected
+              ? theme.colorScheme.primaryContainer.withValues(alpha: 0.4)
+              : Colors.grey.shade50,
+          border: Border.all(
+            color: selected ? theme.colorScheme.primary : Colors.grey.shade300,
+            width: selected ? 1.5 : 1,
+          ),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: selected
+                    ? theme.colorScheme.primary
+                    : Colors.grey.shade200,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon,
+                  size: 20,
+                  color: selected ? Colors.white : Colors.grey.shade600),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: selected
+                              ? theme.colorScheme.primary
+                              : Colors.black87)),
+                  Text(subtitle,
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.grey.shade500)),
+                ],
+              ),
+            ),
+            Icon(
+              selected
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked,
+              color: selected ? theme.colorScheme.primary : Colors.grey.shade400,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Price breakdown row ───────────────────────────────────────────────────────
+
+class _PriceRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool bold;
+  final Color? valueColor;
+
+  const _PriceRow({
+    required this.label,
+    required this.value,
+    this.bold = false,
+    this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label,
+            style: TextStyle(
+                fontSize: bold ? 15 : 13,
+                fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+                color: bold ? Colors.black87 : Colors.grey.shade700)),
+        Text(value,
+            style: TextStyle(
+                fontSize: bold ? 16 : 13,
+                fontWeight: bold ? FontWeight.bold : FontWeight.w500,
+                color: valueColor ??
+                    (bold ? Colors.black87 : Colors.grey.shade800))),
+      ],
     );
   }
 }
