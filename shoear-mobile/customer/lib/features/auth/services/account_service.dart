@@ -30,14 +30,12 @@ class AccountService {
     required String email,
     required String password,
     required String verificationCode,
-    String? shippingAddress,
   }) async {
     await api.post('/auth/register/customer', {
       'username': username,
       'email': email,
       'password': password,
       'verificationCode': verificationCode,
-      if (shippingAddress != null && shippingAddress.isNotEmpty) 'shippingAddress': shippingAddress,
     });
   }
 

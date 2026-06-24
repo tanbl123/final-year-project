@@ -309,6 +309,12 @@ function handleCheckout(PDO $pdo, array $auth): void {
     }
 
     $pdo->prepare('DELETE FROM cart_item WHERE cartId = :cid')->execute(['cid' => $cartId]);
+
+    // Remember this delivery address as the customer's default so it pre-fills
+    // their next checkout (matches Amazon/Shopee: last-used address is the default).
+    $pdo->prepare('UPDATE customer SET shippingAddress = :addr WHERE customerId = :cid')
+        ->execute(['addr' => $address, 'cid' => $customerId]);
+
     $pdo->commit();
   } catch (Throwable $e) {
     if ($pdo->inTransaction()) { $pdo->rollBack(); }

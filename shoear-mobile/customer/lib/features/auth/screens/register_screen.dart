@@ -35,7 +35,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   final _username = TextEditingController();
   final _email    = TextEditingController();
-  final _address  = TextEditingController();
   final _password = TextEditingController();
   final _confirm  = TextEditingController();
   final _code     = TextEditingController();
@@ -75,7 +74,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void dispose() {
     _resendTimer?.cancel();
-    for (final c in [_username, _email, _address, _password, _confirm, _code]) c.dispose();
+    for (final c in [_username, _email, _password, _confirm, _code]) c.dispose();
     for (final f in [_usernameFocus, _emailFocus, _passwordFocus, _confirmFocus]) f.dispose();
     super.dispose();
   }
@@ -158,7 +157,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
             email:            _email.text.trim(),
             password:         _password.text,
             verificationCode: code,
-            shippingAddress:  _address.text.trim(),
           );
       // account created — log straight in
       await context.read<AuthProvider>().login(_email.text.trim(), _password.text);
@@ -283,14 +281,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
           keyboard: TextInputType.emailAddress,
           error:    _emailError,
           onChanged: (v) => setState(() => _emailError = _validateEmail(v)),
-        ),
-        _field(
-          controller: _address,
-          focusNode:  null,
-          label:    'Shipping address (optional)',
-          error:    null,
-          maxLines: 2,
-          onChanged: (_) {},
         ),
         TextField(
           controller:  _password,
