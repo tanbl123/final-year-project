@@ -303,62 +303,37 @@ class _RegisterScreenState extends State<RegisterScreen> {
             }
           }),
         ),
-        ValueListenableBuilder<TextEditingValue>(
-          valueListenable: _password,
-          builder: (_, pwVal, __) => TextField(
-            controller:  _password,
-            focusNode:   _passwordFocus,
-            obscureText: _obscure,
-            onChanged: (v) => setState(() {
-              _passwordError = _validatePassword(v);
-              if (_confirm.text.isNotEmpty) _confirmError = _validateConfirm();
-            }),
-            decoration: InputDecoration(
-              labelText:  'Password',
-              border:     const OutlineInputBorder(),
-              errorText:  _passwordError,
-              suffixIcon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (pwVal.text.isNotEmpty)
-                    IconButton(
-                      icon: const Icon(Icons.clear, size: 18),
-                      onPressed: () => setState(() {
-                        _password.clear();
-                        _passwordError = _validatePassword('');
-                        if (_confirm.text.isNotEmpty) _confirmError = _validateConfirm();
-                      }),
-                    ),
-                  IconButton(
-                    icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
-                    onPressed: () => setState(() => _obscure = !_obscure),
-                  ),
-                ],
-              ),
+        TextField(
+          controller:  _password,
+          focusNode:   _passwordFocus,
+          obscureText: _obscure,
+          onChanged: (v) => setState(() {
+            _passwordError = _validatePassword(v);
+            if (_confirm.text.isNotEmpty) _confirmError = _validateConfirm();
+          }),
+          decoration: InputDecoration(
+            labelText:  'Password',
+            border:     const OutlineInputBorder(),
+            errorText:  _passwordError,
+            suffixIcon: IconButton(
+              icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+              onPressed: () => setState(() => _obscure = !_obscure),
             ),
           ),
         ),
         const SizedBox(height: 16),
-        ValueListenableBuilder<TextEditingValue>(
-          valueListenable: _confirm,
-          builder: (_, cfVal, __) => TextField(
-            controller:  _confirm,
-            focusNode:   _confirmFocus,
-            obscureText: _obscure,
-            onChanged:   (_) => setState(() => _confirmError = _validateConfirm()),
-            decoration:  InputDecoration(
-              labelText: 'Confirm password',
-              border:    const OutlineInputBorder(),
-              errorText: _confirmError,
-              suffixIcon: cfVal.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear, size: 18),
-                      onPressed: () => setState(() {
-                        _confirm.clear();
-                        _confirmError = _validateConfirm();
-                      }),
-                    )
-                  : null,
+        TextField(
+          controller:  _confirm,
+          focusNode:   _confirmFocus,
+          obscureText: _obscure,
+          onChanged:   (_) => setState(() => _confirmError = _validateConfirm()),
+          decoration:  InputDecoration(
+            labelText: 'Confirm password',
+            border:    const OutlineInputBorder(),
+            errorText: _confirmError,
+            suffixIcon: IconButton(
+              icon: Icon(_obscure ? Icons.visibility_off : Icons.visibility),
+              onPressed: () => setState(() => _obscure = !_obscure),
             ),
           ),
         ),
