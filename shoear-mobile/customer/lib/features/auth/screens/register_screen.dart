@@ -288,16 +288,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
         // ── form fields ──
         _field(
-          controller: _username,
-          focusNode:  _usernameFocus,
-          label:  'Username',
-          error:  _usernameError,
-          onChanged: (v) => setState(() {
-            _usernameEdited = true;          // stop mirroring the email
-            _usernameError  = _validateUsername(v);
-          }),
-        ),
-        _field(
           controller: _email,
           focusNode:  _emailFocus,
           label:    'Email',
@@ -342,6 +332,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
             border:    const OutlineInputBorder(),
             errorText: _confirmError,
           ),
+        ),
+        const SizedBox(height: 16),
+        _field(
+          controller: _username,
+          focusNode:  _usernameFocus,
+          label:  'Username',
+          error:  _usernameError,
+          onChanged: (v) => setState(() {
+            _usernameEdited = true;
+            _usernameError  = _validateUsername(v);
+          }),
         ),
         const SizedBox(height: 24),
         FilledButton(
