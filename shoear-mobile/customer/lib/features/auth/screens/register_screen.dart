@@ -304,7 +304,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           keyboard: TextInputType.emailAddress,
           error:    _emailError,
           onChanged: (v) => setState(() {
-            _emailError = _validateEmail(v);
+            _emailError      = _validateEmail(v);
+            _usernameEdited  = false;   // editing email always re-derives username
             _syncUsernameFromEmail(v.trim());
           }),
         ),
