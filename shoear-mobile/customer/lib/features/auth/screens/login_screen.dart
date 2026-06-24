@@ -29,10 +29,22 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  String? _validateIdentifier(String val) {
+    final trimmed = val.trim();
+    if (trimmed.isEmpty) return 'Email is required.';
+    if (!trimmed.contains('@')) return 'Enter a valid email address.';
+    return null;
+  }
+
+  String? _validatePassword(String val) {
+    if (val.isEmpty) return 'Password is required.';
+    return null;
+  }
+
   Future<void> _submit() async {
     setState(() {
-      _identifierError = _identifier.text.trim().isEmpty ? 'Email is required.' : null;
-      _passwordError = _password.text.isEmpty ? 'Password is required.' : null;
+      _identifierError = _validateIdentifier(_identifier.text);
+      _passwordError = _validatePassword(_password.text);
       _googleError = null;
     });
     if (_identifierError != null || _passwordError != null) return;
@@ -116,18 +128,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           controller: _identifier,
                           textInputAction: TextInputAction.next,
                           keyboardType: TextInputType.emailAddress,
-                          onChanged: (val) {
-                            final trimmed = val.trim();
-                            setState(() {
-                              if (trimmed.isEmpty) {
-                                _identifierError = 'Email is required.';
-                              } else if (!trimmed.contains('@')) {
-                                _identifierError = 'Enter a valid email address.';
-                              } else {
-                                _identifierError = null;
-                              }
-                            });
-                          },
+                          onChanged: (val) => setState(() => _identifierError = _validateIdentifier(val)),
                           decoration: InputDecoration(
                             labelText: 'Email',
                             border: const OutlineInputBorder(),
@@ -138,11 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextField(
                           controller: _password,
                           obscureText: _obscure,
-                          onChanged: (val) {
-                            setState(() {
-                              _passwordError = val.isEmpty ? 'Password is required.' : null;
-                            });
-                          },
+                          onChanged: (val) => setState(() => _passwordError = _validatePassword(val)),
                           onSubmitted: (_) => _submit(),
                           decoration: InputDecoration(
                             labelText: 'Password',
