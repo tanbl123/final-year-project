@@ -30,7 +30,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String? _validateIdentifier(String val) {
-    if (val.trim().isEmpty) return 'Email or username is required.';
+    final trimmed = val.trim();
+    if (trimmed.isEmpty) return 'Email is required.';
+    if (!trimmed.contains('@')) return 'Please enter a valid email.';
     return null;
   }
 
@@ -111,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               _loginError = null;
                             }),
                             decoration: InputDecoration(
-                              labelText:  'Email or username',
+                              labelText:  'Email',
                               border:     const OutlineInputBorder(),
                               helperText: ' ',
                               errorText:  _identifierError ?? (_loginError != null ? '' : null),
@@ -120,7 +122,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       icon: const Icon(Icons.clear, size: 18),
                                       onPressed: () => setState(() {
                                         _identifier.clear();
-                                        _identifierError = _validateIdentifier('');
+                                        _identifierError = null;
                                         _loginError = null;
                                       }),
                                     )
