@@ -342,8 +342,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _field(
           controller: _username,
           focusNode:  _usernameFocus,
-          label:  'Username',
-          error:  _usernameError,
+          label:     'Username',
+          error:     _usernameError,
+          maxLength: 20,
           onChanged: (v) => setState(() {
             _usernameEdited = true;
             _usernameError  = _validateUsername(v);
@@ -434,6 +435,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     required void Function(String) onChanged,
     TextInputType? keyboard,
     int maxLines = 1,
+    int? maxLength,
   }) =>
       Padding(
         padding: const EdgeInsets.only(bottom: 16),
@@ -444,11 +446,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
             focusNode:    focusNode,
             keyboardType: keyboard,
             maxLines:     maxLines,
+            maxLength:    maxLength,
             onChanged:    onChanged,
             decoration:   InputDecoration(
-              labelText: label,
-              border:    const OutlineInputBorder(),
-              errorText: error,
+              labelText:   label,
+              border:      const OutlineInputBorder(),
+              errorText:   error,
+              counterText: maxLength != null ? '' : null,
               suffixIcon: value.text.isNotEmpty
                   ? IconButton(
                       icon: const Icon(Icons.clear, size: 18),
