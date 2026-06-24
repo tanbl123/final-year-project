@@ -131,22 +131,22 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: Text('Forgot password?'),
                           ),
                         ),
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12),
+                          child: Divider(),
+                        ),
+                        OutlinedButton(
+                          onPressed: _loading
+                              ? null
+                              : () => Navigator.of(context).push(
+                                    MaterialPageRoute(builder: (_) => const RegisterScreen()),
+                                  ),
+                          child: const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Text('Apply to be a courier'),
+                          ),
+                        ),
                       ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: OutlinedButton(
-                    onPressed: _loading
-                        ? null
-                        : () => Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => const RegisterScreen()),
-                            ),
-                    child: const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 12),
-                      child: Text('Apply to be a courier'),
                     ),
                   ),
                 ),
