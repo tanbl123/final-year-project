@@ -35,7 +35,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   final _username = TextEditingController();
   final _email    = TextEditingController();
-  final _phone    = TextEditingController();
   final _address  = TextEditingController();
   final _password = TextEditingController();
   final _confirm  = TextEditingController();
@@ -43,7 +42,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   final _usernameFocus = FocusNode();
   final _emailFocus    = FocusNode();
-  final _phoneFocus    = FocusNode();
   final _passwordFocus = FocusNode();
   final _confirmFocus  = FocusNode();
 
@@ -53,7 +51,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   String? _usernameError;
   String? _emailError;
-  String? _phoneError;
   String? _passwordError;
   String? _confirmError;
   String? _codeError;
@@ -67,7 +64,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.initState();
     _usernameFocus.addListener(() => _onBlur(_usernameFocus, () => _usernameError = _validateUsername(_username.text)));
     _emailFocus.addListener(()    => _onBlur(_emailFocus,    () => _emailError    = _validateEmail(_email.text)));
-    _phoneFocus.addListener(()    => _onBlur(_phoneFocus,    () => _phoneError    = _validatePhone(_phone.text)));
     _passwordFocus.addListener(() => _onBlur(_passwordFocus, () => _passwordError = _validatePassword(_password.text)));
     _confirmFocus.addListener(()  => _onBlur(_confirmFocus,  () => _confirmError  = _validateConfirm()));
   }
@@ -79,8 +75,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   void dispose() {
     _resendTimer?.cancel();
-    for (final c in [_username, _email, _phone, _address, _password, _confirm, _code]) c.dispose();
-    for (final f in [_usernameFocus, _emailFocus, _phoneFocus, _passwordFocus, _confirmFocus]) f.dispose();
+    for (final c in [_username, _email, _address, _password, _confirm, _code]) c.dispose();
+    for (final f in [_usernameFocus, _emailFocus, _passwordFocus, _confirmFocus]) f.dispose();
     super.dispose();
   }
 
@@ -109,13 +105,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return null;
   }
 
-  String? _validatePhone(String v) {
-    final t = v.trim();
-    if (t.isEmpty) return 'Phone number is required.';
-    if (!RegExp(r'^\+?[1-9]\d{7,14}$').hasMatch(t)) return 'Enter a valid phone number, e.g. +60123456789.';
-    return null;
-  }
-
   String? _validatePassword(String v) {
     if (v.isEmpty) return 'Password is required.';
     return _passwordPolicyError(v);
@@ -132,12 +121,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     setState(() {
       _usernameError = _validateUsername(_username.text);
       _emailError    = _validateEmail(_email.text);
-      _phoneError    = _validatePhone(_phone.text);
       _passwordError = _validatePassword(_password.text);
       _confirmError  = _validateConfirm();
       _googleError   = null;
     });
-    if (_usernameError != null || _emailError != null || _phoneError != null ||
+    if (_usernameError != null || _emailError != null ||
         _passwordError != null || _confirmError != null) return;
 
     setState(() => _loading = true);
@@ -169,7 +157,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
             username:         _username.text.trim(),
             email:            _email.text.trim(),
             password:         _password.text,
-            phoneNumber:      _phone.text.trim(),
             verificationCode: code,
             shippingAddress:  _address.text.trim(),
           );
@@ -296,14 +283,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
           keyboard: TextInputType.emailAddress,
           error:    _emailError,
           onChanged: (v) => setState(() => _emailError = _validateEmail(v)),
-        ),
-        _field(
-          controller: _phone,
-          focusNode:  _phoneFocus,
-          label:    'Phone number',
-          keyboard: TextInputType.phone,
-          error:    _phoneError,
-          onChanged: (v) => setState(() => _phoneError = _validatePhone(v)),
         ),
         _field(
           controller: _address,

@@ -289,16 +289,17 @@ function handleRegisterCustomer(PDO $pdo): void {
   $username    = trim($body['username'] ?? '');
   $email       = trim($body['email'] ?? '');
   $password    = $body['password'] ?? '';
-  $phoneNumber = trim($body['phoneNumber'] ?? '');
+  $phoneRaw    = trim($body['phoneNumber'] ?? '');
+  $phoneNumber = $phoneRaw !== '' ? $phoneRaw : null;
   $shipping    = trim($body['shippingAddress'] ?? '');
 
-  if ($username === '' || $email === '' || $phoneNumber === '') {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Username, email and phone number are required.']);
+  if ($username === '' || $email === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Username and email are required.']);
   }
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please enter a valid email.']);
   }
-  if (!preg_match('/^\+?[1-9]\d{7,14}$/', $phoneNumber)) {
+  if ($phoneNumber !== null && !preg_match('/^\+?[1-9]\d{7,14}$/', $phoneNumber)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid phone number in international format, e.g. +60123456789.']);
   }
   $fmtErr = usernameFormatError($username);

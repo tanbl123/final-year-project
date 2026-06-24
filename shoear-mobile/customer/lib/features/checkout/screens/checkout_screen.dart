@@ -11,9 +11,9 @@ import 'package:customer/features/checkout/screens/receipt_screen.dart';
 /// Review the cart, confirm a delivery address, pick a (simulated) payment
 /// method, then place + pay the order in one step.
 ///
-/// For Google Sign-In users who haven't set a phone number yet, a required
-/// phone field is shown before checkout (phone is passed to the backend when
-/// the courier and admin need to contact the customer).
+/// For users who haven't set a phone number yet (Google Sign-In users or
+/// email users who skipped it at registration), a required phone field is
+/// shown before checkout (phone is needed for delivery contact).
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
 
