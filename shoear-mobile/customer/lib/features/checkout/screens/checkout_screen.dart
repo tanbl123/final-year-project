@@ -49,17 +49,30 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   /// true once a typed postcode auto-filled the city + state (shows a hint).
   bool _postcodeMatched = false;
 
+  /// true while the current city/state came from a postcode lookup (not typed
+  /// by hand). Lets us safely clear stale auto-fill when the postcode changes,
+  /// without ever wiping a city the customer entered manually.
+  bool _addrAutoFilled = false;
+
   bool get _needsPhone => context.read<AuthProvider>().user?.phoneNumber == null;
 
   /// Look up the postcode and pre-fill city + state. Silent on miss — the
   /// customer just types the city manually (graceful fallback, never blocks).
   Future<void> _onPostcodeChanged(String value) async {
     if (!_addrTouched) setState(() => _addrTouched = true);
+    final code = value.trim();
     setState(() {
       _postcodeError = _validatePostcode(value);
       _postcodeMatched = false;
+      // Drop any previously auto-filled city/state so a stale value from an
+      // earlier postcode doesn't linger when the postcode changes. A city the
+      // customer typed themselves (_addrAutoFilled == false) is left alone.
+      if (_addrAutoFilled) {
+        _cityCtrl.clear();
+        _state = null;
+        _addrAutoFilled = false;
+      }
     });
-    final code = value.trim();
     if (!RegExp(r'^\d{5}$').hasMatch(code)) return;
     final loc = await PostcodeService.instance.lookup(code);
     if (!mounted || loc == null) return;
@@ -73,6 +86,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         _stateError = null;
       }
       _postcodeMatched = true;
+      _addrAutoFilled = true;
     });
   }
 
@@ -411,7 +425,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           error: _cityError,
                           onChanged: (v) {
                             if (!_addrTouched) setState(() => _addrTouched = true);
-                            setState(() => _cityError = _validateCity(v));
+                            setState(() {
+                              _cityError = _validateCity(v);
+                              // Customer is editing the city by hand — stop
+                              // treating it as auto-filled so it won't be wiped.
+                              _addrAutoFilled = false;
+                              _postcodeMatched = false;
+                            });
                           },
                         ),
                         const SizedBox(height: 12),
@@ -435,6 +455,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             _state = v;
                             _stateError = v == null ? 'Please select a state.' : null;
                             _postcodeMatched = false;
+                            _addrAutoFilled = false;
                           }),
                         ),
                         if (_postcodeMatched) ...[
