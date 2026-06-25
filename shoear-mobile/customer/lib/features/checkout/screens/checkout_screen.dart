@@ -8,6 +8,7 @@ import 'package:customer/features/order/services/order_service.dart';
 import 'package:customer/features/cart/state/cart_provider.dart';
 import 'package:customer/features/cart/models/cart.dart';
 import 'package:customer/core/widgets/product_image.dart';
+import 'package:customer/core/services/postcode_service.dart';
 import 'package:customer/features/checkout/screens/receipt_screen.dart';
 
 class CheckoutScreen extends StatefulWidget {
@@ -45,7 +46,35 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String? _stateError;
   String? _phoneError;
 
+  /// true once a typed postcode auto-filled the city + state (shows a hint).
+  bool _postcodeMatched = false;
+
   bool get _needsPhone => context.read<AuthProvider>().user?.phoneNumber == null;
+
+  /// Look up the postcode and pre-fill city + state. Silent on miss — the
+  /// customer just types the city manually (graceful fallback, never blocks).
+  Future<void> _onPostcodeChanged(String value) async {
+    if (!_addrTouched) setState(() => _addrTouched = true);
+    setState(() {
+      _postcodeError = _validatePostcode(value);
+      _postcodeMatched = false;
+    });
+    final code = value.trim();
+    if (!RegExp(r'^\d{5}$').hasMatch(code)) return;
+    final loc = await PostcodeService.instance.lookup(code);
+    if (!mounted || loc == null) return;
+    // Only auto-fill if this is still the current postcode (user may type on).
+    if (_postcodeCtrl.text.trim() != code) return;
+    setState(() {
+      _cityCtrl.text = loc.city;
+      _cityError = null;
+      if (_states.contains(loc.state)) {
+        _state = loc.state;
+        _stateError = null;
+      }
+      _postcodeMatched = true;
+    });
+  }
 
   String? _validateName(String value) {
     final v = value.trim();
@@ -376,10 +405,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                 error: _postcodeError,
                                 keyboardType: TextInputType.number,
                                 maxLength: 5,
-                                onChanged: (v) {
-                                  if (!_addrTouched) setState(() => _addrTouched = true);
-                                  setState(() => _postcodeError = _validatePostcode(v));
-                                },
+                                onChanged: _onPostcodeChanged,
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -417,8 +443,26 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           onChanged: (v) => setState(() {
                             _state = v;
                             _stateError = v == null ? 'Please select a state.' : null;
+                            _postcodeMatched = false;
                           }),
                         ),
+                        if (_postcodeMatched) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Icon(Icons.check_circle,
+                                  size: 14, color: Colors.green.shade600),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'City & state filled from postcode. Tap to edit if needed.',
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.green.shade700),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
                     ],
                   ),
