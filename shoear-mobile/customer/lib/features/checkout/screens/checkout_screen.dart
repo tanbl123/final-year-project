@@ -343,11 +343,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Test mode: use card 4242 4242 4242 4242, any future expiry, any CVC.',
-                        style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                      ),
                     ],
                   ),
                 ),
