@@ -392,36 +392,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           onChanged: (_) {},
                         ),
                         const SizedBox(height: 12),
-                        // Postcode + City on one row
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            SizedBox(
-                              width: 130,
-                              child: _addrField(
-                                controller: _postcodeCtrl,
-                                hint: 'Postcode',
-                                icon: Icons.markunread_mailbox_outlined,
-                                error: _postcodeError,
-                                keyboardType: TextInputType.number,
-                                maxLength: 5,
-                                onChanged: _onPostcodeChanged,
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _addrField(
-                                controller: _cityCtrl,
-                                hint: 'City',
-                                icon: Icons.location_city_outlined,
-                                error: _cityError,
-                                onChanged: (v) {
-                                  if (!_addrTouched) setState(() => _addrTouched = true);
-                                  setState(() => _cityError = _validateCity(v));
-                                },
-                              ),
-                            ),
-                          ],
+                        // Postcode (full width so the error text has room)
+                        _addrField(
+                          controller: _postcodeCtrl,
+                          hint: 'Postcode',
+                          icon: Icons.markunread_mailbox_outlined,
+                          error: _postcodeError,
+                          keyboardType: TextInputType.number,
+                          maxLength: 5,
+                          onChanged: _onPostcodeChanged,
+                        ),
+                        const SizedBox(height: 12),
+                        // City (auto-filled from postcode, still editable)
+                        _addrField(
+                          controller: _cityCtrl,
+                          hint: 'City',
+                          icon: Icons.location_city_outlined,
+                          error: _cityError,
+                          onChanged: (v) {
+                            if (!_addrTouched) setState(() => _addrTouched = true);
+                            setState(() => _cityError = _validateCity(v));
+                          },
                         ),
                         const SizedBox(height: 12),
                         // State dropdown
