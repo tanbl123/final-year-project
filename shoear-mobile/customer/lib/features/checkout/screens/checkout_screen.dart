@@ -63,6 +63,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String? _placeSessionToken;
   bool get _placesOn => PlacesService.instance.enabled;
 
+  /// Focus node for the postcode field, so we can jump the cursor there when a
+  /// picked address came back without a postcode.
+  final _postcodeFocus = FocusNode();
+
+  /// true after a Places selection that had no postcode — shows a prompt asking
+  /// the customer to type it in. Cleared once they enter a postcode.
+  bool _postcodePrompt = false;
+
   bool get _needsPhone => context.read<AuthProvider>().user?.phoneNumber == null;
 
   /// Debounced address search as the customer types line 1. No-op (and no
@@ -117,10 +125,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           _stateError = null;
         }
         _addrAutoFilled = true;
+        // Some places (areas/POIs) have no single postcode — prompt for it.
+        _postcodePrompt = addr.postcode.isEmpty;
       }
       _addrTouched = true;
       _postcodeMatched = false;
     });
+    // Jump the cursor to the postcode field when it needs filling in.
+    if (_postcodePrompt) _postcodeFocus.requestFocus();
   }
 
   /// Look up the postcode and pre-fill city + state. Silent on miss — the
@@ -131,6 +143,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     setState(() {
       _postcodeError = _validatePostcode(value);
       _postcodeMatched = false;
+      if (code.isNotEmpty) _postcodePrompt = false; // they're entering it now
       // Drop any previously auto-filled city/state so a stale value from an
       // earlier postcode doesn't linger when the postcode changes. A city the
       // customer typed themselves (_addrAutoFilled == false) is left alone.
@@ -229,6 +242,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     _postcodeCtrl.dispose();
     _cityCtrl.dispose();
     _phoneCtrl.dispose();
+    _postcodeFocus.dispose();
     super.dispose();
   }
 
@@ -344,12 +358,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     TextInputType? keyboardType,
     int? maxLength,
     VoidCallback? onClear,
+    FocusNode? focusNode,
   }) {
     // Show the clear (X) button only when a clear handler is given and the
     // field has text.
     final showClear = onClear != null && controller.text.isNotEmpty;
     return TextField(
       controller:   controller,
+      focusNode:    focusNode,
       keyboardType: keyboardType,
       maxLength:    maxLength,
       decoration: InputDecoration(
@@ -529,8 +545,26 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           error: _postcodeError,
                           keyboardType: TextInputType.number,
                           maxLength: 5,
+                          focusNode: _postcodeFocus,
                           onChanged: _onPostcodeChanged,
                         ),
+                        if (_postcodePrompt) ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              Icon(Icons.info_outline,
+                                  size: 14, color: Colors.orange.shade700),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'No postcode for this area — please enter it.',
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.orange.shade800),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         // City (auto-filled from postcode, still editable)
                         _addrField(
