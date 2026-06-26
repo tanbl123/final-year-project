@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:customer/features/order/models/order.dart';
 import 'package:customer/features/order/services/order_service.dart';
 import 'package:customer/core/widgets/product_image.dart';
+import 'package:customer/core/utils/snackbar.dart';
 import 'package:customer/features/order/screens/orders_screen.dart' show kOrderStatusColors, prettyStatus;
 
 const Map<String, Color> _deliveryColors = {
@@ -79,20 +80,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     reasonCtrl.dispose();
     if (ok != true) return;
     if (reason.isEmpty) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('A reason is required.')));
+      if (mounted) context.showSnack('A reason is required.');
       return;
     }
     if (reason.length < 5) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please give a bit more detail (at least 5 characters).')));
+      if (mounted) context.showSnack('Please give a bit more detail (at least 5 characters).');
       return;
     }
     try {
       await context.read<OrderService>().requestRefund(widget.orderId, reason);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Refund request submitted.')));
+      context.showSnack('Refund request submitted.');
       _refresh();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted) context.showSnack(e.toString());
     }
   }
 

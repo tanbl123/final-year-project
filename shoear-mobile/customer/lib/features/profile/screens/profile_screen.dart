@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:customer/core/widgets/profile_avatar.dart';
+import 'package:customer/core/utils/snackbar.dart';
 import 'package:customer/features/auth/services/account_service.dart';
 import 'package:customer/features/auth/state/auth_provider.dart';
 import 'package:customer/features/auth/screens/change_password_screen.dart';
@@ -146,7 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     // always reload after returning — the photo may have changed even if no save
     if (mounted) _reload();
     if (saved == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated.')));
+      context.showSnack('Profile updated.');
     }
   }
 
@@ -155,7 +156,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
     );
     if (ok == true && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Password changed.')));
+      context.showSnack('Password changed.');
     }
   }
 
@@ -182,7 +183,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await context.read<AuthProvider>().logout();
       if (mounted) Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      if (mounted) context.showSnack(e.toString());
     }
   }
 }

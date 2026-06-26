@@ -9,6 +9,7 @@ import 'package:customer/features/auth/services/account_service.dart';
 import 'package:customer/features/auth/state/auth_provider.dart';
 import 'package:customer/features/order/services/order_service.dart';
 import 'package:customer/features/order/services/order_payment.dart';
+import 'package:customer/core/utils/snackbar.dart';
 import 'package:customer/features/cart/state/cart_provider.dart';
 import 'package:customer/features/cart/models/cart.dart';
 import 'package:customer/core/widgets/product_image.dart';
@@ -391,7 +392,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       await cart.refresh(); // keep the local cart in sync with the server
       if (!mounted) return;
       setState(() => _placing = false);
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
+      context.showSnack(e.toString());
     }
   }
 
@@ -438,8 +439,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _placing = false);
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(e.toString())));
+      context.showSnack(e.toString());
     }
   }
 

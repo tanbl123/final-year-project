@@ -49,14 +49,18 @@ class _OrdersScreenState extends State<OrdersScreen> {
     try {
       final result = await payOrderWithStripe(orders, order.orderId);
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(
-        content: Text(result == PayResult.paid
-            ? 'Payment successful.'
-            : 'Payment cancelled — your order is still awaiting payment.'),
-      ));
+      messenger
+        ..removeCurrentSnackBar()
+        ..showSnackBar(SnackBar(
+          content: Text(result == PayResult.paid
+              ? 'Payment successful.'
+              : 'Payment cancelled — your order is still awaiting payment.'),
+        ));
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(e.toString())));
+      messenger
+        ..removeCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(e.toString())));
     } finally {
       if (mounted) setState(() => _payingId = null);
       await _refresh(); // reflect Paid / Cancelled / still-Placed
