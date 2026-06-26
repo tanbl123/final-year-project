@@ -454,6 +454,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         TextField(
                           controller:   _phoneCtrl,
                           keyboardType: TextInputType.phone,
+                          inputFormatters: [
+                            // Digits only, plus an optional leading '+'.
+                            FilteringTextInputFormatter.allow(RegExp(r'[0-9+]')),
+                          ],
                           decoration: InputDecoration(
                             hintText:  '+60123456789',
                             border:    const OutlineInputBorder(),
