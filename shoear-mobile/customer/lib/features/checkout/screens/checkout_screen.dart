@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:customer/features/auth/services/account_service.dart';
 import 'package:customer/features/auth/state/auth_provider.dart';
 import 'package:customer/features/order/services/order_service.dart';
+import 'package:customer/features/order/services/order_payment.dart';
 import 'package:customer/features/cart/state/cart_provider.dart';
 import 'package:customer/features/cart/models/cart.dart';
 import 'package:customer/core/widgets/product_image.dart';
@@ -323,6 +324,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     setState(() => _placing = true);
     final orders = context.read<OrderService>();
     final cart   = context.read<CartProvider>();
+    String? createdOrderId; // kept for the "pay later" retry on cancel
     try {
       final created = await orders.checkout(
         addressLine1: _line1Ctrl.text.trim(),
@@ -330,6 +332,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         city:         _cityCtrl.text.trim(),
         state:        _state!,
       );
+      createdOrderId = created.orderId;
 
       final pi = await orders.createPaymentIntent(created.orderId);
       Stripe.publishableKey = pi['publishableKey'] as String? ?? '';
@@ -377,21 +380,90 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         MaterialPageRoute(builder: (_) => ReceiptScreen(receipt: receipt)),
       );
     } on StripeException catch (_) {
-      // The order was already created (status Placed) and the cart cleared, so
-      // sync the local cart and point the customer to My Orders to pay later.
+      // The order was already created (status Placed) and the cart cleared.
+      // Offer a one-tap retry so the customer doesn't have to hunt for it in
+      // My Orders; either way the order waits there with its own Pay button.
       await cart.refresh();
       if (!mounted) return;
       setState(() => _placing = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text(
-            'Payment cancelled. Your order is awaiting payment — finish it in My Orders.')),
-      );
+      if (createdOrderId != null) _promptPayLater(orders, cart, createdOrderId);
     } catch (e) {
       await cart.refresh(); // keep the local cart in sync with the server
       if (!mounted) return;
       setState(() => _placing = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString())));
     }
+  }
+
+  /// After a cancelled payment, let the customer pay the just-created order
+  /// right away (one tap) or leave it for later in My Orders.
+  void _promptPayLater(OrderService orders, CartProvider cart, String orderId) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Payment not completed'),
+        content: const Text(
+            'Your order is saved and waiting for payment. Pay now, or finish '
+            'it later from My Orders.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Later'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _retryPayment(orders, cart, orderId);
+            },
+            child: const Text('Pay now'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Re-open the Stripe sheet for an already-created order (no new order).
+  Future<void> _retryPayment(
+      OrderService orders, CartProvider cart, String orderId) async {
+    setState(() => _placing = true);
+    try {
+      final result = await payOrderWithStripe(orders, orderId);
+      if (result == PayResult.paid) {
+        await _completePaidOrder(orders, cart, orderId);
+      } else {
+        if (!mounted) return;
+        setState(() => _placing = false);
+        _promptPayLater(orders, cart, orderId); // offer again
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _placing = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(e.toString())));
+    }
+  }
+
+  /// Post-payment steps: pull the receipt, refresh the cart, persist the name,
+  /// then show the receipt screen.
+  Future<void> _completePaidOrder(
+      OrderService orders, CartProvider cart, String orderId) async {
+    final account = context.read<AccountService>();
+    final auth = context.read<AuthProvider>();
+    final receipt = await orders.getReceipt(orderId);
+    await cart.refresh();
+    final newName = _nameCtrl.text.trim();
+    if (newName != (auth.user?.fullName ?? '')) {
+      try {
+        await account.updateFullName(newName);
+        await auth.applyProfile(fullName: newName);
+      } catch (_) {
+        // non-fatal — order is paid
+      }
+    }
+    if (!mounted) return;
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => ReceiptScreen(receipt: receipt)),
+    );
   }
 
   // Shared builder for the structured address text fields.
