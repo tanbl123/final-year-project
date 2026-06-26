@@ -1,0 +1,13 @@
+@echo off
+REM Run the customer app with Google Places address autocomplete enabled (Windows).
+REM
+REM Setup (once):
+REM   1. copy run.bat.example run.bat
+REM   2. open run.bat and replace YOUR_KEY_HERE with your real Google Places API key
+REM   3. run it:   .\run.bat       (in PowerShell)   or just double-click run.bat
+REM
+REM run.bat is gitignored, so your key never gets committed. Plain `flutter run`
+REM (without the key) still works - autocomplete just stays off and the app falls
+REM back to the offline postcode -> city/state lookup.
+
+flutter run --dart-define=GOOGLE_PLACES_API_KEY=YOUR_KEY_HERE

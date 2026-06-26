@@ -23,9 +23,12 @@ build/
 /windows/
 /web/
 
-# Local run script holding the Google Places API key (never commit the key).
-# Copy run.sh.example -> run.sh and paste your key in run.sh.
+# Local run scripts holding the Google Places API key (never commit the key).
+# Copy run.sh.example -> run.sh (Linux/Mac) or run.bat.example -> run.bat
+# (Windows) and paste your key into the copy.
 run.sh
+run.bat
+run.ps1
 
 # Misc
 *.log
