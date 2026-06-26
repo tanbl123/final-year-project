@@ -89,6 +89,7 @@ function handleResubmitApplication(PDO $pdo, array $auth): void {
   if (!preg_match('/^(0\d{8,10}|\+?60\d{8,10})$/', $phoneNumber)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid Malaysian phone number, e.g. 0123456789.']);
   }
+  $phoneNumber = normalizeMyPhone($phoneNumber); // store canonical +60...
   // SSM number: new 12-digit format or old 6–8 digits + check letter
   if (!preg_match('/^(\d{12}|\d{6,8}-?[A-Za-z])$/', $businessRegNo)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid SSM number, e.g. 202301012345 or 1234567-A.']);

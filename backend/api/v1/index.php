@@ -3,6 +3,7 @@ require __DIR__ . '/../../lib/response.php';
 require __DIR__ . '/../../lib/db.php';
 require __DIR__ . '/../../lib/jwt.php';
 require __DIR__ . '/../../lib/request.php';
+require __DIR__ . '/../../lib/phone.php';
 require __DIR__ . '/../../lib/auth.php';
 require __DIR__ . '/../../lib/ids.php';
 require __DIR__ . '/../../lib/google_auth.php';
