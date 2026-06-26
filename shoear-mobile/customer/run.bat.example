@@ -1,5 +1,5 @@
 @echo off
-REM Run the customer app with Google Places address autocomplete enabled (Windows).
+REM Run the customer app with Google Places autocomplete enabled (Windows).
 REM
 REM Setup (once):
 REM   1. copy run.bat.example run.bat
@@ -10,4 +10,11 @@ REM run.bat is gitignored, so your key never gets committed. Plain `flutter run`
 REM (without the key) still works - autocomplete just stays off and the app falls
 REM back to the offline postcode -> city/state lookup.
 
+REM ── Emulator (default backend 10.0.2.2 works automatically) ─────────────────
 flutter run --dart-define=GOOGLE_PLACES_API_KEY=YOUR_KEY_HERE
+
+REM ── Physical phone: also point the backend at your PC's LAN IP. Find it with
+REM    `ipconfig` (IPv4 Address), then comment out the line above and use this
+REM    one instead (replace BOTH the IP and the key):
+REM
+REM flutter run --dart-define=GOOGLE_PLACES_API_KEY=YOUR_KEY_HERE --dart-define=API_BASE_URL=http://192.168.1.5/shoear/api/v1
