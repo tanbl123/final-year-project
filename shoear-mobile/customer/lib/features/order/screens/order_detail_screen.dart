@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'package:customer/features/order/models/order.dart';
 import 'package:customer/features/order/services/order_service.dart';
+import 'package:customer/features/order/services/order_payment.dart';
 import 'package:customer/core/widgets/product_image.dart';
 import 'package:customer/core/utils/snackbar.dart';
 import 'package:customer/features/order/screens/orders_screen.dart' show kOrderStatusColors, prettyStatus;
@@ -29,6 +30,7 @@ class OrderDetailScreen extends StatefulWidget {
 
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
   late Future<CustomerOrder> _future;
+  bool _paying = false;
 
   @override
   void initState() {
@@ -48,6 +50,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   bool _canRequestRefund(CustomerOrder o) =>
       _refundableStatuses.contains(o.orderStatus) &&
       !o.refunds.any((r) => _activeRefundStatuses.contains(r.refundStatus));
+
+  Future<void> _payNow() async {
+    setState(() => _paying = true);
+    try {
+      final result =
+          await payOrderWithStripe(context.read<OrderService>(), widget.orderId);
+      if (!mounted) return;
+      context.showSnack(result == PayResult.paid
+          ? 'Payment successful.'
+          : 'Payment cancelled — your order is still awaiting payment.');
+    } catch (e) {
+      if (mounted) context.showSnack(e.toString());
+    } finally {
+      if (mounted) setState(() => _paying = false);
+      await _refresh();
+    }
+  }
 
   Future<void> _requestRefund() async {
     final reasonCtrl = TextEditingController();
@@ -100,7 +119,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Order ${widget.orderId}')),
+      backgroundColor: Colors.grey.shade100,
+      appBar: AppBar(
+        title: Text('Order ${widget.orderId}'),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+      ),
       body: FutureBuilder<CustomerOrder>(
         future: _future,
         builder: (context, snap) {
@@ -122,117 +146,144 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Widget _body(BuildContext context, CustomerOrder o) {
-    final theme = Theme.of(context);
-    final orderColor = kOrderStatusColors[o.orderStatus] ?? Colors.grey;
+    final primary = Theme.of(context).colorScheme.primary;
+    final awaiting = o.orderStatus == 'Placed';
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
       children: [
-        Row(
-          children: [
-            Expanded(child: Text(_fmtDate(o.orderDate), style: TextStyle(color: Colors.grey.shade600))),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(color: orderColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-              child: Text(prettyStatus(o.orderStatus), style: TextStyle(color: orderColor, fontWeight: FontWeight.w600)),
+        _StatusBanner(order: o),
+        const SizedBox(height: 12),
+
+        // Pay now for unpaid orders
+        if (awaiting) ...[
+          FilledButton.icon(
+            onPressed: _paying ? null : _payNow,
+            icon: _paying
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.lock_outline, size: 18),
+            label: Text(_paying ? 'Processing…' : 'Pay now  ·  RM ${o.total.toStringAsFixed(2)}',
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(50),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
-          ],
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // Delivery tracking
+        _Card(
+          icon: Icons.local_shipping_outlined,
+          title: 'Delivery Tracking',
+          child: o.deliveries.isEmpty
+              ? Text('Not dispatched yet.', style: TextStyle(color: Colors.grey.shade600))
+              : Column(
+                  children: [
+                    for (int i = 0; i < o.deliveries.length; i++) ...[
+                      if (i > 0) const Divider(height: 20),
+                      _ParcelBlock(parcel: o.deliveries[i]),
+                    ],
+                  ],
+                ),
+        ),
+        const SizedBox(height: 12),
+
+        // Items + total
+        _Card(
+          icon: Icons.shopping_bag_outlined,
+          title: 'Items (${o.items.length})',
+          child: Column(
+            children: [
+              for (int i = 0; i < o.items.length; i++) ...[
+                if (i > 0) const Divider(height: 18),
+                _ItemRow(item: o.items[i], primary: primary),
+              ],
+              const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider(height: 1)),
+              Row(
+                children: [
+                  const Text('Total', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  const Spacer(),
+                  Text('RM ${o.total.toStringAsFixed(2)}',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: primary)),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Payment
+        _Card(
+          icon: Icons.payment_outlined,
+          title: 'Payment',
+          child: Column(
+            children: [
+              _kv('Method', o.paymentMethod ?? '—'),
+              _kv('Status', o.paymentStatus ?? (awaiting ? 'Unpaid' : '—')),
+              if (o.paymentDate != null) _kv('Date', _fmtDate(o.paymentDate)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Delivery address
+        _Card(
+          icon: Icons.location_on_outlined,
+          title: 'Delivery Address',
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(o.deliveryAddress, style: const TextStyle(height: 1.4)),
+          ),
         ),
 
-        const SizedBox(height: 20),
-        _title(context, 'Delivery tracking'),
-        if (o.deliveries.isEmpty)
-          Text('Not dispatched yet.', style: TextStyle(color: Colors.grey.shade600))
-        else
-          for (final d in o.deliveries) _ParcelCard(parcel: d),
-
-        const SizedBox(height: 20),
-        _title(context, 'Items'),
-        for (final it in o.items)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 6),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        // Refunds
+        if (o.refunds.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          _Card(
+            icon: Icons.assignment_return_outlined,
+            title: 'Refunds',
+            child: Column(
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: SizedBox(width: 52, height: 52, child: ProductImage(url: it.imageUrl)),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
+                for (int i = 0; i < o.refunds.length; i++) ...[
+                  if (i > 0) const Divider(height: 16),
+                  Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(it.productName, style: const TextStyle(fontWeight: FontWeight.w600)),
-                      Text('${it.brand} · Size ${it.size} · x${it.qty}',
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                      Expanded(child: Text(o.refunds[i].refundReason, maxLines: 2, overflow: TextOverflow.ellipsis)),
+                      const SizedBox(width: 8),
+                      Text('${o.refunds[i].refundStatus} · RM ${o.refunds[i].refundAmount.toStringAsFixed(2)}',
+                          style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
                     ],
                   ),
-                ),
-                Text('RM ${it.subtotal.toStringAsFixed(2)}'),
+                ],
               ],
             ),
           ),
-        const Divider(height: 24),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text('Total', style: theme.textTheme.titleMedium),
-            Text('RM ${o.total.toStringAsFixed(2)}',
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
-          ],
-        ),
-
-        const SizedBox(height: 20),
-        _title(context, 'Payment'),
-        _kv('Method', o.paymentMethod ?? '—'),
-        _kv('Status', o.paymentStatus ?? '—'),
-        if (o.paymentDate != null) _kv('Date', _fmtDate(o.paymentDate)),
-
-        const SizedBox(height: 20),
-        _title(context, 'Delivery address'),
-        Text(o.deliveryAddress),
-
-        if (o.refunds.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          _title(context, 'Refunds'),
-          for (final r in o.refunds)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Expanded(child: Text(r.refundReason, maxLines: 2, overflow: TextOverflow.ellipsis)),
-                  const SizedBox(width: 8),
-                  Text('${r.refundStatus} · RM ${r.refundAmount.toStringAsFixed(2)}',
-                      style: TextStyle(color: Colors.grey.shade700, fontSize: 12)),
-                ],
-              ),
-            ),
         ],
 
         if (_canRequestRefund(o)) ...[
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: _requestRefund,
             icon: const Icon(Icons.assignment_return_outlined),
             label: const Text('Request a refund'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(48),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            ),
           ),
         ],
       ],
     );
   }
 
-  Widget _title(BuildContext context, String t) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(t, style: Theme.of(context).textTheme.titleMedium),
-      );
-
   Widget _kv(String k, String v) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
+        padding: const EdgeInsets.symmetric(vertical: 3),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            SizedBox(width: 80, child: Text(k, style: const TextStyle(color: Colors.grey))),
-            Expanded(child: Text(v)),
+            SizedBox(width: 80, child: Text(k, style: TextStyle(color: Colors.grey.shade600, fontSize: 13))),
+            Expanded(child: Text(v, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
           ],
         ),
       );
@@ -242,61 +293,197 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final d = DateTime.tryParse(iso);
     if (d == null) return iso;
     final l = d.toLocal();
-    return '${l.day}/${l.month}/${l.year} ${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
+    final h = l.hour % 12 == 0 ? 12 : l.hour % 12;
+    final ampm = l.hour < 12 ? 'AM' : 'PM';
+    final mm = l.minute.toString().padLeft(2, '0');
+    return '${l.day}/${l.month}/${l.year} · $h:$mm $ampm';
   }
 }
 
-class _ParcelCard extends StatelessWidget {
+// ── Status banner ───────────────────────────────────────────────────────────
+class _StatusBanner extends StatelessWidget {
+  final CustomerOrder order;
+  const _StatusBanner({required this.order});
+
+  (IconData, String) _meta(String s) {
+    switch (s) {
+      case 'Placed': return (Icons.payments_outlined, 'Awaiting payment');
+      case 'Paid': return (Icons.inventory_2_outlined, 'Paid · preparing your order');
+      case 'Processing': return (Icons.inventory_2_outlined, 'Preparing your order');
+      case 'Shipped': return (Icons.local_shipping_outlined, 'Shipped');
+      case 'OutForDelivery': return (Icons.local_shipping_outlined, 'Out for delivery');
+      case 'Delivered': return (Icons.check_circle_outline, 'Delivered');
+      case 'Completed': return (Icons.check_circle_outline, 'Completed');
+      case 'Cancelled': return (Icons.cancel_outlined, 'Cancelled');
+      default: return (Icons.receipt_long_outlined, prettyStatus(s));
+    }
+  }
+
+  String _fmtDate(String? iso) {
+    if (iso == null) return '';
+    final d = DateTime.tryParse(iso);
+    if (d == null) return iso;
+    final l = d.toLocal();
+    return 'Ordered ${l.day}/${l.month}/${l.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = order.orderStatus == 'Placed'
+        ? Colors.orange.shade700
+        : (kOrderStatusColors[order.orderStatus] ?? Colors.grey);
+    final (icon, title) = _meta(order.orderStatus);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.15), shape: BoxShape.circle),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: color)),
+                const SizedBox(height: 2),
+                Text(_fmtDate(order.orderDate), style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── White section card ─────────────────────────────────────────────────────
+class _Card extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Widget child;
+  const _Card({required this.icon, required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Row(
+              children: [
+                Icon(icon, size: 18, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(title, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Padding(padding: const EdgeInsets.all(16), child: child),
+        ],
+      ),
+    );
+  }
+}
+
+// ── One item row ────────────────────────────────────────────────────────────
+class _ItemRow extends StatelessWidget {
+  final OrderItem item;
+  final Color primary;
+  const _ItemRow({required this.item, required this.primary});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: SizedBox(width: 52, height: 52, child: ProductImage(url: item.imageUrl)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(item.brand.toUpperCase(),
+                  style: TextStyle(fontSize: 10, color: primary, fontWeight: FontWeight.w600, letterSpacing: 0.8)),
+              Text(item.productName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+              Text('Size ${item.size} · Qty ${item.qty}', style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text('RM ${item.subtotal.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+      ],
+    );
+  }
+}
+
+// ── One parcel block (inside the Delivery Tracking card) ────────────────────
+class _ParcelBlock extends StatelessWidget {
   final ParcelDelivery parcel;
-  const _ParcelCard({required this.parcel});
+  const _ParcelBlock({required this.parcel});
 
   @override
   Widget build(BuildContext context) {
     final color = _deliveryColors[parcel.deliveryStatus] ?? Colors.grey;
     final showOtp = parcel.deliveryStatus == 'OutForDelivery' && (parcel.otpCode?.isNotEmpty ?? false);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                Expanded(child: Text(parcel.supplierName, style: const TextStyle(fontWeight: FontWeight.w600))),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-                  child: Text(prettyStatus(parcel.deliveryStatus), style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12)),
-                ),
-              ],
+            Expanded(child: Text(parcel.supplierName, style: const TextStyle(fontWeight: FontWeight.w600))),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+              child: Text(prettyStatus(parcel.deliveryStatus), style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 12)),
             ),
-            if (parcel.estimatedDeliveryTime != null) ...[
-              const SizedBox(height: 4),
-              Text('Est. delivery: ${_fmt(parcel.estimatedDeliveryTime!)}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-            ],
-            if (showOtp) ...[
-              const SizedBox(height: 10),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade50,
-                  border: Border.all(color: Colors.amber.shade300),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  children: [
-                    Text('Show this code to the courier', style: TextStyle(fontSize: 12, color: Colors.amber.shade900)),
-                    const SizedBox(height: 4),
-                    Text(parcel.otpCode!, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: 6)),
-                  ],
-                ),
-              ),
-            ],
           ],
         ),
-      ),
+        if (parcel.estimatedDeliveryTime != null) ...[
+          const SizedBox(height: 4),
+          Text('Est. delivery: ${_fmt(parcel.estimatedDeliveryTime!)}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+        ],
+        if (showOtp) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.amber.shade50,
+              border: Border.all(color: Colors.amber.shade300),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              children: [
+                Text('Show this code to the courier', style: TextStyle(fontSize: 12, color: Colors.amber.shade900)),
+                const SizedBox(height: 4),
+                Text(parcel.otpCode!, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: 6)),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -304,6 +491,8 @@ class _ParcelCard extends StatelessWidget {
     final d = DateTime.tryParse(iso);
     if (d == null) return iso;
     final l = d.toLocal();
-    return '${l.day}/${l.month}/${l.year} ${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
+    final h = l.hour % 12 == 0 ? 12 : l.hour % 12;
+    final ampm = l.hour < 12 ? 'AM' : 'PM';
+    return '${l.day}/${l.month}/${l.year} · $h:${l.minute.toString().padLeft(2, '0')} $ampm';
   }
 }
