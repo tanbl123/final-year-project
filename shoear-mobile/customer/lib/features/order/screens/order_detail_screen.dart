@@ -6,6 +6,7 @@ import 'package:customer/features/order/services/order_service.dart';
 import 'package:customer/features/order/services/order_payment.dart';
 import 'package:customer/core/widgets/product_image.dart';
 import 'package:customer/core/utils/snackbar.dart';
+import 'package:customer/core/utils/refresh_bus.dart';
 import 'package:customer/features/order/screens/orders_screen.dart' show kOrderStatusColors, prettyStatus;
 
 const Map<String, Color> _deliveryColors = {
@@ -36,6 +37,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   void initState() {
     super.initState();
     _future = context.read<OrderService>().getOrder(widget.orderId);
+    appRefreshTick.addListener(_onRefreshSignal);
+  }
+
+  @override
+  void dispose() {
+    appRefreshTick.removeListener(_onRefreshSignal);
+    super.dispose();
+  }
+
+  // A push arrived or the app resumed — re-fetch this order.
+  void _onRefreshSignal() {
+    if (mounted && !_paying) _refresh();
   }
 
   Future<void> _refresh() async {

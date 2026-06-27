@@ -5,6 +5,7 @@ import 'package:customer/features/order/models/order.dart';
 import 'package:customer/features/order/services/order_service.dart';
 import 'package:customer/features/order/services/order_payment.dart';
 import 'package:customer/core/widgets/product_image.dart';
+import 'package:customer/core/utils/refresh_bus.dart';
 import 'package:customer/features/auth/state/auth_provider.dart';
 import 'package:customer/features/auth/screens/login_screen.dart';
 import 'package:customer/features/order/screens/order_detail_screen.dart';
@@ -34,6 +35,23 @@ class _OrdersScreenState extends State<OrdersScreen> {
   Future<List<CustomerOrderSummary>>? _future;
   bool _wasLoggedIn = false;
   String? _payingId; // order currently being paid (shows a spinner)
+
+  @override
+  void initState() {
+    super.initState();
+    appRefreshTick.addListener(_onRefreshSignal);
+  }
+
+  @override
+  void dispose() {
+    appRefreshTick.removeListener(_onRefreshSignal);
+    super.dispose();
+  }
+
+  // A push arrived or the app resumed — re-fetch if signed in.
+  void _onRefreshSignal() {
+    if (mounted && _wasLoggedIn) _refresh();
+  }
 
   Future<void> _refresh() async {
     final next = context.read<OrderService>().listOrders();

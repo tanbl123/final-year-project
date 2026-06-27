@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:customer/core/utils/refresh_bus.dart';
 import 'package:customer/features/cart/state/cart_provider.dart';
 import 'package:customer/features/cart/screens/cart_screen.dart';
 import 'package:customer/features/catalog/screens/catalog_screen.dart';
@@ -32,7 +33,7 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   static const _tabs = [
     CatalogScreen(),
     WishlistScreen(),
@@ -40,6 +41,24 @@ class _MainShellState extends State<MainShell> {
     OrdersScreen(),
     ProfileScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Returning to the foreground may mean statuses changed while away.
+    if (state == AppLifecycleState.resumed) bumpRefresh();
+  }
 
   @override
   Widget build(BuildContext context) {

@@ -2,6 +2,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'package:customer/firebase_options.dart';
+import 'package:customer/core/utils/refresh_bus.dart';
 import 'package:customer/features/notification/services/notification_service.dart';
 
 /// Firebase Cloud Messaging client (background push).
@@ -28,9 +29,16 @@ class PushService {
       await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
       _available = true;
       // FCM shows tray notifications itself when the app is backgrounded; in the
-      // foreground we just refresh the bell.
-      FirebaseMessaging.onMessage.listen((_) => onMessageCallback?.call());
-      FirebaseMessaging.onMessageOpenedApp.listen((_) => onMessageCallback?.call());
+      // foreground we refresh the bell AND signal order screens to re-fetch
+      // (a push usually means a status changed).
+      FirebaseMessaging.onMessage.listen((_) {
+        onMessageCallback?.call();
+        bumpRefresh();
+      });
+      FirebaseMessaging.onMessageOpenedApp.listen((_) {
+        onMessageCallback?.call();
+        bumpRefresh();
+      });
     } catch (_) {
       _available = false; // Firebase not configured on this build → no push
     }
