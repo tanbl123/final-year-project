@@ -32,7 +32,11 @@ class OrderDetailScreen extends StatefulWidget {
 }
 
 class _OrderDetailScreenState extends State<OrderDetailScreen> {
-  late Future<CustomerOrder> _future;
+  // The loaded order is kept in state (not a FutureBuilder) so background
+  // refreshes (poll / push / resume) update it WITHOUT tearing the subtree down
+  // to a loading spinner — which previously crashed when a dialog was open.
+  CustomerOrder? _order;
+  Object? _error;
   bool _paying = false;
   Timer? _poll; // scoped polling while an active delivery is on screen
 
@@ -44,8 +48,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _future = context.read<OrderService>().getOrder(widget.orderId);
-    _future.then(_managePolling).catchError((_) {});
+    _refresh();
     appRefreshTick.addListener(_onRefreshSignal);
   }
 
@@ -61,12 +64,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     if (mounted && !_paying) _refresh();
   }
 
+  /// Re-fetch the order, keeping the current one visible meanwhile (no spinner
+  /// flash, no subtree teardown).
   Future<void> _refresh() async {
-    final next = context.read<OrderService>().getOrder(widget.orderId);
-    setState(() => _future = next);
     try {
-      _managePolling(await next);
-    } catch (_) {}
+      final o = await context.read<OrderService>().getOrder(widget.orderId);
+      if (!mounted) return;
+      setState(() {
+        _order = o;
+        _error = null;
+      });
+      _managePolling(o);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e);
+    }
   }
 
   /// Start a 20s poll only while this order is an active (in-transit) delivery;
@@ -108,35 +120,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Future<void> _requestRefund() async {
-    final reasonCtrl = TextEditingController();
-    final ok = await showDialog<bool>(
+    // The dialog owns its TextEditingController and disposes it in its own
+    // State, so the controller is never disposed across an async gap.
+    final reason = await showDialog<String>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Request a refund'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('Tell us why you want a refund. An admin will review your request.'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: reasonCtrl,
-              autofocus: true,
-              minLines: 2,
-              maxLines: 4,
-              maxLength: 255,
-              decoration: const InputDecoration(hintText: 'Reason', border: OutlineInputBorder()),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Submit')),
-        ],
-      ),
+      builder: (_) => const _RefundDialog(),
     );
-    final reason = reasonCtrl.text.trim();
-    reasonCtrl.dispose();
-    if (ok != true) return;
+    if (reason == null) return; // cancelled
     if (reason.isEmpty) {
       if (mounted) context.showSnack('A reason is required.');
       return;
@@ -157,39 +147,34 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<CustomerOrder>(
-      future: _future,
-      builder: (context, snap) {
-        final order = snap.hasData ? snap.data : null;
-        final awaiting = order?.orderStatus == 'Placed';
-        return Scaffold(
-          backgroundColor: Colors.grey.shade100,
-          appBar: AppBar(
-            title: Text('Order ${widget.orderId}'),
-            backgroundColor: Colors.white,
-            surfaceTintColor: Colors.white,
-          ),
-          body: snap.connectionState == ConnectionState.waiting
-              ? const Center(child: CircularProgressIndicator())
-              : snap.hasError
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Text(snap.error.toString(),
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(color: Colors.grey)),
-                      ),
-                    )
-                  : RefreshIndicator(onRefresh: _refresh, child: _body(context, order!)),
-          bottomNavigationBar: order == null
-              ? null
-              : awaiting
-                  ? _payBar(context, order)
-                  : _canRequestRefund(order)
-                      ? _refundBar(context)
-                      : null,
-        );
-      },
+    final order = _order;
+    final awaiting = order?.orderStatus == 'Placed';
+    return Scaffold(
+      backgroundColor: Colors.grey.shade100,
+      appBar: AppBar(
+        title: Text('Order ${widget.orderId}'),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+      ),
+      body: order == null
+          ? (_error != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(_error.toString(),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.grey)),
+                  ),
+                )
+              : const Center(child: CircularProgressIndicator()))
+          : RefreshIndicator(onRefresh: _refresh, child: _body(context, order)),
+      bottomNavigationBar: order == null
+          ? null
+          : awaiting
+              ? _payBar(context, order)
+              : _canRequestRefund(order)
+                  ? _refundBar(context)
+                  : null,
     );
   }
 
@@ -571,5 +556,52 @@ class _ParcelBlock extends StatelessWidget {
     final h = l.hour % 12 == 0 ? 12 : l.hour % 12;
     final ampm = l.hour < 12 ? 'AM' : 'PM';
     return '${l.day}/${l.month}/${l.year} · $h:${l.minute.toString().padLeft(2, '0')} $ampm';
+  }
+}
+
+// ── Self-contained refund dialog (owns + disposes its own controller) ───────
+class _RefundDialog extends StatefulWidget {
+  const _RefundDialog();
+
+  @override
+  State<_RefundDialog> createState() => _RefundDialogState();
+}
+
+class _RefundDialogState extends State<_RefundDialog> {
+  final _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Request a refund'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Tell us why you want a refund. An admin will review your request.'),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _ctrl,
+            autofocus: true,
+            minLines: 2,
+            maxLines: 4,
+            maxLength: 255,
+            decoration: const InputDecoration(hintText: 'Reason', border: OutlineInputBorder()),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: () => Navigator.of(context).pop(_ctrl.text.trim()),
+          child: const Text('Submit'),
+        ),
+      ],
+    );
   }
 }
