@@ -126,15 +126,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       context: context,
       builder: (_) => const _RefundDialog(),
     );
-    if (reason == null) return; // cancelled
-    if (reason.isEmpty) {
-      if (mounted) context.showSnack('A reason is required.');
-      return;
-    }
-    if (reason.length < 5) {
-      if (mounted) context.showSnack('Please give a bit more detail (at least 5 characters).');
-      return;
-    }
+    if (reason == null) return; // cancelled (dialog validated the reason inline)
     try {
       await context.read<OrderService>().requestRefund(widget.orderId, reason);
       if (!mounted) return;
@@ -569,11 +561,25 @@ class _RefundDialog extends StatefulWidget {
 
 class _RefundDialogState extends State<_RefundDialog> {
   final _ctrl = TextEditingController();
+  String? _error;
 
   @override
   void dispose() {
     _ctrl.dispose();
     super.dispose();
+  }
+
+  void _submit() {
+    final reason = _ctrl.text.trim();
+    if (reason.isEmpty) {
+      setState(() => _error = 'A reason is required.');
+      return;
+    }
+    if (reason.length < 5) {
+      setState(() => _error = 'Please give a bit more detail (at least 5 characters).');
+      return;
+    }
+    Navigator.of(context).pop(reason);
   }
 
   @override
@@ -591,16 +597,20 @@ class _RefundDialogState extends State<_RefundDialog> {
             minLines: 2,
             maxLines: 4,
             maxLength: 255,
-            decoration: const InputDecoration(hintText: 'Reason', border: OutlineInputBorder()),
+            decoration: InputDecoration(
+              hintText: 'Reason',
+              border: const OutlineInputBorder(),
+              errorText: _error, // inline error, not a snackbar
+            ),
+            onChanged: (_) {
+              if (_error != null) setState(() => _error = null);
+            },
           ),
         ],
       ),
       actions: [
         TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(_ctrl.text.trim()),
-          child: const Text('Submit'),
-        ),
+        FilledButton(onPressed: _submit, child: const Text('Submit')),
       ],
     );
   }
