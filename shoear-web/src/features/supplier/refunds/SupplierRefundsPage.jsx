@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { getSupplierRefunds } from './refundService';
+import { getSupplierRefunds, refundProofUrls } from './refundService';
 import Pagination from '../../../components/Pagination';
 import { usePagination } from '../../../hooks/usePagination';
 
@@ -96,9 +96,14 @@ function SupplierRefundsPage() {
                   </td>
                   <td className="text-muted small">{new Date(r.requestDate).toLocaleDateString()}</td>
                   <td className="text-center">
-                    {r.refundProof
-                      ? <a href={r.refundProof} target="_blank" rel="noreferrer">View</a>
-                      : <span className="text-muted">—</span>}
+                    {(() => {
+                      const urls = refundProofUrls(r.refundProof);
+                      if (urls.length === 0) return <span className="text-muted">—</span>;
+                      if (urls.length === 1) return <a href={urls[0]} target="_blank" rel="noreferrer">View</a>;
+                      return urls.map((u, i) => (
+                        <a key={i} href={u} target="_blank" rel="noreferrer" className="me-2">#{i + 1}</a>
+                      ));
+                    })()}
                   </td>
                 </tr>
               ))}

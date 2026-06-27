@@ -136,7 +136,15 @@ function handleCreateRefund(PDO $pdo, array $auth, string $orderId): void {
   $customerId = requireCustomerId($pdo, $auth);
   $body   = getJsonBody();
   $reason = trim($body['refundReason'] ?? '');
-  $proof  = trim($body['refundProof'] ?? '');
+  // refundProof may be a single URL (legacy) or an array of URLs (multiple
+  // evidence photos). Store one URL as-is, or a JSON array for several.
+  $proofRaw = $body['refundProof'] ?? null;
+  if (is_array($proofRaw)) {
+    $urls  = array_values(array_filter(array_map(fn($u) => trim((string) $u), $proofRaw)));
+    $proof = $urls ? (count($urls) === 1 ? $urls[0] : json_encode($urls)) : '';
+  } else {
+    $proof = trim((string) $proofRaw);
+  }
   if ($reason === '') {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A refund reason is required.']);
   }

@@ -402,7 +402,7 @@ CREATE TABLE refund (
     refundAmount DECIMAL(10,2) NOT NULL,
     refundStatus ENUM('Pending','Approved','Rejected','Completed') NOT NULL DEFAULT 'Pending',
     requestDate  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    refundProof  VARCHAR(255)  NULL,                      -- supporting evidence photo
+    refundProof  TEXT          NULL,                      -- evidence photo URL, or JSON array of URLs
     PRIMARY KEY (refundId),
     KEY idx_refund_order (orderId),
     KEY idx_refund_customer (customerId),

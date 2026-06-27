@@ -124,17 +124,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Future<void> _requestRefund() async {
     // The dialog owns its controller/image and validates inline; it returns the
     // reason + an optional proof photo only once valid.
-    final result = await showDialog<(String, File?)>(
+    final result = await showDialog<(String, List<File>)>(
       context: context,
       builder: (_) => const _RefundDialog(),
     );
     if (result == null) return; // cancelled
-    final (reason, proof) = result;
+    final (reason, proofs) = result;
     final orders = context.read<OrderService>();
     try {
-      String? proofUrl;
-      if (proof != null) proofUrl = await orders.uploadRefundProof(proof);
-      await orders.requestRefund(widget.orderId, reason, refundProof: proofUrl);
+      final urls = <String>[];
+      for (final p in proofs) {
+        urls.add(await orders.uploadRefundProof(p));
+      }
+      await orders.requestRefund(widget.orderId, reason, refundProofs: urls);
       if (!mounted) return;
       context.showSnack('Refund request submitted.');
       _refresh();
@@ -566,9 +568,10 @@ class _RefundDialog extends StatefulWidget {
 }
 
 class _RefundDialogState extends State<_RefundDialog> {
+  static const _maxPhotos = 5;
   final _ctrl = TextEditingController();
   String? _error;
-  File? _proof; // optional supporting photo
+  final List<File> _proofs = []; // optional supporting photos
 
   @override
   void dispose() {
@@ -577,6 +580,7 @@ class _RefundDialogState extends State<_RefundDialog> {
   }
 
   Future<void> _pickPhoto() async {
+    if (_proofs.length >= _maxPhotos) return;
     // Let the customer take a photo on the spot or choose from the gallery.
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
@@ -604,7 +608,7 @@ class _RefundDialogState extends State<_RefundDialog> {
       maxWidth: 1200,
       imageQuality: 85,
     );
-    if (picked != null) setState(() => _proof = File(picked.path));
+    if (picked != null) setState(() => _proofs.add(File(picked.path)));
   }
 
   void _submit() {
@@ -617,7 +621,7 @@ class _RefundDialogState extends State<_RefundDialog> {
       setState(() => _error = 'Please give a bit more detail (at least 5 characters).');
       return;
     }
-    Navigator.of(context).pop((reason, _proof));
+    Navigator.of(context).pop((reason, _proofs));
   }
 
   @override
@@ -646,28 +650,48 @@ class _RefundDialogState extends State<_RefundDialog> {
             },
           ),
           const SizedBox(height: 4),
-          // Optional supporting photo (per refund policy)
-          if (_proof == null)
+          // Optional supporting photos (per refund policy) — up to _maxPhotos.
+          if (_proofs.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (int i = 0; i < _proofs.length; i++)
+                    Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(_proofs[i], width: 56, height: 56, fit: BoxFit.cover),
+                        ),
+                        Positioned(
+                          top: -8,
+                          right: -8,
+                          child: IconButton(
+                            iconSize: 18,
+                            visualDensity: VisualDensity.compact,
+                            icon: const CircleAvatar(
+                              radius: 9,
+                              backgroundColor: Colors.black54,
+                              child: Icon(Icons.close, size: 12, color: Colors.white),
+                            ),
+                            onPressed: () => setState(() => _proofs.removeAt(i)),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          if (_proofs.length < _maxPhotos)
             OutlinedButton.icon(
               onPressed: _pickPhoto,
               icon: const Icon(Icons.add_a_photo_outlined, size: 18),
-              label: const Text('Add a photo (optional)'),
-            )
-          else
-            Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.file(_proof!, width: 48, height: 48, fit: BoxFit.cover),
-                ),
-                const SizedBox(width: 10),
-                const Expanded(child: Text('Photo attached', style: TextStyle(fontSize: 13))),
-                IconButton(
-                  icon: const Icon(Icons.close, size: 18),
-                  tooltip: 'Remove photo',
-                  onPressed: () => setState(() => _proof = null),
-                ),
-              ],
+              label: Text(_proofs.isEmpty
+                  ? 'Add a photo (optional)'
+                  : 'Add another (${_proofs.length}/$_maxPhotos)'),
             ),
         ],
       ),

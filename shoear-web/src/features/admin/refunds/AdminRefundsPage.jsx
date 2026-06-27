@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getRefunds, setRefundStatus } from '../../supplier/refunds/refundService';
+import { getRefunds, setRefundStatus, refundProofUrls } from '../../supplier/refunds/refundService';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Toast from '../../../components/Toast';
 import Pagination from '../../../components/Pagination';
@@ -133,9 +133,14 @@ function AdminRefundsPage() {
                     <span className={`badge text-bg-${STATUS_COLORS[r.refundStatus] || 'secondary'}`}>{r.refundStatus}</span>
                   </td>
                   <td>
-                    {r.refundProof
-                      ? <a href={r.refundProof} target="_blank" rel="noreferrer">View</a>
-                      : <span className="text-muted">—</span>}
+                    {(() => {
+                      const urls = refundProofUrls(r.refundProof);
+                      if (urls.length === 0) return <span className="text-muted">—</span>;
+                      if (urls.length === 1) return <a href={urls[0]} target="_blank" rel="noreferrer">View</a>;
+                      return urls.map((u, i) => (
+                        <a key={i} href={u} target="_blank" rel="noreferrer" className="me-2">#{i + 1}</a>
+                      ));
+                    })()}
                   </td>
                   <td className="text-center">{renderActions(r)}</td>
                 </tr>

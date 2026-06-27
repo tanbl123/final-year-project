@@ -20,3 +20,16 @@ export function getSupplierRefunds(filters = {}) {
   const suffix = qs.toString() ? `?${qs.toString()}` : '';
   return apiGet(`/supplier/refunds${suffix}`, getToken());
 }
+
+// refundProof may be a single URL (legacy) or a JSON array of URLs (multiple
+// evidence photos). Always return an array of URLs for display.
+export function refundProofUrls(proof) {
+  if (!proof) return [];
+  try {
+    const arr = JSON.parse(proof);
+    if (Array.isArray(arr)) return arr.filter(Boolean);
+  } catch {
+    /* not JSON → treat as a single URL */
+  }
+  return [proof];
+}

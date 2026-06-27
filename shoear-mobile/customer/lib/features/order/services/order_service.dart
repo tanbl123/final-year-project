@@ -84,13 +84,13 @@ class OrderService {
     return data['url']?.toString() ?? '';
   }
 
-  /// POST /orders/{id}/refund — request a (full) refund, optionally with a
-  /// proof image URL. Throws on failure (e.g. not a paid order, or a refund
-  /// already in progress).
-  Future<void> requestRefund(String orderId, String reason, {String? refundProof}) async {
+  /// POST /orders/{id}/refund — request a (full) refund, optionally with one or
+  /// more proof image URLs. Throws on failure (e.g. not a paid order, or a
+  /// refund already in progress).
+  Future<void> requestRefund(String orderId, String reason, {List<String>? refundProofs}) async {
     await api.post('/orders/$orderId/refund', {
       'refundReason': reason,
-      if (refundProof != null && refundProof.isNotEmpty) 'refundProof': refundProof,
+      if (refundProofs != null && refundProofs.isNotEmpty) 'refundProof': refundProofs,
     });
   }
 }
