@@ -100,6 +100,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     return DefaultTabController(
       length: _tabs.length,
       child: Scaffold(
+        backgroundColor: Colors.grey.shade100,
         appBar: AppBar(
           title: const Text('My Orders'),
           bottom: loggedIn
@@ -215,79 +216,132 @@ class _OrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
     final dt = order.orderDate == null ? null : DateTime.tryParse(order.orderDate!)?.toLocal();
     final dateStr = dt == null ? '' : '${dt.day}/${dt.month}/${dt.year}';
     final payBy = _payByLabel();
-    return Card(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          ListTile(
-            onTap: onTap,
-            title: Row(
-              children: [
-                Text(order.orderId, style: const TextStyle(fontWeight: FontWeight.bold)),
-                const Spacer(),
-                Text('RM ${order.total.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-              ],
-            ),
-            subtitle: Column(
+    final statusColor = order.awaitingPayment
+        ? Colors.orange.shade700
+        : (kOrderStatusColors[order.orderStatus] ?? Colors.grey);
+    final statusLabel =
+        order.awaitingPayment ? 'To Pay' : prettyStatus(order.orderStatus);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 8,
+              offset: const Offset(0, 2)),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 4),
-                Text('$dateStr · ${order.itemCount} item(s)', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
+                // header: icon + id/date + status
+                Row(
                   children: [
-                    _Chip(
-                      label: order.awaitingPayment ? 'To Pay' : prettyStatus(order.orderStatus),
-                      color: order.awaitingPayment
-                          ? Colors.orange.shade700
-                          : (kOrderStatusColors[order.orderStatus] ?? Colors.grey),
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: primary.withValues(alpha: 0.10),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(Icons.receipt_long_outlined,
+                          size: 20, color: primary),
                     ),
-                    if (order.deliveryStatus != null)
-                      _Chip(label: 'Parcel: ${prettyStatus(order.deliveryStatus!)}', color: Colors.teal, outlined: true),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(order.orderId,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 15)),
+                          const SizedBox(height: 2),
+                          Text(
+                              '$dateStr · ${order.itemCount} item${order.itemCount == 1 ? '' : 's'}',
+                              style: TextStyle(
+                                  color: Colors.grey.shade600, fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    _Chip(label: statusLabel, color: statusColor),
                   ],
                 ),
-              ],
-            ),
-            trailing: const Icon(Icons.chevron_right),
-          ),
-          // ── Pay-now bar for unpaid orders ──────────────────────────────
-          if (order.awaitingPayment)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      payBy == null
-                          ? 'Awaiting payment'
-                          : 'Pay before $payBy or it will be cancelled',
-                      style: TextStyle(fontSize: 12, color: Colors.orange.shade800),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: paying ? null : onPay,
-                    style: FilledButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 18),
-                    ),
-                    child: paying
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Text('Pay now'),
+                if (order.deliveryStatus != null) ...[
+                  const SizedBox(height: 8),
+                  _Chip(
+                      label: 'Parcel: ${prettyStatus(order.deliveryStatus!)}',
+                      color: Colors.teal,
+                      outlined: true),
+                ],
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 10),
+                  child: Divider(height: 1),
+                ),
+                // total
+                Row(
+                  children: [
+                    Text('Total',
+                        style: TextStyle(
+                            color: Colors.grey.shade700, fontSize: 13)),
+                    const Spacer(),
+                    Text('RM ${order.total.toStringAsFixed(2)}',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: primary)),
+                  ],
+                ),
+                // pay-now bar for unpaid orders
+                if (order.awaitingPayment) ...[
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          payBy == null
+                              ? 'Awaiting payment'
+                              : 'Pay before $payBy or it will be cancelled',
+                          style: TextStyle(
+                              fontSize: 11.5, color: Colors.orange.shade800),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: paying ? null : onPay,
+                        style: FilledButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                        ),
+                        child: paying
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Text('Pay now'),
+                      ),
+                    ],
                   ),
                 ],
-              ),
+              ],
             ),
-        ],
+          ),
+        ),
       ),
     );
   }
