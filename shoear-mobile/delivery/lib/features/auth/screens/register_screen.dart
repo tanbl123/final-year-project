@@ -359,6 +359,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             style: TextStyle(fontSize: 13),
           ),
           const SizedBox(height: 16),
+          _sectionHeader('Personal details', top: 0),
           _field(
             controller: _fullName,
             focusNode:  _fullNameFocus,
@@ -384,7 +385,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+]'))],
             onChanged: (v) => setState(() => _phoneError = _validatePhone(v)),
           ),
-          // ── Account security ──
+          _sectionHeader('Account security'),
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: TextField(
@@ -424,7 +425,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             ),
           ),
-          // ── Vehicle details ──
+          _sectionHeader('Vehicle details'),
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: DropdownButtonFormField<String>(
@@ -468,11 +469,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             ),
           ),
-          // ── Identity & licence (KYC) ──
-          const Padding(
-            padding: EdgeInsets.only(bottom: 10),
-            child: Text('Identity & licence', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
+          _sectionHeader('Identity & licence'),
           _photoTile(label: 'Profile photo', url: _avatarUrl, uploading: _upAvatar, onPick: () => _pickPhoto('avatar')),
           const SizedBox(height: 12),
           _field(
@@ -506,6 +503,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
         ],
+      );
+
+  // A bold group label so the long form reads as clear, scannable sections.
+  // [top] adds breathing room above sections after the first.
+  Widget _sectionHeader(String text, {double top = 8}) => Padding(
+        padding: EdgeInsets.only(top: top, bottom: 10),
+        child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold)),
       );
 
   Widget _photoTile({
