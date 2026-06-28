@@ -44,6 +44,7 @@ class AuthService {
     required String icPhotoUrl,
     required String dateOfBirth,     // YYYY-MM-DD
     required bool termsAccepted,
+    required List<String> coverageZones,
     required String avatarUrl,
   }) async {
     final data = await api.post('/auth/register/courier', {
@@ -64,6 +65,7 @@ class AuthService {
       'icPhotoUrl': icPhotoUrl,
       'dateOfBirth': dateOfBirth,
       'termsAccepted': termsAccepted,
+      'coverageZones': coverageZones,
       'avatarUrl': avatarUrl,
     });
     return (data as Map<String, dynamic>)['message']?.toString() ??

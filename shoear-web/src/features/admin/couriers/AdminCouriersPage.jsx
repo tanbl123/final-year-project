@@ -169,6 +169,14 @@ function AdminCouriersPage() {
                         ? <span className="text-success">✓ T&amp;C / PDPA agreed</span>
                         : <span className="text-danger">T&amp;C not agreed</span>}
                     </div>
+                    <div className="mt-1">
+                      <span className="text-muted">Covers:</span>{' '}
+                      {c.coverageZones
+                        ? c.coverageZones.split(',').filter(Boolean).map((z) => (
+                            <span key={z} className="badge bg-info-subtle text-dark border me-1">{z}</span>
+                          ))
+                        : '—'}
+                    </div>
                   </td>
                   <td className="text-muted small">{new Date(c.created_at).toLocaleDateString()}</td>
                   <td className="text-end text-nowrap">

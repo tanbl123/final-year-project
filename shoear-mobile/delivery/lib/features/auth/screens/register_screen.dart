@@ -63,6 +63,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _termsAccepted = false;
   String? _licenseClassError, _licenseExpiryError, _dobError, _termsError;
 
+  // Delivery coverage: states the courier will deliver to (drives auto-dispatch).
+  final Set<String> _coverageZones = {};
+  String? _coverageError;
+  // The 16 Malaysian states + federal territories (must match the backend list).
+  static const _states = [
+    'Johor', 'Kedah', 'Kelantan', 'Melaka', 'Negeri Sembilan', 'Pahang',
+    'Perak', 'Perlis', 'Pulau Pinang', 'Sabah', 'Sarawak', 'Selangor',
+    'Terengganu', 'Kuala Lumpur', 'Labuan', 'Putrajaya',
+  ];
+
   final _fullNameFocus     = FocusNode();
   final _emailFocus        = FocusNode();
   final _phoneFocus        = FocusNode();
@@ -284,6 +294,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _licenseExpiryError = _validateLicenseExpiry();
       _dobError           = _validateDob();
       _termsError         = _termsAccepted ? null : 'Please agree to the Terms and PDPA notice.';
+      _coverageError      = _coverageZones.isEmpty ? 'Select at least one delivery area.' : null;
       _docsError = _photosUploaded ? null : 'Please add your profile photo, licence photo and IC photo.';
     });
     if (_fullNameError != null || _emailError != null || _phoneError != null ||
@@ -291,7 +302,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _vehiclePlateError != null || _passwordError != null || _confirmError != null ||
         _licenseNumberError != null || _icNumberError != null || _docsError != null ||
         _licenseClassError != null || _licenseExpiryError != null || _dobError != null ||
-        _termsError != null) return;
+        _termsError != null || _coverageError != null) return;
 
     setState(() => _loading = true);
     try {
@@ -336,6 +347,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             icPhotoUrl:       _icPhotoUrl ?? '',
             dateOfBirth:      _dateOfBirth != null ? _fmtDate(_dateOfBirth!) : '',
             termsAccepted:    _termsAccepted,
+            coverageZones:    _coverageZones.toList(),
             avatarUrl:        _avatarUrl ?? '',
           );
       if (!mounted) return;
@@ -528,6 +540,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             ),
           ),
+          _sectionHeader('Delivery coverage'),
+          const Padding(
+            padding: EdgeInsets.only(bottom: 8),
+            child: Text('Select the states you can deliver to. Orders are assigned '
+                'to couriers who cover the delivery area.', style: TextStyle(fontSize: 12)),
+          ),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              for (final s in _states)
+                FilterChip(
+                  label: Text(s),
+                  selected: _coverageZones.contains(s),
+                  onSelected: (sel) => setState(() {
+                    if (sel) { _coverageZones.add(s); } else { _coverageZones.remove(s); }
+                    if (_coverageZones.isNotEmpty) _coverageError = null;
+                  }),
+                ),
+            ],
+          ),
+          if (_coverageError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(_coverageError!, style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 12)),
+            ),
           _sectionHeader('Identity & licence'),
           _photoTile(label: 'Profile photo', url: _avatarUrl, uploading: _upAvatar,
               error: _docsError != null && _avatarUrl == null, onPick: () => _pickPhoto('avatar')),

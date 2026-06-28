@@ -398,6 +398,13 @@ function handleRegisterCourier(PDO $pdo): void {
   $dateOfBirth     = trim($body['dateOfBirth'] ?? '');     // YYYY-MM-DD
   $termsAccepted   = ($body['termsAccepted'] ?? false) === true;
   $avatarUrl       = trim($body['avatarUrl'] ?? '');
+  // Coverage zones: states the courier delivers to. Accept an array or a
+  // comma-separated string; normalise to a clean, de-duplicated list.
+  $rawZones        = $body['coverageZones'] ?? [];
+  if (is_string($rawZones)) { $rawZones = explode(',', $rawZones); }
+  $coverageZones   = is_array($rawZones)
+    ? array_values(array_unique(array_filter(array_map('trim', $rawZones))))
+    : [];
 
   if ($fullName === '' || $email === '' || $phoneNumber === '' ||
       $vehicleBrand === '' || $vehicleModel === '' || $vehiclePlate === '') {
@@ -458,6 +465,15 @@ function handleRegisterCourier(PDO $pdo): void {
   // PDPA / Terms consent is mandatory.
   if (!$termsAccepted) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'You must agree to the Terms and the data-use (PDPA) notice.']);
+  }
+  // Coverage zones: at least one, each a recognised Malaysian state.
+  if (count($coverageZones) === 0) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please select at least one delivery coverage area.']);
+  }
+  foreach ($coverageZones as $z) {
+    if (!in_array($z, MY_STATES, true)) {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'One of your coverage areas is not a valid state.']);
+    }
   }
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please enter a valid email.']);
@@ -522,11 +538,11 @@ function handleRegisterCourier(PDO $pdo): void {
     )->execute(['id' => $userId, 'un' => $username, 'pw' => $hash, 'em' => $email, 'fn' => $fullName, 'ph' => $phoneNumber, 'av' => $avatarUrl !== '' ? $avatarUrl : null]);
 
     $deliveryPersonnelId = nextId($pdo, 'delivery_personnel', 'deliveryPersonnelId', 'DEL');
-    $pdo->prepare('INSERT INTO delivery_personnel (deliveryPersonnelId, userId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate, licenseNumber, licensePhotoUrl, licenseClass, licenseExpiry, icNumber, icPhotoUrl, dateOfBirth, termsAcceptedAt)
-                   VALUES (:did, :uid, :vt, :vb, :vm, :vp, :ln, :lp, :lc, :le, :ic, :ip, :dob, NOW())')
+    $pdo->prepare('INSERT INTO delivery_personnel (deliveryPersonnelId, userId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate, licenseNumber, licensePhotoUrl, licenseClass, licenseExpiry, icNumber, icPhotoUrl, dateOfBirth, termsAcceptedAt, coverageZones)
+                   VALUES (:did, :uid, :vt, :vb, :vm, :vp, :ln, :lp, :lc, :le, :ic, :ip, :dob, NOW(), :cz)')
         ->execute(['did' => $deliveryPersonnelId, 'uid' => $userId, 'vt' => $vehicleType, 'vb' => $vehicleBrand, 'vm' => $vehicleModel, 'vp' => $vehiclePlate,
                    'ln' => $licenseNumber, 'lp' => $licensePhotoUrl, 'lc' => $licenseClass, 'le' => $licenseExpiry,
-                   'ic' => $icNumber, 'ip' => $icPhotoUrl, 'dob' => $dateOfBirth]);
+                   'ic' => $icNumber, 'ip' => $icPhotoUrl, 'dob' => $dateOfBirth, 'cz' => implode(',', $coverageZones)]);
 
     $pdo->commit();
   } catch (Throwable $e) {

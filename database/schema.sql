@@ -140,6 +140,7 @@ CREATE TABLE delivery_personnel (
     icPhotoUrl          VARCHAR(255) NULL,                  -- photo of the IC
     dateOfBirth         DATE         NULL,                  -- for the 18+ eligibility check
     termsAcceptedAt     DATETIME     NULL,                  -- when PDPA/T&C consent was given
+    coverageZones       VARCHAR(255) NOT NULL DEFAULT '',   -- comma-separated states the courier delivers to
     PRIMARY KEY (deliveryPersonnelId),
     UNIQUE KEY uq_delivery_user (userId),
     CONSTRAINT fk_delivery_user FOREIGN KEY (userId) REFERENCES `user`(userId)

@@ -35,12 +35,20 @@ function scoreCourier(array $c): float {
 
 // Rank every Active courier best-first. Each row carries the inputs the score
 // is built from, so the admin UI can show *why* a courier was chosen (its load).
-function scoreCouriers(PDO $pdo): array {
+//
+// [state] is the order's delivery state. When given, couriers whose coverage
+// zone includes that state are ranked ABOVE those who don't (zone-based last-mile
+// dispatch — a parcel for Selangor goes to a courier who covers Selangor). Each
+// row gets a `coversZone` flag the caller uses to hard-filter for auto-assign.
+// When [state] is null (e.g. the admin's manual-assign roster) every courier
+// counts as covering, so the ranking falls back to load only.
+function scoreCouriers(PDO $pdo, ?string $state = null): array {
   $rows = $pdo->query(
     "SELECT dp.deliveryPersonnelId,
             u.fullName,
             u.userId,
             dp.vehicleType, dp.vehicleBrand, dp.vehicleModel, dp.vehiclePlate,
+            dp.coverageZones,
             COUNT(d.deliveryId) AS activeLoad
        FROM delivery_personnel dp
        JOIN `user` u
@@ -48,19 +56,25 @@ function scoreCouriers(PDO $pdo): array {
        LEFT JOIN delivery d
          ON d.deliveryPersonnelId = dp.deliveryPersonnelId
         AND d.deliveryStatus IN ('Assigned', 'PickedUp', 'OutForDelivery')
-      GROUP BY dp.deliveryPersonnelId, u.fullName, u.userId, dp.vehicleType, dp.vehicleBrand, dp.vehicleModel, dp.vehiclePlate"
+      GROUP BY dp.deliveryPersonnelId, u.fullName, u.userId, dp.vehicleType, dp.vehicleBrand, dp.vehicleModel, dp.vehiclePlate, dp.coverageZones"
   )->fetchAll();
 
+  $wantZone = $state !== null && $state !== '';
   foreach ($rows as &$r) {
-    $r['activeLoad'] = (int) $r['activeLoad'];
-    $r['score']      = scoreCourier($r);
+    $r['activeLoad']    = (int) $r['activeLoad'];
+    $zones              = array_values(array_filter(array_map('trim', explode(',', (string) $r['coverageZones']))));
+    $r['coverageZones'] = $zones;
+    // No state to match → treat everyone as covering (load-only ranking).
+    $r['coversZone']    = $wantZone ? in_array($state, $zones, true) : true;
+    $r['score']         = scoreCourier($r);
   }
   unset($r);
 
-  // Best score first; deliveryPersonnelId as a stable tie-breaker so the pick
-  // is deterministic when several couriers are equally idle.
+  // Couriers covering the zone first; then best (lowest) score; then a stable
+  // id tie-breaker so the pick is deterministic when several are equally idle.
   usort($rows, function ($a, $b) {
-    return ($a['score'] <=> $b['score'])
+    return (($b['coversZone'] ? 1 : 0) <=> ($a['coversZone'] ? 1 : 0))
+        ?: ($a['score'] <=> $b['score'])
         ?: strcmp($a['deliveryPersonnelId'], $b['deliveryPersonnelId']);
   });
 
@@ -112,8 +126,19 @@ function assignDelivery(PDO $pdo, string $orderId, string $supplierId): array {
   $stmt->execute(['o' => $orderId, 's' => $supplierId]);
   $existing = $stmt->fetch();
 
-  $candidates = scoreCouriers($pdo);
-  $best       = $candidates[0] ?? null;     // best-scoring Active courier, or none
+  // Zone-based dispatch: only auto-assign a courier whose coverage zone includes
+  // the order's delivery state. If none is free the parcel stays Pending for the
+  // admin queue (a human can still assign across zones). Orders with no recorded
+  // state fall back to plain load-based selection.
+  $stState = $pdo->prepare("SELECT deliveryState FROM `order` WHERE orderId = :o");
+  $stState->execute(['o' => $orderId]);
+  $state = $stState->fetchColumn() ?: null;
+
+  $candidates = scoreCouriers($pdo, $state);
+  $best = null;
+  foreach ($candidates as $c) {           // already ranked covering-first, then load
+    if ($c['coversZone']) { $best = $c; break; }
+  }
 
   if ($existing) {
     // Only fill in a courier if it's still unassigned; never override a human's
