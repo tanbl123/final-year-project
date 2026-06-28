@@ -239,7 +239,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _vehiclePlateError = _validatePlate(_vehiclePlate.text);
       _passwordError     = _validatePassword(_password.text);
       _confirmError      = _validateConfirm();
-      _licenseNumberError = _validateLicenseNo(_licenseNumber.text);
+      // When "same as IC" is on the licence mirrors the (validated) IC, so the
+      // IC error is the only one to show; otherwise validate the typed licence.
+      _licenseNumberError = _licenseSameAsIc ? null : _validateLicenseNo(_licenseNumber.text);
       _icNumberError      = _validateIcNo(_icNumber.text);
       _docsError = _photosUploaded ? null : 'Please add your profile photo, licence photo and IC photo.';
     });
@@ -283,7 +285,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             vehiclePlate:     _vehiclePlate.text.trim(),
             password:         _password.text,
             verificationCode: code,
-            licenseNumber:    _licenseNumber.text.trim(),
+            licenseNumber:    _licenseSameAsIc ? _icNumber.text.trim() : _licenseNumber.text.trim(),
             licensePhotoUrl:  _licensePhotoUrl ?? '',
             icNumber:         _icNumber.text.trim(),
             icPhotoUrl:       _icPhotoUrl ?? '',
@@ -484,10 +486,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             onChanged: (v) => setState(() {
               _icNumberError = _validateIcNo(v);
-              // Keep the licence number mirrored while "same as IC" is on.
+              // Keep the licence number mirrored while "same as IC" is on. The
+              // licence field is read-only then, so its error stays hidden — the
+              // IC field's own error already tells the courier what to fix.
               if (_licenseSameAsIc) {
                 _licenseNumber.text = v.trim();
-                _licenseNumberError = _validateLicenseNo(_licenseNumber.text);
+                _licenseNumberError = null;
               }
             }),
           ),
@@ -508,7 +512,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               _licenseSameAsIc = checked ?? false;
               if (_licenseSameAsIc) {
                 _licenseNumber.text = _icNumber.text.trim();
-                _licenseNumberError = _validateLicenseNo(_licenseNumber.text);
+                _licenseNumberError = null;   // read-only now; IC error covers it
               }
             }),
             controlAffinity: ListTileControlAffinity.leading,
