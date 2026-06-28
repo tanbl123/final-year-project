@@ -13,7 +13,22 @@ function getOrCreateWishlistId(PDO $pdo, string $customerId): string {
   return $id;
 }
 
-function wishlistPayload(PDO $pdo, string $wishlistId): array {
+// Returns one PAGE of wishlist items, plus the FULL set of saved product ids
+// (so the app's heart icons everywhere stay correct) and the total count.
+function wishlistPayload(PDO $pdo, string $wishlistId, int $page = 1, int $limit = 20): array {
+  $page   = max(1, $page);
+  $limit  = min(60, max(1, $limit));
+  $offset = ($page - 1) * $limit;
+
+  $total = (int) $pdo->query(
+    "SELECT COUNT(*) FROM wishlist_item WHERE wishlistId = " . $pdo->quote($wishlistId)
+  )->fetchColumn();
+
+  // every saved product id (lightweight) — drives hearts across the app
+  $idsStmt = $pdo->prepare('SELECT productId FROM wishlist_item WHERE wishlistId = :wid');
+  $idsStmt->execute(['wid' => $wishlistId]);
+  $savedIds = array_column($idsStmt->fetchAll(), 'productId');
+
   $stmt = $pdo->prepare(
     "SELECT wi.wishlistItemId, p.productId, p.productName AS name, p.productBrand AS brand,
             p.productPrice AS price, p.productStatus AS status, c.categoryName AS categoryName,
@@ -27,9 +42,13 @@ function wishlistPayload(PDO $pdo, string $wishlistId): array {
        JOIN product p  ON p.productId = wi.productId
        JOIN category c ON c.categoryId = p.categoryId
       WHERE wi.wishlistId = :wid
-      ORDER BY wi.wishlistAddedAt DESC"
+      ORDER BY wi.wishlistAddedAt DESC
+      LIMIT :limit OFFSET :offset"
   );
-  $stmt->execute(['wid' => $wishlistId]);
+  $stmt->bindValue(':wid', $wishlistId);
+  $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
+  $stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+  $stmt->execute();
 
   $items = [];
   foreach ($stmt->fetchAll() as $r) {
@@ -46,14 +65,24 @@ function wishlistPayload(PDO $pdo, string $wishlistId): array {
       'available'      => $r['status'] === 'Approved',   // still buyable?
     ];
   }
-  return ['wishlistId' => $wishlistId, 'items' => $items, 'itemCount' => count($items)];
+  // itemCount = TOTAL saved (used for the count badge), not the page size.
+  return [
+    'wishlistId' => $wishlistId,
+    'items'      => $items,
+    'itemCount'  => $total,
+    'total'      => $total,
+    'page'       => $page,
+    'savedIds'   => $savedIds,
+  ];
 }
 
-// GET /wishlist
+// GET /wishlist — optional ?page&limit for the wishlist screen's infinite scroll.
 function handleGetWishlist(PDO $pdo, array $auth): void {
   $customerId = requireCustomerId($pdo, $auth);
   $wishlistId = getOrCreateWishlistId($pdo, $customerId);
-  sendJson(200, true, wishlistPayload($pdo, $wishlistId));
+  $page  = (int) ($_GET['page'] ?? 1);
+  $limit = (int) ($_GET['limit'] ?? 20);
+  sendJson(200, true, wishlistPayload($pdo, $wishlistId, $page, $limit));
 }
 
 // POST /wishlist/items — body: { productId }. Idempotent (saving twice is fine).

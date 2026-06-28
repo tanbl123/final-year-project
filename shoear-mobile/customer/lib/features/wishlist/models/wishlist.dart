@@ -40,10 +40,20 @@ class WishlistItem {
 
 class Wishlist {
   final String wishlistId;
-  final List<WishlistItem> items;
-  final int itemCount;
+  final List<WishlistItem> items;  // one page of items
+  final int itemCount;             // total saved (count badge)
+  final int total;                 // total saved (for pagination)
+  final int page;                  // which page these items are
+  final List<String> savedIds;     // ALL saved product ids (hearts app-wide)
 
-  Wishlist({required this.wishlistId, required this.items, required this.itemCount});
+  Wishlist({
+    required this.wishlistId,
+    required this.items,
+    required this.itemCount,
+    this.total = 0,
+    this.page = 1,
+    this.savedIds = const [],
+  });
 
   factory Wishlist.fromJson(Map<String, dynamic> j) => Wishlist(
         wishlistId: j['wishlistId'] as String? ?? '',
@@ -51,5 +61,8 @@ class Wishlist {
             .map((e) => WishlistItem.fromJson(e as Map<String, dynamic>))
             .toList(),
         itemCount: (j['itemCount'] as num?)?.toInt() ?? 0,
+        total: (j['total'] as num?)?.toInt() ?? (j['itemCount'] as num?)?.toInt() ?? 0,
+        page: (j['page'] as num?)?.toInt() ?? 1,
+        savedIds: ((j['savedIds'] as List?) ?? []).map((e) => e.toString()).toList(),
       );
 }

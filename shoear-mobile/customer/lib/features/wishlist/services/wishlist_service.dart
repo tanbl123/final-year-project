@@ -6,9 +6,10 @@ class WishlistService {
   final ApiClient api;
   WishlistService(this.api);
 
-  /// GET /wishlist
-  Future<Wishlist> getWishlist() async =>
-      Wishlist.fromJson(await api.get('/wishlist') as Map<String, dynamic>);
+  /// GET /wishlist — one page of items + the full saved-id set.
+  Future<Wishlist> getWishlist({int page = 1, int limit = 20}) async =>
+      Wishlist.fromJson(await api.get('/wishlist',
+          query: {'page': '$page', 'limit': '$limit'}) as Map<String, dynamic>);
 
   /// POST /wishlist/items — save a product (idempotent).
   Future<Wishlist> add(String productId) async =>

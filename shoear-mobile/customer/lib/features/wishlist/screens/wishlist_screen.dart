@@ -17,11 +17,26 @@ class WishlistScreen extends StatefulWidget {
 }
 
 class _WishlistScreenState extends State<WishlistScreen> {
+  final _scroll = ScrollController();
+
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(_onScroll);
     if (context.read<AuthProvider>().isLoggedIn) {
       WidgetsBinding.instance.addPostFrameCallback((_) => context.read<WishlistProvider>().refresh());
+    }
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scroll.hasClients && _scroll.position.pixels >= _scroll.position.maxScrollExtent - 400) {
+      context.read<WishlistProvider>().loadMore();
     }
   }
 
@@ -76,18 +91,23 @@ class _WishlistScreenState extends State<WishlistScreen> {
 
     return RefreshIndicator(
       onRefresh: () => wl.refresh(),
-      child: GridView.builder(
-        padding: const EdgeInsets.all(12),
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 220,
-          childAspectRatio: 0.62,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-        ),
-        itemCount: items.length,
-        itemBuilder: (context, i) {
-          final it = items[i];
-          return Card(
+      child: CustomScrollView(
+        controller: _scroll,
+        physics: const AlwaysScrollableScrollPhysics(),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.all(12),
+            sliver: SliverGrid(
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 220,
+                childAspectRatio: 0.62,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+              ),
+              delegate: SliverChildBuilderDelegate(
+                (context, i) {
+                  final it = items[i];
+                  return Card(
             clipBehavior: Clip.antiAlias,
             child: InkWell(
               onTap: () => Navigator.of(context).push(
@@ -155,7 +175,19 @@ class _WishlistScreenState extends State<WishlistScreen> {
               ),
             ),
           );
-        },
+                },
+                childCount: items.length,
+              ),
+            ),
+          ),
+          if (wl.loadingMore)
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+            ),
+        ],
       ),
     );
   }
