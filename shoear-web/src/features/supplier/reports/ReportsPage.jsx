@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { getSalesReport } from './reportService';
 import { useAuth } from '../../auth/AuthContext';
+import ReportPeriodBar from '../../../components/ReportPeriodBar';
+
+const ALL_TIME = { from: null, to: null, label: 'All time' };
 
 const rm = (n) => 'RM ' + Number(n || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -20,20 +23,23 @@ function StatCard({ label, value, sub, color = 'dark' }) {
 
 function ReportsPage() {
   const { user } = useAuth();
+  const [range, setRange] = useState(ALL_TIME);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let active = true;
-    getSalesReport()
+    setLoading(true);
+    getSalesReport({ from: range.from, to: range.to })
       .then((d) => { if (active) setData(d); })
       .catch((err) => { if (active) setError(err.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [range.from, range.to]);
 
   const hasSales = !!data && data.summary.products > 0;
+  const growth = data?.period?.growthPct;
 
   async function exportPdf() {
     const { generateReportPdf } = await import('../../../utils/reportPdf'); // lazy: keep jsPDF out of the main bundle
@@ -41,6 +47,7 @@ function ReportsPage() {
     generateReportPdf({
       title: 'Sales Report',
       generatedBy: user?.fullName,
+      period: range.label,
       referencePrefix: 'SR',
       summary: [
         { label: 'Gross sales', value: rm(data.summary.grossSales) },
@@ -48,6 +55,9 @@ function ReportsPage() {
         { label: 'Net earnings (after commission)', value: rm(data.summary.netEarnings) },
         { label: 'Units sold', value: String(data.summary.unitsSold) },
         { label: 'Products sold', value: String(data.summary.products) },
+        ...(growth != null
+          ? [{ label: 'Gross sales vs previous period', value: `${growth > 0 ? '+' : ''}${growth}%` }]
+          : []),
       ],
       head: ['Product', 'Units', 'Gross sales', `Net (after ${rate}%)`],
       body: data.byProduct.map((p) => [
@@ -66,11 +76,23 @@ function ReportsPage() {
       <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">
         <div>
           <h1 className="mb-1">📊 Sales Report</h1>
-          <p className="text-muted">Your paid sales, and what you keep after platform commission.</p>
+          <p className="text-muted mb-0">Your paid sales, and what you keep after platform commission.</p>
         </div>
-        <button className="btn btn-outline-primary" onClick={exportPdf} disabled={!hasSales}>
-          ⬇ Export PDF
-        </button>
+        <div className="d-flex align-items-end gap-2 flex-wrap">
+          <ReportPeriodBar onChange={setRange} />
+          <button className="btn btn-outline-primary" onClick={exportPdf} disabled={!hasSales}>
+            ⬇ Export PDF
+          </button>
+        </div>
+      </div>
+
+      <div className="d-flex align-items-center gap-2 mb-3 mt-2">
+        <span className="text-muted small">Showing: <span className="fw-semibold">{range.label}</span></span>
+        {growth != null && (
+          <span className={`badge rounded-pill text-bg-${growth >= 0 ? 'success' : 'danger'}`}>
+            {growth >= 0 ? '▲' : '▼'} {Math.abs(growth)}% vs previous period
+          </span>
+        )}
       </div>
 
       {error && <div className="alert alert-danger py-2">{error}</div>}

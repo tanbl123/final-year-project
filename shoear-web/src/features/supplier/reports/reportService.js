@@ -1,6 +1,10 @@
 import { apiGet, getToken } from '../../../api/client';
 
 // The signed-in supplier's own sales report (summary + per-product breakdown).
-export function getSalesReport() {
-  return apiGet('/reports/sales', getToken());
+// Optional { from, to } (YYYY-MM-DD) scopes it to a reporting period.
+export function getSalesReport({ from, to } = {}) {
+  const qs = new URLSearchParams();
+  if (from && to) { qs.set('from', from); qs.set('to', to); }
+  const suffix = qs.toString() ? `?${qs}` : '';
+  return apiGet(`/reports/sales${suffix}`, getToken());
 }

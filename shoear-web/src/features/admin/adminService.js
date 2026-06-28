@@ -147,8 +147,12 @@ export function resolveDeliveryIssue(issueId) {
 
 // ── reports ──────────────────────────────────────────────────────────
 // Platform commission across all suppliers (paid orders only).
-export function getCommissionReport() {
-  return apiGet('/admin/reports/commission', getToken());
+// Optional { from, to } (YYYY-MM-DD) scopes it to a reporting period.
+export function getCommissionReport({ from, to } = {}) {
+  const qs = new URLSearchParams();
+  if (from && to) { qs.set('from', from); qs.set('to', to); }
+  const suffix = qs.toString() ? `?${qs}` : '';
+  return apiGet(`/admin/reports/commission${suffix}`, getToken());
 }
 
 // ── order oversight ──────────────────────────────────────────────────

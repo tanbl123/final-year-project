@@ -3,11 +3,14 @@ import { getCommissionReport, getCommission, setCommission } from '../adminServi
 import { useAuth } from '../../auth/AuthContext';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Toast from '../../../components/Toast';
+import ReportPeriodBar from '../../../components/ReportPeriodBar';
 
 const rm = (n) => 'RM ' + Number(n || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const ALL_TIME = { from: null, to: null, label: 'All time' };
 
 function AdminCommissionPage() {
   const { user } = useAuth();
+  const [range, setRange] = useState(ALL_TIME);
   const [data, setData] = useState(null);          // per-supplier report
   const [commission, setCommissionState] = useState(null);  // { current, history }
   const [loading, setLoading] = useState(true);
@@ -18,12 +21,12 @@ function AdminCommissionPage() {
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState(false);
 
-  function load() {
+  function load(r = range) {
     setLoading(true);
-    Promise.all([getCommission(), getCommissionReport()])
-      .then(([c, r]) => {
+    Promise.all([getCommission(), getCommissionReport({ from: r.from, to: r.to })])
+      .then(([c, rep]) => {
         setCommissionState(c);
-        setData(r);
+        setData(rep);
         // prefill the input with the current rate so the admin can nudge it with
         // the spinner (e.g. 10 → 11) instead of starting from an empty field
         const cur = c?.current?.commissionRateValue;
@@ -34,8 +37,8 @@ function AdminCommissionPage() {
   }
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    load();
-  }, []);
+    load(range);
+  }, [range.from, range.to]);
 
   const rateError = (() => {
     if (newRate === '') return '';
@@ -63,6 +66,7 @@ function AdminCommissionPage() {
     ? Number(commission.current.commissionRateValue) : null;
 
   const hasReport = !!data && data.summary.suppliers > 0;
+  const growth = data?.period?.growthPct;
 
   async function exportPdf() {
     const { generateReportPdf } = await import('../../../utils/reportPdf'); // lazy: keep jsPDF out of the main bundle
@@ -70,12 +74,16 @@ function AdminCommissionPage() {
     generateReportPdf({
       title: 'Commission Report',
       generatedBy: user?.fullName,
+      period: range.label,
       referencePrefix: 'CR',
       summary: [
         { label: 'Gross sales', value: rm(data.summary.grossSales) },
         { label: `Total commission (${rate}%)`, value: rm(data.summary.totalCommission) },
         { label: 'Suppliers with sales', value: String(data.summary.suppliers) },
         { label: 'Current commission rate', value: currentRate != null ? `${currentRate}%` : '—' },
+        ...(growth != null
+          ? [{ label: 'Gross sales vs previous period', value: `${growth > 0 ? '+' : ''}${growth}%` }]
+          : []),
       ],
       head: ['Supplier', 'Units', 'Gross sales', `Commission (${rate}%)`],
       body: data.bySupplier.map((s) => [s.companyName, s.units, rm(s.gross), rm(s.commission)]),
@@ -164,11 +172,22 @@ function AdminCommissionPage() {
           </div>
 
           {/* per-supplier report */}
-          <div className="d-flex justify-content-between align-items-center mb-3">
+          <div className="d-flex justify-content-between align-items-end mb-2 flex-wrap gap-2">
             <h5 className="mb-0">Commission earned by supplier</h5>
-            <button className="btn btn-outline-primary btn-sm" onClick={exportPdf} disabled={!hasReport}>
-              ⬇ Export PDF
-            </button>
+            <div className="d-flex align-items-end gap-2 flex-wrap">
+              <ReportPeriodBar onChange={setRange} />
+              <button className="btn btn-outline-primary btn-sm" onClick={exportPdf} disabled={!hasReport}>
+                ⬇ Export PDF
+              </button>
+            </div>
+          </div>
+          <div className="d-flex align-items-center gap-2 mb-3">
+            <span className="text-muted small">Showing: <span className="fw-semibold">{range.label}</span></span>
+            {growth != null && (
+              <span className={`badge rounded-pill text-bg-${growth >= 0 ? 'success' : 'danger'}`}>
+                {growth >= 0 ? '▲' : '▼'} {Math.abs(growth)}% vs previous period
+              </span>
+            )}
           </div>
           {!data || data.summary.suppliers === 0 ? (
             <div className="card card-body text-center text-muted">No sales recorded yet.</div>
