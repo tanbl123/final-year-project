@@ -803,9 +803,42 @@ function handleRemoveAvatar(PDO $pdo, array $auth): void {
   sendJson(200, true, ['avatarUrl' => null]);
 }
 
-// DELETE /auth/me — the user closes their own account. Soft-delete (status →
+// DELETE /auth/me — the customer closes their own account. Soft-delete (status →
 // 'Deleted') so order/review history stays intact; the account can no longer log in.
+//
+// Only CUSTOMERS may self-delete (requireCustomerId 403s others) — couriers and
+// suppliers are operational accounts managed by the admin. Before deleting we:
+//   1. auto-cancel the customer's unpaid ('Placed') orders (they're leaving),
+//   2. block if any order is still in progress (paid, not yet delivered),
+//   3. block if any refund is still pending/approved.
 function handleDeleteMe(PDO $pdo, array $auth): void {
+  $customerId = requireCustomerId($pdo, $auth);
+
+  // 1. Auto-cancel unpaid orders ('Placed' ⇒ no successful payment, no stock held).
+  $pdo->prepare("UPDATE `order` SET orderStatus = 'Cancelled'
+                  WHERE customerId = :cid AND orderStatus = 'Placed'")
+      ->execute(['cid' => $customerId]);
+
+  // 2. Orders still in progress (paid but not fully delivered) block deletion.
+  $active = $pdo->prepare(
+    "SELECT COUNT(*) FROM `order`
+      WHERE customerId = :cid
+        AND orderStatus IN ('Paid','Processing','Shipped','OutForDelivery')"
+  );
+  $active->execute(['cid' => $customerId]);
+  if ((int) $active->fetchColumn() > 0) {
+    sendJson(409, false, null, ['code' => 'ACTIVE_ORDERS',
+      'message' => 'You have orders still in progress. You can delete your account once they are delivered.']);
+  }
+
+  // 3. A pending/approved refund must be resolved first.
+  $ref = $pdo->prepare("SELECT COUNT(*) FROM refund WHERE customerId = :cid AND refundStatus IN ('Pending','Approved')");
+  $ref->execute(['cid' => $customerId]);
+  if ((int) $ref->fetchColumn() > 0) {
+    sendJson(409, false, null, ['code' => 'ACTIVE_REFUND',
+      'message' => 'You have a refund in progress. You can delete your account once it is resolved.']);
+  }
+
   $pdo->prepare("UPDATE `user` SET status = 'Deleted' WHERE userId = :id")
       ->execute(['id' => $auth['userId']]);
   sendJson(200, true, ['message' => 'Your account has been deleted.']);
