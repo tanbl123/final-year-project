@@ -422,8 +422,9 @@ function handleRegisterCourier(PDO $pdo): void {
   if (mb_strlen($licenseNumber) > 50) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Licence number is too long (max 50 characters).']);
   }
-  if (mb_strlen($icNumber) > 20) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'IC number is too long (max 20 characters).']);
+  // Malaysian NRIC is exactly 12 digits (entered without dashes).
+  if (!preg_match('/^\d{12}$/', $icNumber)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'IC must be 12 digits (e.g. 901231145678).']);
   }
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please enter a valid email.']);

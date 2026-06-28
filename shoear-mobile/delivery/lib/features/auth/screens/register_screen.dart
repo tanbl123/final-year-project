@@ -172,7 +172,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _validateIcNo(String v) {
     final t = v.trim();
     if (t.isEmpty) return 'IC number is required.';
-    if (t.length > 20) return 'IC number is too long.';
+    // Malaysian NRIC is exactly 12 digits (YYMMDD-PB-####), entered without dashes.
+    if (!RegExp(r'^\d{12}$').hasMatch(t)) return 'IC must be 12 digits (e.g. 901231145678).';
     return null;
   }
 
@@ -471,11 +472,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
           _sectionHeader('Identity & licence'),
-          _photoTile(label: 'Profile photo', url: _avatarUrl, uploading: _upAvatar, onPick: () => _pickPhoto('avatar')),
+          _photoTile(label: 'Profile photo', url: _avatarUrl, uploading: _upAvatar,
+              error: _docsError != null && _avatarUrl == null, onPick: () => _pickPhoto('avatar')),
           const SizedBox(height: 12),
           _field(
             controller: _icNumber, focusNode: null,
-            label: 'IC / identity number', error: _icNumberError, maxLength: 20,
+            label: 'IC / identity number', error: _icNumberError, maxLength: 12,
             keyboard: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             onChanged: (v) => setState(() {
@@ -487,7 +489,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
               }
             }),
           ),
-          _photoTile(label: 'IC photo', url: _icPhotoUrl, uploading: _upIc, onPick: () => _pickPhoto('ic')),
+          _photoTile(label: 'IC photo', url: _icPhotoUrl, uploading: _upIc,
+              error: _docsError != null && _icPhotoUrl == null, onPick: () => _pickPhoto('ic')),
           const SizedBox(height: 12),
           _field(
             controller: _licenseNumber, focusNode: null,
@@ -511,7 +514,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             dense: true,
             title: const Text('Licence number is the same as my IC number'),
           ),
-          _photoTile(label: 'Driving licence photo', url: _licensePhotoUrl, uploading: _upLicense, onPick: () => _pickPhoto('license')),
+          _photoTile(label: 'Driving licence photo', url: _licensePhotoUrl, uploading: _upLicense,
+              error: _docsError != null && _licensePhotoUrl == null, onPick: () => _pickPhoto('license')),
           if (_docsError != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -542,13 +546,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
     required String? url,
     required bool uploading,
     required VoidCallback onPick,
+    bool error = false,
   }) =>
       InkWell(
         onTap: uploading ? null : onPick,
         child: Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade400),
+            border: Border.all(
+              color: error ? Theme.of(context).colorScheme.error : Colors.grey.shade400,
+            ),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -572,8 +579,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-                    Text(url == null ? 'Tap to upload' : 'Uploaded · tap to replace',
-                        style: TextStyle(fontSize: 12, color: url == null ? Colors.grey.shade600 : Colors.green.shade700)),
+                    Text(
+                        url != null
+                            ? 'Uploaded · tap to replace'
+                            : error
+                                ? 'Required — tap to upload'
+                                : 'Tap to upload',
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: url != null
+                                ? Colors.green.shade700
+                                : error
+                                    ? Theme.of(context).colorScheme.error
+                                    : Colors.grey.shade600)),
                   ],
                 ),
               ),
