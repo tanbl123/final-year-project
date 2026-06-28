@@ -66,6 +66,11 @@ export function payCourier(deliveryPersonnelId) {
   return apiPost(`/admin/couriers/${deliveryPersonnelId}/payout`, {}, getToken());
 }
 
+// A single courier's payout history.
+export function getCourierPayoutHistory(deliveryPersonnelId) {
+  return apiGet(`/admin/couriers/${deliveryPersonnelId}/payouts`, getToken());
+}
+
 // Products awaiting approval.
 export function getPendingProducts() {
   return apiGet('/admin/products/pending', getToken());

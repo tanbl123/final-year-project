@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getCourierPayouts, payCourier } from '../adminService';
+import { getCourierPayouts, payCourier, getCourierPayoutHistory } from '../adminService';
 
 // Courier payouts — each active courier's accrued per-delivery earnings, with a
 // one-click Stripe payout of their pending balance. A courier must have finished
@@ -10,6 +10,8 @@ function AdminCourierPayoutsPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busyId, setBusyId] = useState('');
+  const [openId, setOpenId] = useState('');          // courier whose history is expanded
+  const [history, setHistory] = useState({});        // { [deliveryPersonnelId]: payouts[] | 'loading' }
 
   function load() {
     setLoading(true);
@@ -27,6 +29,9 @@ function AdminCourierPayoutsPage() {
     try {
       const res = await payCourier(courier.deliveryPersonnelId);
       setNotice(`Paid ${courier.fullName} RM ${Number(res.amount).toFixed(2)} (${res.deliveryCount} deliveries).`);
+      // drop any cached history for this courier so it reflects the new payout
+      setHistory((h) => { const next = { ...h }; delete next[courier.deliveryPersonnelId]; return next; });
+      if (openId === courier.deliveryPersonnelId) setOpenId('');
       load();
     } catch (err) {
       setError(err.message);
@@ -36,6 +41,26 @@ function AdminCourierPayoutsPage() {
   }
 
   const fmt = (n) => `RM ${Number(n || 0).toFixed(2)}`;
+
+  async function toggleHistory(courierId) {
+    if (openId === courierId) { setOpenId(''); return; }
+    setOpenId(courierId);
+    if (!history[courierId]) {
+      setHistory((h) => ({ ...h, [courierId]: 'loading' }));
+      try {
+        const data = await getCourierPayoutHistory(courierId);
+        setHistory((h) => ({ ...h, [courierId]: data.payouts }));
+      } catch (err) {
+        setHistory((h) => ({ ...h, [courierId]: [] }));
+        setError(err.message);
+      }
+    }
+  }
+
+  function statusBadge(s) {
+    const cls = s === 'Paid' ? 'bg-success' : s === 'Failed' ? 'bg-danger' : 'bg-secondary';
+    return <span className={`badge ${cls}`}>{s}</span>;
+  }
 
   return (
     <div className="container py-4">
@@ -87,7 +112,13 @@ function AdminCourierPayoutsPage() {
                     </td>
                     <td className="text-end fw-semibold">{fmt(c.pendingBalance)}</td>
                     <td className="text-end">{c.pendingDeliveries}</td>
-                    <td className="text-end">
+                    <td className="text-end text-nowrap">
+                      <button
+                        className="btn btn-outline-secondary btn-sm me-2"
+                        onClick={() => toggleHistory(c.deliveryPersonnelId)}
+                      >
+                        {openId === c.deliveryPersonnelId ? 'Hide' : 'History'}
+                      </button>
                       <button
                         className="btn btn-primary btn-sm"
                         disabled={!canPay || busyId === c.deliveryPersonnelId}
@@ -101,6 +132,50 @@ function AdminCourierPayoutsPage() {
                     </td>
                   </tr>
                 );
+              }).flatMap((row, i) => {
+                const c = couriers[i];
+                const out = [row];
+                if (openId === c.deliveryPersonnelId) {
+                  const h = history[c.deliveryPersonnelId];
+                  out.push(
+                    <tr key={`${c.deliveryPersonnelId}-history`}>
+                      <td colSpan={5} className="bg-light">
+                        <div className="px-2 py-1">
+                          <div className="fw-semibold small mb-2">Payout history — {c.fullName}</div>
+                          {h === 'loading' ? (
+                            <div className="text-muted small">Loading…</div>
+                          ) : !h || h.length === 0 ? (
+                            <div className="text-muted small">No payouts yet.</div>
+                          ) : (
+                            <table className="table table-sm mb-0">
+                              <thead>
+                                <tr>
+                                  <th>Date</th>
+                                  <th className="text-end">Amount</th>
+                                  <th className="text-end">Deliveries</th>
+                                  <th>Status</th>
+                                  <th>Stripe transfer</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {h.map((p) => (
+                                  <tr key={p.payoutId}>
+                                    <td className="small">{new Date(p.created_at).toLocaleString()}</td>
+                                    <td className="text-end">{fmt(p.amount)}</td>
+                                    <td className="text-end">{p.deliveryCount}</td>
+                                    <td>{statusBadge(p.payoutStatus)}</td>
+                                    <td className="small text-muted">{p.stripeTransferId || '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                }
+                return out;
               })}
             </tbody>
           </table>

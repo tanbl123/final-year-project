@@ -168,6 +168,20 @@ function handleListCourierBalances(PDO $pdo): void {
   sendJson(200, true, ['couriers' => $rows]);
 }
 
+// GET /admin/couriers/{deliveryPersonnelId}/payouts — that courier's payout history.
+function handleCourierPayoutHistory(PDO $pdo, string $courierId): void {
+  $stmt = $pdo->prepare(
+    "SELECT payoutId, amount, deliveryCount, currency, payoutStatus, stripeTransferId, created_at
+       FROM courier_payout WHERE deliveryPersonnelId = :dp
+      ORDER BY created_at DESC, payoutId DESC"
+  );
+  $stmt->execute(['dp' => $courierId]);
+  $rows = $stmt->fetchAll();
+  foreach ($rows as &$r) { $r['amount'] = (float) $r['amount']; }
+  unset($r);
+  sendJson(200, true, ['payouts' => $rows]);
+}
+
 // POST /admin/couriers/{deliveryPersonnelId}/payout — pay the courier their
 // whole pending balance in one Stripe transfer, then stamp the covered
 // deliveries with the payout id.
