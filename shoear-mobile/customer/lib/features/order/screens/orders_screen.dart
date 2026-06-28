@@ -372,10 +372,10 @@ class _OrderCard extends StatelessWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: order.payBy == null
+                        child: (order.payBySeconds == null || order.payBySeconds! <= 0)
                             ? Text('Awaiting payment',
                                 style: TextStyle(fontSize: 11.5, color: Colors.orange.shade800))
-                            : _PayCountdown(payBy: order.payBy!, onExpired: onExpired),
+                            : _PayCountdown(secondsLeft: order.payBySeconds!, onExpired: onExpired),
                       ),
                       const SizedBox(width: 8),
                       FilledButton(
@@ -454,9 +454,9 @@ class _ErrorView extends StatelessWidget {
 // shows an expiring note and asks the list to reload (the server cancels the
 // order on that refresh).
 class _PayCountdown extends StatefulWidget {
-  final String payBy; // ISO deadline
+  final int secondsLeft; // seconds remaining at fetch time (relative)
   final VoidCallback? onExpired;
-  const _PayCountdown({required this.payBy, this.onExpired});
+  const _PayCountdown({required this.secondsLeft, this.onExpired});
 
   @override
   State<_PayCountdown> createState() => _PayCountdownState();
@@ -464,6 +464,9 @@ class _PayCountdown extends StatefulWidget {
 
 class _PayCountdownState extends State<_PayCountdown> {
   Timer? _timer;
+  // Anchor the deadline to the device clock at build time using the relative
+  // seconds from the server — so it's correct regardless of timezone.
+  late final DateTime _deadline = DateTime.now().add(Duration(seconds: widget.secondsLeft));
   late Duration _left = _remaining();
   bool _firedExpired = false;
 
@@ -483,9 +486,7 @@ class _PayCountdownState extends State<_PayCountdown> {
   }
 
   Duration _remaining() {
-    final due = DateTime.tryParse(widget.payBy);
-    if (due == null) return Duration.zero;
-    final d = due.difference(DateTime.now());
+    final d = _deadline.difference(DateTime.now());
     return d.isNegative ? Duration.zero : d;
   }
 

@@ -524,6 +524,11 @@ function handleListCustomerOrders(PDO $pdo, array $auth): void {
             CASE WHEN o.orderStatus = 'Placed'
                  THEN DATE_ADD(o.orderDate, INTERVAL " . ORDER_PAYMENT_WINDOW_MINUTES . " MINUTE)
                  ELSE NULL END AS payBy,
+            -- seconds left to pay (relative → immune to client timezone/clock)
+            CASE WHEN o.orderStatus = 'Placed'
+                 THEN GREATEST(0, TIMESTAMPDIFF(SECOND, NOW(),
+                        DATE_ADD(o.orderDate, INTERVAL " . ORDER_PAYMENT_WINDOW_MINUTES . " MINUTE)))
+                 ELSE NULL END AS payBySeconds,
             (SELECT d.deliveryStatus FROM delivery d WHERE d.orderId = o.orderId
                ORDER BY FIELD(d.deliveryStatus,'Pending','Assigned','PickedUp','OutForDelivery','Delivered','Failed')
                LIMIT 1) AS deliveryStatus,
@@ -556,6 +561,7 @@ function handleListCustomerOrders(PDO $pdo, array $auth): void {
   foreach ($rows as &$r) {
     $r['orderTotalAmount'] = (float) $r['orderTotalAmount'];
     $r['itemCount']        = (int) $r['itemCount'];
+    $r['payBySeconds']     = $r['payBySeconds'] === null ? null : (int) $r['payBySeconds'];
   }
   unset($r);
   sendJson(200, true, ['orders' => $rows, 'page' => $page, 'limit' => $limit, 'total' => $total]);

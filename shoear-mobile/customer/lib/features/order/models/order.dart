@@ -94,6 +94,7 @@ class CustomerOrderSummary {
   final String? paymentStatus;
   final String? deliveryStatus; // rolled up across parcels
   final String? payBy; // deadline to pay a 'Placed' order before auto-cancel
+  final int? payBySeconds; // seconds left to pay (relative; timezone-proof)
   final String? previewName; // first item's product name (list preview)
   final String? previewBrand; // first item's brand
   final String? previewImage; // first item's image URL
@@ -107,6 +108,7 @@ class CustomerOrderSummary {
     this.paymentStatus,
     this.deliveryStatus,
     this.payBy,
+    this.payBySeconds,
     this.previewName,
     this.previewBrand,
     this.previewImage,
@@ -124,6 +126,7 @@ class CustomerOrderSummary {
         paymentStatus: j['paymentStatus'] as String?,
         deliveryStatus: j['deliveryStatus'] as String?,
         payBy: j['payBy'] as String?,
+        payBySeconds: (j['payBySeconds'] as num?)?.toInt(),
         previewName: j['previewName'] as String?,
         previewBrand: j['previewBrand'] as String?,
         previewImage: (j['previewImage'] as String?)?.isNotEmpty == true ? j['previewImage'] as String : null,
