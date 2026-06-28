@@ -51,6 +51,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _picker = ImagePicker();
   String? _avatarUrl, _licensePhotoUrl, _icPhotoUrl;
   bool _upAvatar = false, _upLicense = false, _upIc = false;
+  bool _licenseSameAsIc = false;   // local couriers: licence no. == IC no.
   String? _licenseNumberError, _icNumberError, _docsError;
 
   final _fullNameFocus     = FocusNode();
@@ -473,20 +474,44 @@ class _RegisterScreenState extends State<RegisterScreen> {
           _photoTile(label: 'Profile photo', url: _avatarUrl, uploading: _upAvatar, onPick: () => _pickPhoto('avatar')),
           const SizedBox(height: 12),
           _field(
-            controller: _licenseNumber, focusNode: null,
-            label: 'Driving licence number', error: _licenseNumberError, maxLength: 50,
-            onChanged: (v) => setState(() => _licenseNumberError = _validateLicenseNo(v)),
-          ),
-          _photoTile(label: 'Driving licence photo', url: _licensePhotoUrl, uploading: _upLicense, onPick: () => _pickPhoto('license')),
-          const SizedBox(height: 12),
-          _field(
             controller: _icNumber, focusNode: null,
             label: 'IC / identity number', error: _icNumberError, maxLength: 20,
             keyboard: TextInputType.number,
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            onChanged: (v) => setState(() => _icNumberError = _validateIcNo(v)),
+            onChanged: (v) => setState(() {
+              _icNumberError = _validateIcNo(v);
+              // Keep the licence number mirrored while "same as IC" is on.
+              if (_licenseSameAsIc) {
+                _licenseNumber.text = v.trim();
+                _licenseNumberError = _validateLicenseNo(_licenseNumber.text);
+              }
+            }),
           ),
           _photoTile(label: 'IC photo', url: _icPhotoUrl, uploading: _upIc, onPick: () => _pickPhoto('ic')),
+          const SizedBox(height: 12),
+          _field(
+            controller: _licenseNumber, focusNode: null,
+            label: 'Driving licence number', error: _licenseNumberError, maxLength: 50,
+            enabled: !_licenseSameAsIc,
+            onChanged: (v) => setState(() => _licenseNumberError = _validateLicenseNo(v)),
+          ),
+          // For local couriers the Malaysian licence number is the IC number, so
+          // offer a one-tap fill. Foreign couriers untick it and type their own.
+          CheckboxListTile(
+            value: _licenseSameAsIc,
+            onChanged: (checked) => setState(() {
+              _licenseSameAsIc = checked ?? false;
+              if (_licenseSameAsIc) {
+                _licenseNumber.text = _icNumber.text.trim();
+                _licenseNumberError = _validateLicenseNo(_licenseNumber.text);
+              }
+            }),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Licence number is the same as my IC number'),
+          ),
+          _photoTile(label: 'Driving licence photo', url: _licensePhotoUrl, uploading: _upLicense, onPick: () => _pickPhoto('license')),
           if (_docsError != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -622,12 +647,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     int maxLines = 1,
     int? maxLength,
     List<TextInputFormatter>? inputFormatters,
+    bool enabled = true,
   }) =>
       Padding(
         padding: const EdgeInsets.only(bottom: 16),
         child: TextField(
           controller:      controller,
           focusNode:       focusNode,
+          enabled:         enabled,
           keyboardType:    keyboard,
           maxLines:        maxLines,
           maxLength:       maxLength,
