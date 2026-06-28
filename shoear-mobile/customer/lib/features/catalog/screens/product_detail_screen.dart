@@ -470,7 +470,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       context: context,
       isScrollControlled: true,
       builder: (_) => ReviewSheet(
-        initialRating: existing?.ratingScore ?? 5,
+        initialRating: existing?.ratingScore ?? 0,
         initialComment: existing?.reviewComment ?? '',
         editing: existing != null,
       ),

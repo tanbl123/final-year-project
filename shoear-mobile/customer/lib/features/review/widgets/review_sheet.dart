@@ -12,14 +12,14 @@ class ReviewResult {
 /// when dismissed. Shared by the product page ("Write a review") and the order
 /// detail ("Rate" each delivered item).
 class ReviewSheet extends StatefulWidget {
-  final int initialRating;
+  final int initialRating; // 0 = nothing selected yet (new review)
   final String initialComment;
   final bool editing; // false → "Write a review", true → "Edit your review"
   final String? productName; // shown as context when rating from an order
 
   const ReviewSheet({
     super.key,
-    this.initialRating = 5,
+    this.initialRating = 0,
     this.initialComment = '',
     this.editing = false,
     this.productName,
@@ -69,6 +69,9 @@ class _ReviewSheetState extends State<ReviewSheet> {
                     size: 36,
                   ),
                 ),
+              const SizedBox(width: 4),
+              if (_rating == 0)
+                Text('Tap to rate', style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
             ],
           ),
           const SizedBox(height: 8),
@@ -86,7 +89,10 @@ class _ReviewSheetState extends State<ReviewSheet> {
           SizedBox(
             width: double.infinity,
             child: FilledButton(
-              onPressed: () => Navigator.of(context).pop(ReviewResult(_rating, _comment.text.trim())),
+              // require an explicit star tap before submitting (no default rating)
+              onPressed: _rating == 0
+                  ? null
+                  : () => Navigator.of(context).pop(ReviewResult(_rating, _comment.text.trim())),
               child: const Text('Submit'),
             ),
           ),
