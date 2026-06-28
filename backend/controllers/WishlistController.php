@@ -32,6 +32,8 @@ function wishlistPayload(PDO $pdo, string $wishlistId, int $page = 1, int $limit
   $stmt = $pdo->prepare(
     "SELECT wi.wishlistItemId, p.productId, p.productName AS name, p.productBrand AS brand,
             p.productPrice AS price, p.productStatus AS status, c.categoryName AS categoryName,
+            (SELECT COALESCE(SUM(pv.stockQuantity), 0) FROM product_variant pv
+              WHERE pv.productId = p.productId) AS stock,
             (SELECT pi.productImageUrl FROM product_image pi
               WHERE pi.productId = p.productId ORDER BY pi.productImageId LIMIT 1) AS imageUrl,
             (SELECT ROUND(AVG(r.ratingScore), 1) FROM review r
@@ -62,7 +64,8 @@ function wishlistPayload(PDO $pdo, string $wishlistId, int $page = 1, int $limit
       'categoryName'   => $r['categoryName'],
       'ratingAverage'  => $r['ratingAverage'] !== null ? (float) $r['ratingAverage'] : 0,
       'ratingCount'    => (int) $r['ratingCount'],
-      'available'      => $r['status'] === 'Approved',   // still buyable?
+      'available'      => $r['status'] === 'Approved',   // still listed (not removed)?
+      'inStock'        => ((int) $r['stock']) > 0,        // any size left?
     ];
   }
   // itemCount = TOTAL saved (used for the count badge), not the page size.

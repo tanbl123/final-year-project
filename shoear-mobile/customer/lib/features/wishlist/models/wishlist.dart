@@ -9,7 +9,8 @@ class WishlistItem {
   final String? categoryName;
   final double ratingAverage;
   final int ratingCount;
-  final bool available;
+  final bool available; // still listed (not removed/rejected)
+  final bool inStock;   // has at least one size in stock
 
   WishlistItem({
     required this.wishlistItemId,
@@ -22,6 +23,7 @@ class WishlistItem {
     required this.ratingAverage,
     required this.ratingCount,
     required this.available,
+    this.inStock = true,
   });
 
   factory WishlistItem.fromJson(Map<String, dynamic> j) => WishlistItem(
@@ -35,6 +37,7 @@ class WishlistItem {
         ratingAverage: (j['ratingAverage'] as num?)?.toDouble() ?? 0,
         ratingCount: (j['ratingCount'] as num?)?.toInt() ?? 0,
         available: j['available'] == true,
+        inStock: j['inStock'] != false, // default true if absent
       );
 }
 

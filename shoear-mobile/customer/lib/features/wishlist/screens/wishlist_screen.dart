@@ -143,14 +143,16 @@ class _WishlistScreenState extends State<WishlistScreen> {
                             ),
                           ),
                         ),
-                        if (!it.available)
+                        if (!it.available || !it.inStock)
                           Positioned(
                             bottom: 0, left: 0, right: 0,
                             child: Container(
-                              color: Colors.black54,
+                              color: !it.available ? Colors.black54 : Colors.orange.shade800,
                               padding: const EdgeInsets.symmetric(vertical: 2),
-                              child: const Text('Unavailable', textAlign: TextAlign.center,
-                                  style: TextStyle(color: Colors.white, fontSize: 11)),
+                              child: Text(
+                                  !it.available ? 'No longer available' : 'Out of stock',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(color: Colors.white, fontSize: 11)),
                             ),
                           ),
                       ],
