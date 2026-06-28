@@ -6,9 +6,13 @@ export function getBadgeCounts() {
   return apiGet('/admin/badge-counts', getToken());
 }
 
-// Platform overview dashboard: { kpis, actions, recentOrders, trend }.
-export function getAdminDashboard() {
-  return apiGet('/admin/dashboard', getToken());
+// Platform overview dashboard: { kpis, actions, recentOrders, trend, period }.
+// Optional { from, to } (YYYY-MM-DD) scopes the KPIs/trend to a period.
+export function getAdminDashboard({ from, to } = {}) {
+  const qs = new URLSearchParams();
+  if (from && to) { qs.set('from', from); qs.set('to', to); }
+  const suffix = qs.toString() ? `?${qs}` : '';
+  return apiGet(`/admin/dashboard${suffix}`, getToken());
 }
 
 // Run the time-based notification sweeps on demand (payment reminders,

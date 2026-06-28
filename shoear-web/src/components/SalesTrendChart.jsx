@@ -1,38 +1,28 @@
-// A tiny dependency-free bar chart for the dashboards' sales trend. Takes the
-// API's sparse [{date,gross}] list, fills the last `days` days with zeros, and
-// renders SVG bars (each with a native hover tooltip). Stretches to its width.
-
-const iso = (d) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+// A tiny dependency-free bar chart for the dashboards' sales trend. Renders the
+// already zero-filled, ordered [{date,gross}] series the backend returns (which
+// spans the selected period), one SVG bar per day with a native hover tooltip.
 
 const rm = (n) => 'RM ' + Number(n || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function SalesTrendChart({ data = [], days = 14, color = '#4f46e5', height = 140 }) {
-  const map = new Map((data || []).map((d) => [d.date, Number(d.gross) || 0]));
-  const today = new Date();
-  const points = [];
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const key = iso(d);
-    points.push({ date: key, gross: map.get(key) || 0 });
+export default function SalesTrendChart({ data = [], color = '#4f46e5', height = 140 }) {
+  const points = data || [];
+  const total = points.reduce((s, p) => s + (Number(p.gross) || 0), 0);
+
+  if (!points.length || total === 0) {
+    return <div className="text-muted small py-4 text-center">No sales in this period.</div>;
   }
 
-  const max = Math.max(1, ...points.map((p) => p.gross));
-  const total = points.reduce((s, p) => s + p.gross, 0);
-  const W = points.length * 12;
+  const max = Math.max(1, ...points.map((p) => Number(p.gross) || 0));
   const H = 48;
+  const W = points.length * 12;
   const bw = W / points.length;
-
-  if (total === 0) {
-    return <div className="text-muted small py-4 text-center">No sales in the last {days} days.</div>;
-  }
 
   return (
     <div>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" style={{ width: '100%', height }}>
         {points.map((p, i) => {
-          const h = (p.gross / max) * (H - 2);
+          const g = Number(p.gross) || 0;
+          const h = (g / max) * (H - 2);
           return (
             <rect
               key={p.date}
@@ -40,10 +30,10 @@ export default function SalesTrendChart({ data = [], days = 14, color = '#4f46e5
               y={H - h}
               width={bw - 1.2}
               height={h}
-              fill={p.gross > 0 ? color : '#e5e7eb'}
+              fill={g > 0 ? color : '#e5e7eb'}
               rx="0.6"
             >
-              <title>{`${p.date}: ${rm(p.gross)}`}</title>
+              <title>{`${p.date}: ${rm(g)}`}</title>
             </rect>
           );
         })}

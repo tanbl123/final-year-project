@@ -9,7 +9,11 @@ export function getSalesReport({ from, to } = {}) {
   return apiGet(`/reports/sales${suffix}`, getToken());
 }
 
-// The supplier's overview dashboard: { kpis, actions, recentOrders, trend }.
-export function getSupplierDashboard() {
-  return apiGet('/supplier/dashboard', getToken());
+// The supplier's overview dashboard: { kpis, actions, recentOrders, trend, period }.
+// Optional { from, to } (YYYY-MM-DD) scopes the KPIs/trend to a period.
+export function getSupplierDashboard({ from, to } = {}) {
+  const qs = new URLSearchParams();
+  if (from && to) { qs.set('from', from); qs.set('to', to); }
+  const suffix = qs.toString() ? `?${qs}` : '';
+  return apiGet(`/supplier/dashboard${suffix}`, getToken());
 }

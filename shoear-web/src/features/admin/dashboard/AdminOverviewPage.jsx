@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getAdminDashboard } from '../adminService';
 import SalesTrendChart from '../../../components/SalesTrendChart';
+import ReportPeriodBar from '../../../components/ReportPeriodBar';
 
+const ALL_TIME = { from: null, to: null, label: 'All time' };
 const rm = (n) => 'RM ' + Number(n || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtDate = (s) => (s ? new Date(s).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
 
@@ -37,25 +39,41 @@ function Kpi({ label, value, sub, color = 'dark' }) {
 }
 
 function AdminOverviewPage() {
+  const [range, setRange] = useState(ALL_TIME);
   const [d, setD] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     let active = true;
-    getAdminDashboard()
+    setLoading(true);
+    getAdminDashboard({ from: range.from, to: range.to })
       .then((res) => { if (active) setD(res); })
       .catch((err) => { if (active) setError(err.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [range.from, range.to]);
 
   const totalActions = d ? ACTIONS.reduce((s, a) => s + (d.actions?.[a.key] || 0), 0) : 0;
+  const growth = d?.period?.growthPct;
 
   return (
     <div className="container py-4 text-start">
-      <h1 className="mb-1">📊 Dashboard</h1>
-      <p className="text-muted">Platform overview — sales, pending work and recent activity.</p>
+      <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+          <h1 className="mb-1">📊 Dashboard</h1>
+          <p className="text-muted mb-0">Platform overview — sales, pending work and recent activity.</p>
+        </div>
+        <ReportPeriodBar onChange={setRange} />
+      </div>
+      <div className="d-flex align-items-center gap-2 mb-3 mt-2">
+        <span className="text-muted small">Showing: <span className="fw-semibold">{range.label}</span></span>
+        {growth != null && (
+          <span className={`badge rounded-pill text-bg-${growth >= 0 ? 'success' : 'danger'}`}>
+            {growth >= 0 ? '▲' : '▼'} {Math.abs(growth)}% vs previous period
+          </span>
+        )}
+      </div>
 
       {error && <div className="alert alert-danger py-2">{error}</div>}
       {loading ? (
