@@ -49,11 +49,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   // KYC photos (uploaded as soon as they're picked → store the returned URL)
   final _picker = ImagePicker();
-  String? _avatarUrl, _licensePhotoUrl, _icPhotoUrl, _workPermitUrl;
-  bool _upAvatar = false, _upLicense = false, _upIc = false, _upWorkPermit = false;
+  String? _avatarUrl, _licensePhotoUrl, _icPhotoUrl;
+  bool _upAvatar = false, _upLicense = false, _upIc = false;
   bool _licenseSameAsIc = false;   // local couriers: licence no. == IC no.
-  String _identityType = 'Malaysian';  // 'Malaysian' (NRIC) | 'Foreigner' (passport)
-  bool get _isForeigner => _identityType == 'Foreigner';
   String? _licenseNumberError, _icNumberError, _docsError;
 
   final _fullNameFocus     = FocusNode();
@@ -171,25 +169,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return null;
   }
 
-  // Identity number rule depends on the chosen type: a Malaysian NRIC is exactly
-  // 12 digits (YYMMDD-PB-####, no dashes); a passport is 5–15 letters/digits.
   String? _validateIcNo(String v) {
     final t = v.trim();
-    if (_isForeigner) {
-      if (t.isEmpty) return 'Passport number is required.';
-      if (!RegExp(r'^[A-Za-z0-9]{5,15}$').hasMatch(t)) return 'Passport must be 5–15 letters or digits.';
-      return null;
-    }
     if (t.isEmpty) return 'IC number is required.';
+    // Malaysian NRIC is exactly 12 digits (YYMMDD-PB-####), entered without dashes.
     if (!RegExp(r'^\d{12}$').hasMatch(t)) return 'IC must be 12 digits (e.g. 901231145678).';
     return null;
   }
 
-  bool get _photosUploaded =>
-      _avatarUrl != null &&
-      _licensePhotoUrl != null &&
-      _icPhotoUrl != null &&
-      (!_isForeigner || _workPermitUrl != null);   // foreigners also need a work permit
+  bool get _photosUploaded => _avatarUrl != null && _licensePhotoUrl != null && _icPhotoUrl != null;
 
   // Let the courier take a fresh photo (preferred for KYC) or pick an existing
   // one from the gallery.
@@ -215,32 +203,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
 
   // Pick an image and upload it immediately (pre-login public upload). which ∈
-  // {'avatar','license','ic','workpermit'}.
+  // {'avatar','license','ic'}.
   Future<void> _pickPhoto(String which) async {
     final source = await _choosePhotoSource();
     if (source == null) return;
     final XFile? x = await _picker.pickImage(source: source, maxWidth: 1600, imageQuality: 85);
     if (x == null) return;
     setState(() {
-      if (which == 'avatar') _upAvatar = true;
-      else if (which == 'license') _upLicense = true;
-      else if (which == 'workpermit') _upWorkPermit = true;
-      else _upIc = true;
+      if (which == 'avatar') _upAvatar = true; else if (which == 'license') _upLicense = true; else _upIc = true;
     });
     try {
       final url = await context.read<AuthProvider>().authService.uploadRegistrationDoc(File(x.path));
       if (!mounted) return;
       setState(() {
-        if (which == 'avatar') _avatarUrl = url;
-        else if (which == 'license') _licensePhotoUrl = url;
-        else if (which == 'workpermit') _workPermitUrl = url;
-        else _icPhotoUrl = url;
+        if (which == 'avatar') _avatarUrl = url; else if (which == 'license') _licensePhotoUrl = url; else _icPhotoUrl = url;
         _docsError = null;
       });
     } catch (e) {
       if (mounted) context.showSnack(e.toString());
     } finally {
-      if (mounted) setState(() { _upAvatar = false; _upLicense = false; _upIc = false; _upWorkPermit = false; });
+      if (mounted) setState(() { _upAvatar = false; _upLicense = false; _upIc = false; });
     }
   }
 
@@ -257,11 +239,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _confirmError      = _validateConfirm();
       _licenseNumberError = _validateLicenseNo(_licenseNumber.text);
       _icNumberError      = _validateIcNo(_icNumber.text);
-      _docsError = _photosUploaded
-          ? null
-          : _isForeigner
-              ? 'Please add your profile photo, licence photo, passport photo and work permit photo.'
-              : 'Please add your profile photo, licence photo and IC photo.';
+      _docsError = _photosUploaded ? null : 'Please add your profile photo, licence photo and IC photo.';
     });
     if (_fullNameError != null || _emailError != null || _phoneError != null ||
         _vehicleBrandError != null || _vehicleModelError != null ||
@@ -305,10 +283,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             verificationCode: code,
             licenseNumber:    _licenseNumber.text.trim(),
             licensePhotoUrl:  _licensePhotoUrl ?? '',
-            identityType:     _identityType,
             icNumber:         _icNumber.text.trim(),
             icPhotoUrl:       _icPhotoUrl ?? '',
-            workPermitUrl:    _workPermitUrl ?? '',
             avatarUrl:        _avatarUrl ?? '',
           );
       if (!mounted) return;
@@ -496,56 +472,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           ),
           _sectionHeader('Identity & licence'),
-          // Citizenship drives which identity document + validation applies.
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'Malaysian', label: Text('Malaysian'), icon: Icon(Icons.badge_outlined)),
-                ButtonSegment(value: 'Foreigner', label: Text('Foreigner'), icon: Icon(Icons.public)),
-              ],
-              selected: {_identityType},
-              onSelectionChanged: (sel) => setState(() {
-                _identityType = sel.first;
-                // Reset identity/licence inputs so no stale value carries across types.
-                _icNumber.clear();
-                _icNumberError = null;
-                _icPhotoUrl = null;
-                _licenseSameAsIc = false;
-                _licenseNumber.clear();
-                _licenseNumberError = null;
-                if (!_isForeigner) _workPermitUrl = null;
-              }),
-            ),
-          ),
           _photoTile(label: 'Profile photo', url: _avatarUrl, uploading: _upAvatar,
               error: _docsError != null && _avatarUrl == null, onPick: () => _pickPhoto('avatar')),
           const SizedBox(height: 12),
           _field(
             controller: _icNumber, focusNode: null,
-            label: _isForeigner ? 'Passport number' : 'IC / identity number',
-            error: _icNumberError,
-            maxLength: _isForeigner ? 15 : 12,
-            keyboard: _isForeigner ? TextInputType.text : TextInputType.number,
-            inputFormatters: _isForeigner
-                ? [FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z0-9]')), UpperCaseTextFormatter()]
-                : [FilteringTextInputFormatter.digitsOnly],
+            label: 'IC / identity number', error: _icNumberError, maxLength: 12,
+            keyboard: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             onChanged: (v) => setState(() {
               _icNumberError = _validateIcNo(v);
-              // Keep the licence number mirrored while "same as IC" is on (Malaysian only).
+              // Keep the licence number mirrored while "same as IC" is on.
               if (_licenseSameAsIc) {
                 _licenseNumber.text = v.trim();
                 _licenseNumberError = _validateLicenseNo(_licenseNumber.text);
               }
             }),
           ),
-          _photoTile(label: _isForeigner ? 'Passport photo' : 'IC photo', url: _icPhotoUrl, uploading: _upIc,
+          _photoTile(label: 'IC photo', url: _icPhotoUrl, uploading: _upIc,
               error: _docsError != null && _icPhotoUrl == null, onPick: () => _pickPhoto('ic')),
-          if (_isForeigner) ...[
-            const SizedBox(height: 12),
-            _photoTile(label: 'Work permit / pass photo', url: _workPermitUrl, uploading: _upWorkPermit,
-                error: _docsError != null && _workPermitUrl == null, onPick: () => _pickPhoto('workpermit')),
-          ],
           const SizedBox(height: 12),
           _field(
             controller: _licenseNumber, focusNode: null,
@@ -554,22 +499,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
             onChanged: (v) => setState(() => _licenseNumberError = _validateLicenseNo(v)),
           ),
           // For local couriers the Malaysian licence number is the IC number, so
-          // offer a one-tap fill. Hidden for foreigners (passport != licence no.).
-          if (!_isForeigner)
-            CheckboxListTile(
-              value: _licenseSameAsIc,
-              onChanged: (checked) => setState(() {
-                _licenseSameAsIc = checked ?? false;
-                if (_licenseSameAsIc) {
-                  _licenseNumber.text = _icNumber.text.trim();
-                  _licenseNumberError = _validateLicenseNo(_licenseNumber.text);
-                }
-              }),
-              controlAffinity: ListTileControlAffinity.leading,
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              title: const Text('Licence number is the same as my IC number'),
-            ),
+          // offer a one-tap fill. Foreign couriers untick it and type their own.
+          CheckboxListTile(
+            value: _licenseSameAsIc,
+            onChanged: (checked) => setState(() {
+              _licenseSameAsIc = checked ?? false;
+              if (_licenseSameAsIc) {
+                _licenseNumber.text = _icNumber.text.trim();
+                _licenseNumberError = _validateLicenseNo(_licenseNumber.text);
+              }
+            }),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Licence number is the same as my IC number'),
+          ),
           _photoTile(label: 'Driving licence photo', url: _licensePhotoUrl, uploading: _upLicense,
               error: _docsError != null && _licensePhotoUrl == null, onPick: () => _pickPhoto('license')),
           if (_docsError != null)

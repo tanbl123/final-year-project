@@ -129,30 +129,17 @@ function AdminCouriersPage() {
                   </td>
                   <td className="small">
                     <div>
-                      <span className={`badge ${c.identityType === 'Foreigner' ? 'bg-warning text-dark' : 'bg-secondary'}`}>
-                        {c.identityType === 'Foreigner' ? 'Foreigner' : 'Malaysian'}
-                      </span>
-                    </div>
-                    <div className="mt-1">
                       <span className="text-muted">Licence:</span> {c.licenseNumber || '—'}
                       {c.licensePhotoUrl && (
                         <a href={c.licensePhotoUrl} target="_blank" rel="noreferrer" className="ms-1">view</a>
                       )}
                     </div>
                     <div>
-                      <span className="text-muted">{c.identityType === 'Foreigner' ? 'Passport:' : 'IC:'}</span> {c.icNumber || '—'}
+                      <span className="text-muted">IC:</span> {c.icNumber || '—'}
                       {c.icPhotoUrl && (
                         <a href={c.icPhotoUrl} target="_blank" rel="noreferrer" className="ms-1">view</a>
                       )}
                     </div>
-                    {c.identityType === 'Foreigner' && (
-                      <div>
-                        <span className="text-muted">Work permit:</span>{' '}
-                        {c.workPermitUrl
-                          ? <a href={c.workPermitUrl} target="_blank" rel="noreferrer">view</a>
-                          : '—'}
-                      </div>
-                    )}
                   </td>
                   <td className="text-muted small">{new Date(c.created_at).toLocaleDateString()}</td>
                   <td className="text-end text-nowrap">

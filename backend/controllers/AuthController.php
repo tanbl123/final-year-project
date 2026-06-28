@@ -388,13 +388,11 @@ function handleRegisterCourier(PDO $pdo): void {
   $vehicleBrand = trim($body['vehicleBrand'] ?? '');
   $vehicleModel = trim($body['vehicleModel'] ?? '');
   $vehiclePlate = strtoupper(trim($body['vehiclePlate'] ?? ''));
-  // KYC: driving licence, identity, profile photo (uploaded via /uploads/registration-doc)
+  // KYC: driving licence, IC, profile photo (uploaded via /uploads/registration-doc)
   $licenseNumber   = trim($body['licenseNumber'] ?? '');
   $licensePhotoUrl = trim($body['licensePhotoUrl'] ?? '');
-  $identityType    = trim($body['identityType'] ?? 'Malaysian');
-  $icNumber        = trim($body['icNumber'] ?? '');           // NRIC or passport no.
+  $icNumber        = trim($body['icNumber'] ?? '');
   $icPhotoUrl      = trim($body['icPhotoUrl'] ?? '');
-  $workPermitUrl   = trim($body['workPermitUrl'] ?? '');      // foreigner only
   $avatarUrl       = trim($body['avatarUrl'] ?? '');
 
   if ($fullName === '' || $email === '' || $phoneNumber === '' ||
@@ -417,29 +415,16 @@ function handleRegisterCourier(PDO $pdo): void {
   if (!preg_match('/^[A-Za-z0-9 \-]+$/', $vehiclePlate)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Only letters, numbers, spaces or hyphens.']);
   }
-  if (!in_array($identityType, ['Malaysian', 'Foreigner'], true)) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Invalid identity type.']);
-  }
-  // KYC required: licence (number + photo), identity (number + photo), profile photo
+  // KYC required: licence (number + photo), IC (number + photo), profile photo
   if ($licenseNumber === '' || $licensePhotoUrl === '' || $icNumber === '' || $icPhotoUrl === '' || $avatarUrl === '') {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Driving licence, identity (both number + photo) and a profile photo are all required.']);
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Driving licence, IC (both number + photo) and a profile photo are all required.']);
   }
   if (mb_strlen($licenseNumber) > 20) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Licence number is too long (max 20 characters).']);
   }
-  if ($identityType === 'Malaysian') {
-    // Malaysian NRIC is exactly 12 digits (entered without dashes).
-    if (!preg_match('/^\d{12}$/', $icNumber)) {
-      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'IC must be 12 digits (e.g. 901231145678).']);
-    }
-  } else {
-    // Foreigner: passport number is 5–15 alphanumeric characters, plus a work permit.
-    if (!preg_match('/^[A-Za-z0-9]{5,15}$/', $icNumber)) {
-      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Passport number must be 5–15 letters or digits.']);
-    }
-    if ($workPermitUrl === '') {
-      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A work permit / pass photo is required for non-Malaysian couriers.']);
-    }
+  // Malaysian NRIC is exactly 12 digits (entered without dashes).
+  if (!preg_match('/^\d{12}$/', $icNumber)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'IC must be 12 digits (e.g. 901231145678).']);
   }
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please enter a valid email.']);
@@ -504,11 +489,10 @@ function handleRegisterCourier(PDO $pdo): void {
     )->execute(['id' => $userId, 'un' => $username, 'pw' => $hash, 'em' => $email, 'fn' => $fullName, 'ph' => $phoneNumber, 'av' => $avatarUrl !== '' ? $avatarUrl : null]);
 
     $deliveryPersonnelId = nextId($pdo, 'delivery_personnel', 'deliveryPersonnelId', 'DEL');
-    $pdo->prepare('INSERT INTO delivery_personnel (deliveryPersonnelId, userId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate, licenseNumber, licensePhotoUrl, identityType, icNumber, icPhotoUrl, workPermitUrl)
-                   VALUES (:did, :uid, :vt, :vb, :vm, :vp, :ln, :lp, :it, :ic, :ip, :wp)')
+    $pdo->prepare('INSERT INTO delivery_personnel (deliveryPersonnelId, userId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate, licenseNumber, licensePhotoUrl, icNumber, icPhotoUrl)
+                   VALUES (:did, :uid, :vt, :vb, :vm, :vp, :ln, :lp, :ic, :ip)')
         ->execute(['did' => $deliveryPersonnelId, 'uid' => $userId, 'vt' => $vehicleType, 'vb' => $vehicleBrand, 'vm' => $vehicleModel, 'vp' => $vehiclePlate,
-                   'ln' => $licenseNumber, 'lp' => $licensePhotoUrl, 'it' => $identityType, 'ic' => $icNumber, 'ip' => $icPhotoUrl,
-                   'wp' => ($identityType === 'Foreigner' && $workPermitUrl !== '') ? $workPermitUrl : null]);
+                   'ln' => $licenseNumber, 'lp' => $licensePhotoUrl, 'ic' => $icNumber, 'ip' => $icPhotoUrl]);
 
     $pdo->commit();
   } catch (Throwable $e) {

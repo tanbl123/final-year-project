@@ -38,10 +38,8 @@ class AuthService {
     required String verificationCode,
     required String licenseNumber,
     required String licensePhotoUrl,
-    required String identityType,
     required String icNumber,
     required String icPhotoUrl,
-    required String workPermitUrl,
     required String avatarUrl,
   }) async {
     final data = await api.post('/auth/register/courier', {
@@ -56,10 +54,8 @@ class AuthService {
       'verificationCode': verificationCode,
       'licenseNumber': licenseNumber,
       'licensePhotoUrl': licensePhotoUrl,
-      'identityType': identityType,
       'icNumber': icNumber,
       'icPhotoUrl': icPhotoUrl,
-      'workPermitUrl': workPermitUrl,
       'avatarUrl': avatarUrl,
     });
     return (data as Map<String, dynamic>)['message']?.toString() ??
