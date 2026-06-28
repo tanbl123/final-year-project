@@ -73,6 +73,7 @@ class ProductVariant {
 
 /// A published review on a product.
 class ProductReview {
+  final String reviewId;
   final String customerName;
   final int ratingScore;
   final String? comment;
@@ -80,6 +81,7 @@ class ProductReview {
   final String? supplierReply;
 
   ProductReview({
+    required this.reviewId,
     required this.customerName,
     required this.ratingScore,
     this.comment,
@@ -88,6 +90,7 @@ class ProductReview {
   });
 
   factory ProductReview.fromJson(Map<String, dynamic> j) => ProductReview(
+        reviewId: j['reviewId'] as String? ?? '',
         customerName: j['customerName'] as String? ?? 'Customer',
         ratingScore: (j['ratingScore'] as num?)?.toInt() ?? 0,
         comment: j['reviewComment'] as String?,

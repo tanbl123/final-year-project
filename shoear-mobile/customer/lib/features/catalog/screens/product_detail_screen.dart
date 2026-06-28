@@ -23,7 +23,7 @@ class ProductDetailScreen extends StatefulWidget {
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   late Future<ProductDetail> _future;
-  Future<MyReviewStatus>? _myReviewFuture;
+  MyReviewStatus? _myStatus; // null until loaded / not logged in
   String? _selectedVariantId;
   bool _adding = false;
 
@@ -31,16 +31,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   void initState() {
     super.initState();
     _future = context.read<CatalogService>().getProduct(widget.productId);
-    if (context.read<AuthProvider>().isLoggedIn) {
-      _myReviewFuture = context.read<ReviewService>().myReview(widget.productId);
-    }
+    if (context.read<AuthProvider>().isLoggedIn) _loadMyReview();
+  }
+
+  Future<void> _loadMyReview() async {
+    try {
+      final s = await context.read<ReviewService>().myReview(widget.productId);
+      if (mounted) setState(() => _myStatus = s);
+    } catch (_) {/* eligibility just won't show */}
   }
 
   void _reloadReviews() {
     setState(() {
       _future = context.read<CatalogService>().getProduct(widget.productId);
-      _myReviewFuture = context.read<ReviewService>().myReview(widget.productId);
     });
+    if (context.read<AuthProvider>().isLoggedIn) _loadMyReview();
   }
 
   Future<void> _addToCart(ProductDetail p) async {
@@ -331,7 +336,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _yourReviewSection(context),
                           Row(
                             children: [
                               Text('Reviews',
@@ -345,6 +349,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             ],
                           ),
                           const SizedBox(height: 12),
+                          _reviewPrompt(),
                           if (p.reviews.isEmpty)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 20),
@@ -352,7 +357,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   style: TextStyle(color: Colors.grey.shade500)),
                             )
                           else
-                            for (final r in p.reviews) _ReviewTile(review: r),
+                            for (final r in _orderedReviews(p.reviews))
+                              _ReviewTile(
+                                review: r,
+                                isMine: r.reviewId.isNotEmpty && r.reviewId == _myStatus?.myReview?.reviewId,
+                                onEdit: () => _openReviewEditor(existing: _myStatus!.myReview),
+                                onDelete: () => _deleteReview(r.reviewId),
+                              ),
                         ],
                       ),
                     ),
@@ -377,91 +388,54 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
-  Widget _yourReviewSection(BuildContext context) {
-    if (_myReviewFuture == null) return const SizedBox.shrink();
+  // The customer's own review goes FIRST in the list (so Edit/Delete live in the
+  // reviews section, like Shopee/Lazada), the rest follow in their server order.
+  List<ProductReview> _orderedReviews(List<ProductReview> reviews) {
+    final mineId = _myStatus?.myReview?.reviewId;
+    if (mineId == null || mineId.isEmpty) return reviews;
+    final mine = <ProductReview>[];
+    final others = <ProductReview>[];
+    for (final r in reviews) {
+      (r.reviewId == mineId ? mine : others).add(r);
+    }
+    return [...mine, ...others];
+  }
+
+  // Above the list: a "Write a review" CTA (eligible, not yet reviewed) or an
+  // eligibility hint. Once the customer HAS a review it shows inline in the
+  // list (with Edit/Delete), so nothing is rendered here.
+  Widget _reviewPrompt() {
+    final st = _myStatus;
+    if (st == null) return const SizedBox.shrink();
+    // An admin-removed review isn't in the public list, so note it here.
+    if (st.myReview != null) {
+      if (st.myReview!.reviewStatus == 'Removed') {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text('Your review was removed by an admin.',
+              style: TextStyle(fontSize: 12, color: Colors.red.shade400)),
+        );
+      }
+      return const SizedBox.shrink(); // shown inline in the list
+    }
+    if (st.canReview) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: OutlinedButton.icon(
+          onPressed: () => _openReviewEditor(),
+          icon: const Icon(Icons.rate_review_outlined),
+          label: const Text('Write a review'),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, 44),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        ),
+      );
+    }
     return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: FutureBuilder<MyReviewStatus>(
-        future: _myReviewFuture,
-        builder: (context, snap) {
-          if (!snap.hasData) return const SizedBox.shrink();
-          final status = snap.data!;
-          final mine = status.myReview;
-          if (mine != null) {
-            return Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                border: Border.all(color: Colors.grey.shade200),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Text('Your review',
-                          style: TextStyle(fontWeight: FontWeight.w600)),
-                      const SizedBox(width: 8),
-                      Row(
-                        children: [
-                          for (int i = 1; i <= 5; i++)
-                            Icon(
-                              i <= mine.ratingScore ? Icons.star_rounded : Icons.star_outline_rounded,
-                              color: Colors.amber.shade600,
-                              size: 16,
-                            ),
-                        ],
-                      ),
-                      const Spacer(),
-                      if (mine.reviewStatus == 'Removed')
-                        Text('Removed by admin',
-                            style: TextStyle(fontSize: 11, color: Colors.red.shade400)),
-                    ],
-                  ),
-                  if ((mine.reviewComment ?? '').isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    Text(mine.reviewComment!,
-                        style: TextStyle(color: Colors.grey.shade700)),
-                  ],
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      TextButton.icon(
-                        onPressed: () => _openReviewEditor(existing: mine),
-                        icon: const Icon(Icons.edit, size: 15),
-                        label: const Text('Edit'),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => _deleteReview(mine.reviewId),
-                        icon: const Icon(Icons.delete_outline, size: 15),
-                        label: const Text('Delete'),
-                        style: TextButton.styleFrom(foregroundColor: Colors.red),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          }
-          if (status.canReview) {
-            return OutlinedButton.icon(
-              onPressed: () => _openReviewEditor(),
-              icon: const Icon(Icons.rate_review_outlined),
-              label: const Text('Write a review'),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 44),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            );
-          }
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text('Purchase this product to leave a review.',
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-          );
-        },
-      ),
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Text('You can review this product after your order is delivered.',
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
     );
   }
 
@@ -642,13 +616,15 @@ class _SizeChip extends StatelessWidget {
 
 class _ReviewTile extends StatelessWidget {
   final ProductReview review;
-  const _ReviewTile({required this.review});
+  final bool isMine;
+  final VoidCallback? onEdit;
+  final VoidCallback? onDelete;
+  const _ReviewTile({required this.review, this.isMine = false, this.onEdit, this.onDelete});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
+    final primary = Theme.of(context).colorScheme.primary;
+    final body = Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -662,22 +638,43 @@ class _ReviewTile extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(review.customerName,
-                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                  Row(
-                    children: [
-                      for (int i = 1; i <= 5; i++)
-                        Icon(
-                          i <= review.ratingScore ? Icons.star_rounded : Icons.star_outline_rounded,
-                          color: Colors.amber.shade600,
-                          size: 14,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(review.customerName,
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
                         ),
-                    ],
-                  ),
-                ],
+                        if (isMine) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: primary.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text('You',
+                                style: TextStyle(fontSize: 10, color: primary, fontWeight: FontWeight.w700)),
+                          ),
+                        ],
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        for (int i = 1; i <= 5; i++)
+                          Icon(
+                            i <= review.ratingScore ? Icons.star_rounded : Icons.star_outline_rounded,
+                            color: Colors.amber.shade600,
+                            size: 14,
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -707,11 +704,46 @@ class _ReviewTile extends StatelessWidget {
               ),
             ),
           ],
+          if (isMine) ...[
+            const SizedBox(height: 2),
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit, size: 15),
+                  label: const Text('Edit'),
+                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                ),
+                TextButton.icon(
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline, size: 15),
+                  label: const Text('Delete'),
+                  style: TextButton.styleFrom(foregroundColor: Colors.red, visualDensity: VisualDensity.compact),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 4),
           const Divider(height: 1),
         ],
-      ),
-    );
+      );
+
+    // Highlight the customer's own review so it's easy to spot in the list.
+    if (isMine) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            border: Border.all(color: Colors.grey.shade200),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: body,
+        ),
+      );
+    }
+    return Padding(padding: const EdgeInsets.only(bottom: 16), child: body);
   }
 }
 
