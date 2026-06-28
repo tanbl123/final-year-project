@@ -45,6 +45,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   bool _loadingAddr   = true;
   bool _placing       = false;
+  // Snapshot of the just-placed order, shown behind the payment sheet so the
+  // page isn't blank while the customer is paying (cart is already cleared).
+  String? _pendingOrderId;
+  double _pendingTotal = 0;
+  List<CartItem> _pendingItems = const [];
   bool _nameTouched   = false;
   bool _phoneTouched  = false;
   bool _addrTouched   = false;
@@ -326,9 +331,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
     }
 
-    setState(() => _placing = true);
     final orders = context.read<OrderService>();
     final cart   = context.read<CartProvider>();
+    // Snapshot the items being ordered before the cart is cleared, so we can
+    // show a summary behind the payment sheet.
+    final cartNow = cart.cart;
+    final ordered = cartNow == null
+        ? <CartItem>[]
+        : (widget.selectedCartItemIds == null
+            ? cartNow.items
+            : cartNow.items.where((i) => widget.selectedCartItemIds!.contains(i.cartItemId)).toList());
+    setState(() {
+      _placing = true;
+      _pendingItems = ordered;
+      _pendingTotal = ordered.fold<double>(0, (s, i) => s + i.subtotal);
+    });
     String? createdOrderId; // kept for the "pay later" retry on cancel
     try {
       final created = await orders.checkout(
@@ -339,6 +356,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         selectedCartItemIds: widget.selectedCartItemIds,
       );
       createdOrderId = created.orderId;
+      if (mounted) setState(() => _pendingOrderId = created.orderId);
 
       final pi = await orders.createPaymentIntent(created.orderId);
       Stripe.publishableKey = pi['publishableKey'] as String? ?? '';
@@ -479,6 +497,80 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  // Shown behind the Stripe sheet once the order is placed (cart cleared): a
+  // clear "awaiting payment" summary so the page never looks empty/confusing.
+  Widget _awaitingPaymentView(BuildContext context) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const SizedBox(height: 8),
+            Center(child: Icon(Icons.hourglass_top_rounded, size: 40, color: primary)),
+            const SizedBox(height: 8),
+            const Center(
+                child: Text('Awaiting payment',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16))),
+            const SizedBox(height: 4),
+            Center(
+              child: Text(
+                _pendingOrderId == null ? 'Saving your order…' : 'Order $_pendingOrderId',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                children: [
+                  for (final it in _pendingItems)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text('${it.brand} ${it.productName}  ×${it.quantity}',
+                                maxLines: 1, overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 13)),
+                          ),
+                          Text('RM ${it.subtotal.toStringAsFixed(2)}',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    ),
+                  const Divider(height: 18),
+                  Row(
+                    children: [
+                      const Text('Total', style: TextStyle(fontWeight: FontWeight.bold)),
+                      const Spacer(),
+                      Text('RM ${_pendingTotal.toStringAsFixed(2)}',
+                          style: TextStyle(fontWeight: FontWeight.bold, color: primary, fontSize: 16)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Center(
+              child: Text(
+                'Complete the card payment to confirm your order, or choose "Pay later".',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // Shared builder for the structured address text fields.
   Widget _addrField({
     required TextEditingController controller,
@@ -543,17 +635,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         surfaceTintColor: Colors.white,
       ),
       body: (_placing && items.isEmpty)
-          // order already placed, payment in progress — don't flash "cart empty"
-          ? const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 16),
-                  Text('Completing your order…'),
-                ],
-              ),
-            )
+          // Order already placed, payment in progress — show what they're paying
+          // for (the cart is cleared) instead of a blank / "cart empty" page.
+          ? _awaitingPaymentView(context)
           : (cart == null || items.isEmpty)
           ? const Center(child: Text('Your cart is empty.'))
           : ListView(
