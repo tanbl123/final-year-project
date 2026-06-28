@@ -177,10 +177,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   bool get _photosUploaded => _avatarUrl != null && _licensePhotoUrl != null && _icPhotoUrl != null;
 
+  // Let the courier take a fresh photo (preferred for KYC) or pick an existing
+  // one from the gallery.
+  Future<ImageSource?> _choosePhotoSource() => showModalBottomSheet<ImageSource>(
+        context: context,
+        builder: (ctx) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Take a photo'),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library_outlined),
+                title: const Text('Choose from gallery'),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      );
+
   // Pick an image and upload it immediately (pre-login public upload). which ∈
   // {'avatar','license','ic'}.
   Future<void> _pickPhoto(String which) async {
-    final XFile? x = await _picker.pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 85);
+    final source = await _choosePhotoSource();
+    if (source == null) return;
+    final XFile? x = await _picker.pickImage(source: source, maxWidth: 1600, imageQuality: 85);
     if (x == null) return;
     setState(() {
       if (which == 'avatar') _upAvatar = true; else if (which == 'license') _upLicense = true; else _upIc = true;
@@ -460,6 +485,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           _field(
             controller: _icNumber, focusNode: null,
             label: 'IC / identity number', error: _icNumberError, maxLength: 20,
+            keyboard: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             onChanged: (v) => setState(() => _icNumberError = _validateIcNo(v)),
           ),
           _photoTile(label: 'IC photo', url: _icPhotoUrl, uploading: _upIc, onPick: () => _pickPhoto('ic')),
