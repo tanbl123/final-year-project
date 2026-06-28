@@ -8,7 +8,7 @@ export function homePathFor(user) {
   if (user?.role === 'Supplier' && user?.status && user.status !== 'Active') {
     return '/resubmit';
   }
-  return '/products';
+  return '/dashboard';
 }
 
 // allowInactive lets the resubmit page itself be reached by a non-Active

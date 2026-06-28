@@ -8,3 +8,8 @@ export function getSalesReport({ from, to } = {}) {
   const suffix = qs.toString() ? `?${qs}` : '';
   return apiGet(`/reports/sales${suffix}`, getToken());
 }
+
+// The supplier's overview dashboard: { kpis, actions, recentOrders, trend }.
+export function getSupplierDashboard() {
+  return apiGet('/supplier/dashboard', getToken());
+}

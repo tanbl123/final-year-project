@@ -33,6 +33,7 @@ require __DIR__ . '/../../controllers/WishlistController.php';
 require __DIR__ . '/../../controllers/PaymentController.php';
 require __DIR__ . '/../../controllers/NotificationController.php';
 require __DIR__ . '/../../controllers/VehicleController.php';
+require __DIR__ . '/../../controllers/DashboardController.php';
 
 // ── Always answer with JSON, even on a PHP error ──
 // A stray warning/notice or an uncaught error would otherwise print into the
@@ -474,6 +475,13 @@ if ($method === 'GET' && $path === '/reports/sales') {
   handleSupplierSalesReport($pdo, $auth);
 }
 
+// supplier overview dashboard (KPIs + needs-action + recent orders + trend)
+if ($method === 'GET' && $path === '/supplier/dashboard') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleSupplierDashboard($pdo, $auth);
+}
+
 if ($method === 'GET' && $path === '/admin/reports/commission') {
   $auth = requireAuth($secret);
   requireAdmin($auth);
@@ -508,6 +516,14 @@ if ($method === 'GET' && $path === '/admin/badge-counts') {
   requireAdmin($auth);
   $pdo  = getPDO();
   handleAdminBadgeCounts($pdo);
+}
+
+// admin overview dashboard (KPIs + needs-action + recent orders + trend)
+if ($method === 'GET' && $path === '/admin/dashboard') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleAdminDashboard($pdo);
 }
 
 if ($method === 'GET' && $path === '/admin/suppliers/pending') {

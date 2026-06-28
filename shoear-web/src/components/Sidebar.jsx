@@ -7,7 +7,8 @@ import { getBadgeCounts } from '../features/admin/adminService';
 // `badge` names the work-queue count (from /admin/badge-counts) to show as a pill.
 const ADMIN_NAV = [
   { group: 'Main', items: [
-    { to: '/admin', label: 'Suppliers', icon: '🏪', end: true, badge: 'suppliers' },
+    { to: '/admin', label: 'Dashboard', icon: '📊', end: true },
+    { to: '/admin/suppliers', label: 'Suppliers', icon: '🏪', badge: 'suppliers' },
     { to: '/admin/couriers', label: 'Couriers', icon: '🛵', badge: 'couriers' },
     { to: '/admin/changes', label: 'Changes', icon: '📝', badge: 'changes' },
     { to: '/admin/users', label: 'Users', icon: '👥' },
@@ -32,6 +33,9 @@ const ADMIN_NAV = [
 ];
 
 const SUPPLIER_NAV = [
+  { group: 'Main', items: [
+    { to: '/dashboard', label: 'Dashboard', icon: '📊', end: true },
+  ] },
   { group: 'Catalog', items: [
     { to: '/products', label: 'Products', icon: '👟' },
     { to: '/inventory', label: 'Inventory', icon: '📦' },

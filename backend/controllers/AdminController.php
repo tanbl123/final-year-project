@@ -356,7 +356,7 @@ function handleRejectChangeRequest(PDO $pdo, array $auth, string $requestId): vo
 // GET /admin/badge-counts — one cheap call powering the sidebar work-queue
 // badges: how many items in each queue are waiting for the admin to act. The
 // web app polls this periodically so the admin sees pending work at a glance.
-function handleAdminBadgeCounts(PDO $pdo): void {
+function adminBadgeCounts(PDO $pdo): array {
   $counts = [
     // Main / Moderation approval queues
     'suppliers'  => "SELECT COUNT(*) FROM `user` WHERE role = 'Supplier' AND status = 'Pending'",
@@ -372,5 +372,9 @@ function handleAdminBadgeCounts(PDO $pdo): void {
   foreach ($counts as $key => $sql) {
     $out[$key] = (int) $pdo->query($sql)->fetchColumn();
   }
-  sendJson(200, true, ['counts' => $out]);
+  return $out;
+}
+
+function handleAdminBadgeCounts(PDO $pdo): void {
+  sendJson(200, true, ['counts' => adminBadgeCounts($pdo)]);
 }

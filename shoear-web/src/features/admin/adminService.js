@@ -6,6 +6,11 @@ export function getBadgeCounts() {
   return apiGet('/admin/badge-counts', getToken());
 }
 
+// Platform overview dashboard: { kpis, actions, recentOrders, trend }.
+export function getAdminDashboard() {
+  return apiGet('/admin/dashboard', getToken());
+}
+
 // Run the time-based notification sweeps on demand (payment reminders,
 // abandoned-cart, review reminders, auto-cancel). Returns { swept: {...} }.
 // In production a cron hits this; the button is for live demos.

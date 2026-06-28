@@ -1,0 +1,141 @@
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { getAdminDashboard } from '../adminService';
+import SalesTrendChart from '../../../components/SalesTrendChart';
+
+const rm = (n) => 'RM ' + Number(n || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtDate = (s) => (s ? new Date(s).toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' }) : '—');
+
+// Pending work the admin should clear, each linking to its page.
+const ACTIONS = [
+  { key: 'suppliers',  label: 'Supplier applications', to: '/admin/suppliers' },
+  { key: 'couriers',   label: 'Courier applications',  to: '/admin/couriers' },
+  { key: 'products',   label: 'Product approvals',     to: '/admin/products' },
+  { key: 'changes',    label: 'Business changes',      to: '/admin/changes' },
+  { key: 'deliveries', label: 'Unassigned deliveries', to: '/admin/deliveries' },
+  { key: 'issues',     label: 'Delivery issues',       to: '/admin/delivery-issues' },
+  { key: 'refunds',    label: 'Refund requests',       to: '/admin/refunds' },
+];
+
+const STATUS_BADGE = {
+  Placed: 'secondary', Paid: 'primary', Cancelled: 'danger',
+  Shipped: 'info', OutForDelivery: 'info', Delivered: 'success', Completed: 'success',
+};
+
+function Kpi({ label, value, sub, color = 'dark' }) {
+  return (
+    <div className="col-6 col-xl">
+      <div className="card h-100">
+        <div className="card-body">
+          <div className="text-muted small text-uppercase">{label}</div>
+          <div className={`fs-4 fw-semibold text-${color}`}>{value}</div>
+          {sub && <div className="text-muted small">{sub}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminOverviewPage() {
+  const [d, setD] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    getAdminDashboard()
+      .then((res) => { if (active) setD(res); })
+      .catch((err) => { if (active) setError(err.message); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  const totalActions = d ? ACTIONS.reduce((s, a) => s + (d.actions?.[a.key] || 0), 0) : 0;
+
+  return (
+    <div className="container py-4 text-start">
+      <h1 className="mb-1">📊 Dashboard</h1>
+      <p className="text-muted">Platform overview — sales, pending work and recent activity.</p>
+
+      {error && <div className="alert alert-danger py-2">{error}</div>}
+      {loading ? (
+        <p className="text-muted">Loading…</p>
+      ) : !d ? null : (
+        <>
+          {/* KPIs */}
+          <div className="row g-3 mb-4">
+            <Kpi label="Gross sales (GMV)" value={rm(d.kpis.gmv)} />
+            <Kpi label="Paid orders" value={d.kpis.orders} />
+            <Kpi label="Commission earned" value={rm(d.kpis.commission)} color="success" />
+            <Kpi label="Active suppliers" value={d.kpis.suppliers} />
+            <Kpi label="Active couriers" value={d.kpis.couriers} />
+          </div>
+
+          <div className="row g-3">
+            {/* Needs attention */}
+            <div className="col-lg-5">
+              <div className="card h-100">
+                <div className="card-header bg-white fw-semibold d-flex justify-content-between">
+                  <span>Needs attention</span>
+                  {totalActions === 0 && <span className="badge text-bg-success">All clear</span>}
+                </div>
+                <div className="list-group list-group-flush">
+                  {ACTIONS.map((a) => {
+                    const n = d.actions?.[a.key] || 0;
+                    return (
+                      <Link key={a.key} to={a.to}
+                        className="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        <span className={n > 0 ? '' : 'text-muted'}>{a.label}</span>
+                        <span className={`badge rounded-pill text-bg-${n > 0 ? 'danger' : 'light'}`}>{n}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Sales trend */}
+            <div className="col-lg-7">
+              <div className="card h-100">
+                <div className="card-header bg-white fw-semibold">Sales — last 14 days</div>
+                <div className="card-body">
+                  <SalesTrendChart data={d.trend} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Recent orders */}
+          <h5 className="mt-4 mb-3">Recent orders</h5>
+          {d.recentOrders.length === 0 ? (
+            <div className="card card-body text-center text-muted">No orders yet.</div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table align-middle">
+                <thead>
+                  <tr>
+                    <th>Order</th><th>Customer</th>
+                    <th className="text-end">Total</th><th>Status</th><th>Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {d.recentOrders.map((o) => (
+                    <tr key={o.orderId}>
+                      <td><Link to={`/admin/orders/${o.orderId}`} className="fw-semibold text-decoration-none">{o.orderId}</Link></td>
+                      <td>{o.customerName}</td>
+                      <td className="text-end">{rm(o.total)}</td>
+                      <td><span className={`badge text-bg-${STATUS_BADGE[o.status] || 'secondary'}`}>{o.status}</span></td>
+                      <td>{fmtDate(o.date)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+export default AdminOverviewPage;

@@ -23,6 +23,8 @@ import AdminOrdersPage from './features/admin/orders/AdminOrdersPage';
 import AdminOrderDetailPage from './features/admin/orders/AdminOrderDetailPage';
 import AdminInventoryPage from './features/admin/products/AdminInventoryPage';
 import AdminDashboardPage from './features/admin/suppliers/AdminDashboardPage';
+import AdminOverviewPage from './features/admin/dashboard/AdminOverviewPage';
+import SupplierDashboardPage from './features/supplier/dashboard/SupplierDashboardPage';
 import AdminProductApprovalsPage from './features/admin/products/AdminProductApprovalsPage';
 import AdminCategoriesPage from './features/admin/products/AdminCategoriesPage';
 import AdminBusinessChangesPage from './features/admin/suppliers/AdminBusinessChangesPage';
@@ -140,6 +142,9 @@ const router = createBrowserRouter(
 
       {/* admin */}
       <Route path="/admin" element={
+        <ProtectedRoute role="Admin"><AdminOverviewPage /></ProtectedRoute>
+      } />
+      <Route path="/admin/suppliers" element={
         <ProtectedRoute role="Admin"><AdminDashboardPage /></ProtectedRoute>
       } />
       <Route path="/admin/products" element={
@@ -188,6 +193,9 @@ const router = createBrowserRouter(
       } />
 
       {/* supplier */}
+      <Route path="/dashboard" element={
+        <ProtectedRoute role="Supplier"><SupplierDashboardPage /></ProtectedRoute>
+      } />
       <Route path="/products" element={
         <ProtectedRoute role="Supplier"><ProductsPage /></ProtectedRoute>
       } />
