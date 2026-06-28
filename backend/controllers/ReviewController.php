@@ -116,20 +116,21 @@ function handleDeleteReviewReply(PDO $pdo, array $auth, string $reviewId): void 
 }
 
 // ── Customer reviews (create / edit / delete your OWN review) ─────────────────
-// Business rule (proposal): a customer may only review a product they have
-// actually purchased (an order of theirs, past payment, contains that product).
-// One review per customer per product (enforced by a unique key).
-
-const PURCHASED_STATUSES = "'Paid','Processing','Shipped','OutForDelivery','Delivered','Completed'";
-
+// Business rule: a customer may only review a product they have purchased AND
+// RECEIVED — i.e. the parcel carrying that product (its supplier's delivery for
+// that order) has been Delivered. This matches Shopee/Lazada/Amazon: you rate
+// what you've actually received, not what you've merely paid for. One review
+// per customer per product (enforced by a unique key).
 function customerHasPurchased(PDO $pdo, string $customerId, string $productId): bool {
   $stmt = $pdo->prepare(
     "SELECT 1
        FROM order_item oi
        JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+       JOIN product p          ON p.productId = pv.productId
        JOIN `order` o          ON o.orderId = oi.orderId
+       JOIN delivery d         ON d.orderId = o.orderId AND d.supplierId = p.supplierId
       WHERE pv.productId = :pid AND o.customerId = :cid
-        AND o.orderStatus IN (" . PURCHASED_STATUSES . ")
+        AND d.deliveryStatus = 'Delivered'
       LIMIT 1"
   );
   $stmt->execute(['pid' => $productId, 'cid' => $customerId]);

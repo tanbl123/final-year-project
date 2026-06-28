@@ -600,13 +600,9 @@ function handleGetCustomerOrder(PDO $pdo, array $auth, string $orderId): void {
   $order['canRefund'] = $canRefund;
   $order['refundWindowDays'] = REFUND_WINDOW_DAYS;
 
-  // Review: a customer may rate items on any purchased (paid+) order — same rule
-  // the review endpoint enforces. The per-item 'reviewed' flag drives Rate vs Rated.
-  $order['canReview'] = in_array(
-    $order['orderStatus'],
-    ['Paid', 'Processing', 'Shipped', 'OutForDelivery', 'Delivered', 'Completed'],
-    true
-  );
+  // Review: only after every parcel is delivered (real-world — you rate what
+  // you've actually received). The per-item 'reviewed' flag drives Rate vs Rated.
+  $order['canReview'] = $allDelivered;
 
   sendJson(200, true, $order);
 }
