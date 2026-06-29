@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getPendingProducts, approveProduct, rejectProduct, refreshBadges } from '../adminService';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Pagination from '../../../components/Pagination';
 import Toast from '../../../components/Toast';
+import ClearableInput from '../../../components/ClearableInput';
+import SortableTh from '../../../components/SortableTh';
 import { usePagination } from '../../../hooks/usePagination';
+import { useTableSort } from '../../../hooks/useTableSort';
 import ProductReviewModal from './ProductReviewModal';
 
 const PAGE_SIZE = 10;
@@ -16,8 +19,29 @@ function AdminProductApprovalsPage() {
   const [busyId, setBusyId] = useState('');         // productId currently being actioned
   const [rejecting, setRejecting] = useState(null); // product pending reject confirmation
   const [reviewId, setReviewId] = useState('');     // product being previewed in the modal
+  const [search, setSearch] = useState('');
 
-  const { page, setPage, totalPages, pageItems } = usePagination(products, PAGE_SIZE);
+  // client-side search across name / brand / supplier / category
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((p) =>
+      [p.productName, p.productBrand, p.companyName, p.categoryName]
+        .some((v) => String(v ?? '').toLowerCase().includes(q)));
+  }, [products, search]);
+
+  // click a header to sort; Price numeric, Submitted by date
+  const sort = useTableSort(filtered, {
+    initialKey: 'created_at',
+    initialDir: 'desc',
+    getValue: (p, k) => {
+      if (k === 'productPrice') return Number(p.productPrice);
+      if (k === 'created_at') return new Date(p.created_at).getTime();
+      return p[k] ?? '';
+    },
+  });
+
+  const { page, setPage, totalPages, pageItems } = usePagination(sort.sorted, PAGE_SIZE);
 
   // load the pending queue on mount
   useEffect(() => {
@@ -56,23 +80,35 @@ function AdminProductApprovalsPage() {
       <Toast message={notice} onClose={() => setNotice('')} />
       {error && <div className="alert alert-danger py-2">{error}</div>}
 
+      {!loading && products.length > 0 && (
+        <div className="card card-body mb-4">
+          <label className="form-label small text-muted mb-1">Search</label>
+          <ClearableInput type="text" placeholder="Product, brand, supplier or category"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            onClear={() => { setSearch(''); setPage(1); }} />
+        </div>
+      )}
+
       {loading ? (
         <p className="text-muted">Loading…</p>
       ) : products.length === 0 ? (
         <div className="card card-body text-center text-muted">
           🎉 No pending products. You're all caught up.
         </div>
+      ) : filtered.length === 0 ? (
+        <div className="card card-body text-center text-muted">No pending products match your search.</div>
       ) : (
         <div className="table-responsive">
           <table className="table align-middle">
             <thead>
               <tr>
-                <th>Product</th>
-                <th>Supplier</th>
-                <th>Category</th>
-                <th className="text-end">Price</th>
-                <th>Submitted</th>
-                <th className="text-end">Actions</th>
+                <SortableTh label="Product" columnKey="productName" sort={sort} />
+                <SortableTh label="Supplier" columnKey="companyName" sort={sort} />
+                <SortableTh label="Category" columnKey="categoryName" sort={sort} className="text-center" style={{ width: 130 }} />
+                <SortableTh label="Price" columnKey="productPrice" sort={sort} className="text-end" style={{ width: 120 }} />
+                <SortableTh label="Submitted" columnKey="created_at" sort={sort} className="text-center" style={{ width: 120 }} />
+                <th className="text-end" style={{ width: 230 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -86,9 +122,9 @@ function AdminProductApprovalsPage() {
                     <div className="text-muted small">{p.productBrand}</div>
                   </td>
                   <td>{p.companyName}</td>
-                  <td><span className="badge text-bg-light">{p.categoryName}</span></td>
+                  <td className="text-center"><span className="badge text-bg-light">{p.categoryName}</span></td>
                   <td className="text-end">RM {p.productPrice.toFixed(2)}</td>
-                  <td className="text-muted small">{new Date(p.created_at).toLocaleDateString()}</td>
+                  <td className="text-center text-muted small">{new Date(p.created_at).toLocaleDateString()}</td>
                   <td className="text-end text-nowrap">
                     <button
                       className="btn btn-outline-secondary btn-sm me-2"
@@ -117,7 +153,7 @@ function AdminProductApprovalsPage() {
           </table>
 
           <Pagination page={page} totalPages={totalPages} onChange={setPage}
-            summary={`Page ${page} of ${totalPages} · ${products.length} pending`} />
+            summary={`Page ${page} of ${totalPages} · ${filtered.length} pending`} />
         </div>
       )}
 

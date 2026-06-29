@@ -112,10 +112,23 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy }) {
             </div>
 
             <div className="modal-footer">
-              <button type="button" className="btn btn-outline-danger" disabled={busy || !product}
-                onClick={() => onReject(product)}>Reject</button>
-              <button type="button" className="btn btn-success" disabled={busy || !product}
-                onClick={() => onApprove(product)}>{busy ? '…' : 'Approve'}</button>
+              {/* Approve/Reject only when the parent wants moderation (the approval
+                  queue). Read-only callers (e.g. inventory) just get Close. */}
+              {(onApprove || onReject) ? (
+                <>
+                  <button type="button" className="btn btn-light" onClick={onClose}>Close</button>
+                  {onReject && (
+                    <button type="button" className="btn btn-outline-danger" disabled={busy || !product}
+                      onClick={() => onReject(product)}>Reject</button>
+                  )}
+                  {onApprove && (
+                    <button type="button" className="btn btn-success" disabled={busy || !product}
+                      onClick={() => onApprove(product)}>{busy ? '…' : 'Approve'}</button>
+                  )}
+                </>
+              ) : (
+                <button type="button" className="btn btn-secondary" onClick={onClose}>Close</button>
+              )}
             </div>
           </div>
         </div>

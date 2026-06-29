@@ -5,6 +5,7 @@ import ClearableInput from '../../../components/ClearableInput';
 import SortableTh from '../../../components/SortableTh';
 import { usePagination } from '../../../hooks/usePagination';
 import { useTableSort } from '../../../hooks/useTableSort';
+import ProductReviewModal from './ProductReviewModal';
 
 const PAGE_SIZE = 12;
 const LOW_STOCK = 10;
@@ -16,6 +17,7 @@ function AdminInventoryPage() {
   const [error, setError] = useState('');
   const [filters, setFilters] = useState({ status: '', search: '' });
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [reviewId, setReviewId] = useState('');   // product previewed in the modal
 
   // Click any column header to sort; Sizes/Total stock compare numerically.
   const sort = useTableSort(rows, {
@@ -99,13 +101,17 @@ function AdminInventoryPage() {
                 <SortableTh label="Total stock" columnKey="totalStock" sort={sort} className="text-end" style={{ width: 110 }} />
                 <th className="text-center" style={{ width: 110 }}>Stock</th>
                 <SortableTh label="Status" columnKey="status" sort={sort} className="text-center" style={{ width: 110 }} />
+                <th className="text-center" style={{ width: 90 }}>Detail</th>
               </tr>
             </thead>
             <tbody>
               {pageItems.map((r) => (
                 <tr key={r.productId}>
                   <td>
-                    <div className="fw-semibold">{r.productName}</div>
+                    <button type="button" className="btn btn-link p-0 fw-semibold text-start text-decoration-none"
+                      onClick={() => setReviewId(r.productId)}>
+                      {r.productName}
+                    </button>
                     <div className="text-muted small">{r.brand}</div>
                   </td>
                   <td>{r.supplierName}</td>
@@ -114,6 +120,11 @@ function AdminInventoryPage() {
                   <td className="text-center">{stockBadge(r.totalStock)}</td>
                   <td className="text-center">
                     <span className={`badge text-bg-${STATUS_COLORS[r.status] || 'secondary'}`}>{r.status}</span>
+                  </td>
+                  <td className="text-center">
+                    <button className="btn btn-outline-secondary btn-sm" onClick={() => setReviewId(r.productId)}>
+                      View
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -124,6 +135,9 @@ function AdminInventoryPage() {
             summary={`Page ${page} of ${totalPages} · ${rows.length} products`} />
         </div>
       )}
+
+      {/* read-only product detail (no approve/reject — inventory is read-only) */}
+      <ProductReviewModal productId={reviewId} onClose={() => setReviewId('')} />
     </div>
   );
 }
