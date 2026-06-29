@@ -263,6 +263,12 @@ if ($method === 'GET' && $path === '/courier/earnings') {
   $pdo  = getPDO();
   handleCourierEarnings($pdo, $config, $auth);
 }
+// A rejected courier fixes & resubmits their application (back to Pending).
+if ($method === 'POST' && $path === '/courier/application/resubmit') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleResubmitCourierApplication($pdo, $auth);
+}
 if ($method === 'POST' && $path === '/courier/stripe/onboard') {
   $auth = requireAuth($secret);
   $pdo  = getPDO();

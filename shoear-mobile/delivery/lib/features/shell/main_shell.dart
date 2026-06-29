@@ -7,6 +7,7 @@ import 'package:delivery/features/delivery/screens/assignments_screen.dart';
 import 'package:delivery/features/delivery/screens/history_screen.dart';
 import 'package:delivery/features/profile/screens/profile_screen.dart';
 import 'package:delivery/features/earnings/screens/payout_gate.dart';
+import 'package:delivery/features/auth/screens/resubmit_gate.dart';
 
 /// Top-level shell: shows the login screen until a courier signs in, then a
 /// two-tab bar (active deliveries / history).
@@ -22,8 +23,11 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    final loggedIn = context.watch<AuthProvider>().isLoggedIn;
-    if (!loggedIn) return const LoginScreen();
+    final auth = context.watch<AuthProvider>();
+    if (!auth.isLoggedIn) return const LoginScreen();
+
+    // A rejected courier is gated to the fix-&-resubmit form (back to Pending).
+    if (auth.user?.status == 'Rejected') return const ResubmitGate();
 
     // A newly-approved courier must connect a payout (bank) account before the
     // app becomes usable — they're paid per delivery, so it's required.

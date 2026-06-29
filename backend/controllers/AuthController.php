@@ -378,6 +378,157 @@ function handleRegisterCustomer(PDO $pdo): void {
 // and must be approved by an admin before it can log in. Creates a `user` row +
 // a `delivery_personnel` row together. Requires a valid verification code emailed
 // via /auth/register/send-code.
+// Reads + validates the courier KYC / vehicle / profile fields shared by
+// registration and resubmission (everything except email, password and the
+// email verification code). Returns a normalised array, or sends a 400 + exits.
+// NOTE: handleRegisterCourier keeps its own inline copy of these checks; keep
+// the two in sync when changing courier KYC rules.
+function validateCourierKyc(array $body): array {
+  $fullName    = trim($body['fullName'] ?? '');
+  $phoneNumber = trim($body['phoneNumber'] ?? '');
+  $vehicleType  = trim($body['vehicleType']  ?? 'Motorcycle');
+  $vehicleBrand = trim($body['vehicleBrand'] ?? '');
+  $vehicleModel = trim($body['vehicleModel'] ?? '');
+  $vehiclePlate = strtoupper(trim($body['vehiclePlate'] ?? ''));
+  $licenseNumber   = trim($body['licenseNumber'] ?? '');
+  $licensePhotoUrl = trim($body['licensePhotoUrl'] ?? '');
+  $rawClasses = $body['licenseClass'] ?? [];
+  if (is_string($rawClasses)) { $rawClasses = explode(',', $rawClasses); }
+  $licenseClasses = is_array($rawClasses)
+    ? array_values(array_unique(array_filter(array_map('trim', $rawClasses)))) : [];
+  $licenseExpiry   = trim($body['licenseExpiry'] ?? '');
+  $icNumber        = trim($body['icNumber'] ?? '');
+  $icPhotoUrl      = trim($body['icPhotoUrl'] ?? '');
+  $dateOfBirth     = trim($body['dateOfBirth'] ?? '');
+  $termsAccepted   = ($body['termsAccepted'] ?? false) === true;
+  $avatarUrl       = trim($body['avatarUrl'] ?? '');
+  $rawZones = $body['coverageZones'] ?? [];
+  if (is_string($rawZones)) { $rawZones = explode(',', $rawZones); }
+  $coverageZones = is_array($rawZones)
+    ? array_values(array_unique(array_filter(array_map('trim', $rawZones)))) : [];
+
+  if ($fullName === '' || $phoneNumber === '' || $vehicleBrand === '' || $vehicleModel === '' || $vehiclePlate === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'All fields including vehicle details are required.']);
+  }
+  if (!in_array($vehicleType, ['Motorcycle', 'Car', 'Van', 'Truck'], true)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Invalid vehicle type.']);
+  }
+  if (mb_strlen($vehicleBrand) > 50 || mb_strlen($vehicleModel) > 50) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Vehicle brand/model is too long (max 50 characters).']);
+  }
+  if (mb_strlen($vehiclePlate) < 3 || !preg_match('/^[A-Za-z0-9 \-]+$/', $vehiclePlate)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid plate number (letters, numbers, spaces or hyphens).']);
+  }
+  if ($licenseNumber === '' || $licensePhotoUrl === '' || $icNumber === '' || $icPhotoUrl === '' || $avatarUrl === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Driving licence, IC (both number + photo) and a profile photo are all required.']);
+  }
+  if (mb_strlen($licenseNumber) > 20) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Licence number is too long (max 20 characters).']);
+  }
+  if (!preg_match('/^\d{12}$/', $icNumber)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'IC must be 12 digits (e.g. 901231145678).']);
+  }
+  $allowedClasses = ['B2', 'B', 'D', 'DA', 'E', 'E1', 'E2'];
+  if (count($licenseClasses) === 0) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please select at least one driving licence class.']);
+  }
+  foreach ($licenseClasses as $lc) {
+    if (!in_array($lc, $allowedClasses, true)) {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'One of the selected licence classes is invalid.']);
+    }
+  }
+  $exp = DateTime::createFromFormat('Y-m-d', $licenseExpiry);
+  if (!$exp || $exp->format('Y-m-d') !== $licenseExpiry) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please provide a valid licence expiry date.']);
+  }
+  if ($exp <= new DateTime('today')) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Your driving licence has expired.']);
+  }
+  $dob = DateTime::createFromFormat('Y-m-d', $dateOfBirth);
+  if (!$dob || $dob->format('Y-m-d') !== $dateOfBirth) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please provide a valid date of birth.']);
+  }
+  $age = (new DateTime('today'))->diff($dob)->y;
+  if ($dob >= new DateTime('today') || $age < 18) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'You must be at least 18 years old to register as a courier.']);
+  }
+  if ($age > 100) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please provide a valid date of birth.']);
+  }
+  if (!$termsAccepted) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'You must agree to the Terms and the data-use (PDPA) notice.']);
+  }
+  if (count($coverageZones) === 0) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please select at least one delivery coverage area.']);
+  }
+  foreach ($coverageZones as $z) {
+    if (!in_array($z, MY_STATES, true)) {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'One of your coverage areas is not a valid state.']);
+    }
+  }
+  if (!preg_match('/^(0\d{8,10}|\+?60\d{8,10})$/', $phoneNumber)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid Malaysian phone number, e.g. 0123456789.']);
+  }
+  if (mb_strlen($fullName) > 120) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Full name is too long (max 120 characters).']);
+  }
+
+  return [
+    'fullName' => $fullName, 'phoneNumber' => normalizeMyPhone($phoneNumber),
+    'vehicleType' => $vehicleType, 'vehicleBrand' => $vehicleBrand,
+    'vehicleModel' => $vehicleModel, 'vehiclePlate' => $vehiclePlate,
+    'licenseNumber' => $licenseNumber, 'licensePhotoUrl' => $licensePhotoUrl,
+    'licenseClass' => implode(',', $licenseClasses), 'licenseExpiry' => $licenseExpiry,
+    'icNumber' => $icNumber, 'icPhotoUrl' => $icPhotoUrl, 'dateOfBirth' => $dateOfBirth,
+    'coverageZones' => implode(',', $coverageZones), 'avatarUrl' => $avatarUrl,
+  ];
+}
+
+// POST /courier/application/resubmit — a REJECTED courier fixes and resubmits
+// their application. Updates their details and flips the account back to
+// Pending so it reappears in the admin approval queue.
+function handleResubmitCourierApplication(PDO $pdo, array $auth): void {
+  requireDeliveryPersonnelId($pdo, $auth);   // 403 unless this is a courier account
+
+  $cur = $pdo->prepare('SELECT status FROM `user` WHERE userId = :id');
+  $cur->execute(['id' => $auth['userId']]);
+  if ($cur->fetchColumn() !== 'Rejected') {
+    sendJson(409, false, null, ['code' => 'NOT_REJECTED', 'message' => 'Only a rejected application can be resubmitted.']);
+  }
+
+  $k = validateCourierKyc(getJsonBody());
+
+  $pdo->beginTransaction();
+  try {
+    $pdo->prepare(
+      'UPDATE `user` SET fullName = :fn, phoneNumber = :ph, avatarUrl = :av,
+              status = "Pending", rejectionReason = NULL
+        WHERE userId = :id'
+    )->execute(['fn' => $k['fullName'], 'ph' => $k['phoneNumber'],
+                'av' => $k['avatarUrl'] !== '' ? $k['avatarUrl'] : null, 'id' => $auth['userId']]);
+
+    $pdo->prepare(
+      'UPDATE delivery_personnel
+          SET vehicleType = :vt, vehicleBrand = :vb, vehicleModel = :vm, vehiclePlate = :vp,
+              licenseNumber = :ln, licensePhotoUrl = :lp, licenseClass = :lc, licenseExpiry = :le,
+              icNumber = :ic, icPhotoUrl = :ip, dateOfBirth = :dob, coverageZones = :cz,
+              termsAcceptedAt = NOW()
+        WHERE userId = :id'
+    )->execute([
+      'vt' => $k['vehicleType'], 'vb' => $k['vehicleBrand'], 'vm' => $k['vehicleModel'], 'vp' => $k['vehiclePlate'],
+      'ln' => $k['licenseNumber'], 'lp' => $k['licensePhotoUrl'], 'lc' => $k['licenseClass'], 'le' => $k['licenseExpiry'],
+      'ic' => $k['icNumber'], 'ip' => $k['icPhotoUrl'], 'dob' => $k['dateOfBirth'], 'cz' => $k['coverageZones'],
+      'id' => $auth['userId'],
+    ]);
+    $pdo->commit();
+  } catch (Throwable $e) {
+    $pdo->rollBack();
+    sendJson(500, false, null, ['code' => 'SERVER', 'message' => 'Could not resubmit. Please try again.']);
+  }
+
+  sendJson(200, true, ['status' => 'Pending', 'message' => 'Application resubmitted for review.']);
+}
+
 function handleRegisterCourier(PDO $pdo): void {
   $body        = getJsonBody();
   $email       = trim($body['email'] ?? '');
@@ -734,7 +885,10 @@ function handleLogin(PDO $pdo, string $secret): void {
   // gates them there). Pending/Banned/Suspended/Deleted stay blocked.
   $isActive           = $user['status'] === 'Active';
   $isRejectedSupplier = $user['role'] === 'Supplier' && $user['status'] === 'Rejected';
-  if (!$isActive && !$isRejectedSupplier) {
+  // A rejected courier is also let in, but only to fix & resubmit their
+  // application (the delivery app gates them to the resubmit screen).
+  $isRejectedCourier  = $user['role'] === 'DeliveryPersonnel' && $user['status'] === 'Rejected';
+  if (!$isActive && !$isRejectedSupplier && !$isRejectedCourier) {
     if ($user['status'] === 'Pending') {
       $msg = 'Your account is pending admin approval. Please wait for approval.';
     } elseif ($user['status'] === 'Banned') {
@@ -776,7 +930,7 @@ function handleLogin(PDO $pdo, string $secret): void {
 // GET /auth/me — the signed-in user's own profile (+ role-specific details).
 function handleMe(PDO $pdo, array $auth): void {
   $stmt = $pdo->prepare(
-    'SELECT userId, username, fullName, email, phoneNumber, avatarUrl, role, status, created_at,
+    'SELECT userId, username, fullName, email, phoneNumber, avatarUrl, role, status, rejectionReason, created_at,
             (password IS NOT NULL) AS hasPassword
        FROM `user` WHERE userId = :id'
   );
@@ -796,7 +950,10 @@ function handleMe(PDO $pdo, array $auth): void {
                                postcode, city, state
                           FROM customer WHERE userId = :id');
   } elseif ($u['role'] === 'DeliveryPersonnel') {
-    $p = $pdo->prepare('SELECT deliveryPersonnelId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate FROM delivery_personnel WHERE userId = :id');
+    $p = $pdo->prepare('SELECT deliveryPersonnelId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate,
+                               licenseNumber, licensePhotoUrl, licenseClass, licenseExpiry,
+                               icNumber, icPhotoUrl, dateOfBirth, coverageZones
+                          FROM delivery_personnel WHERE userId = :id');
   } else {
     $p = null;
   }

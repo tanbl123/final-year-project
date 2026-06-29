@@ -25,7 +25,11 @@ enum _Step { form, verify }
 /// (awaiting admin approval), so we don't log in — we pop back and tell the
 /// applicant to wait for approval.
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+  // When [resubmit] is non-null the screen runs in "fix & resubmit" mode for a
+  // REJECTED courier: it pre-fills the form from this /auth/me payload, hides
+  // the email-code + password steps, and submits to the resubmit endpoint.
+  final Map<String, dynamic>? resubmit;
+  const RegisterScreen({super.key, this.resubmit});
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -109,6 +113,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   int    _resendIn = 0;
   Timer? _resendTimer;
 
+  bool get _isResubmit => widget.resubmit != null;
+
   @override
   void initState() {
     super.initState();
@@ -118,6 +124,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _vehiclePlateFocus.addListener(() => _onBlur(_vehiclePlateFocus, () => _vehiclePlateError = _validatePlate(_vehiclePlate.text)));
     _passwordFocus.addListener(()     => _onBlur(_passwordFocus,     () => _passwordError     = _validatePassword(_password.text)));
     _confirmFocus.addListener(()      => _onBlur(_confirmFocus,      () => _confirmError      = _validateConfirm()));
+    if (_isResubmit) _prefillFromResubmit();
+  }
+
+  // Pre-fill every field from the rejected courier's existing application
+  // (/auth/me payload: top-level user fields + a 'profile' block).
+  void _prefillFromResubmit() {
+    final me = widget.resubmit!;
+    final p = (me['profile'] as Map?) ?? {};
+    DateTime? parse(String? s) => (s != null && s.length >= 10) ? DateTime.tryParse(s.substring(0, 10)) : null;
+    List<String> csv(dynamic v) => (v == null || '$v'.isEmpty)
+        ? <String>[] : '$v'.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+
+    _fullName.text     = me['fullName']?.toString() ?? '';
+    _email.text        = me['email']?.toString() ?? '';
+    _phone.text        = me['phoneNumber']?.toString() ?? '';
+    _vehicleType       = p['vehicleType']?.toString() ?? 'Motorcycle';
+    _vehicleBrand.text = p['vehicleBrand']?.toString() ?? '';
+    _vehicleModel.text = p['vehicleModel']?.toString() ?? '';
+    _vehiclePlate.text = p['vehiclePlate']?.toString() ?? '';
+    _licenseNumber.text = p['licenseNumber']?.toString() ?? '';
+    _icNumber.text      = p['icNumber']?.toString() ?? '';
+    _avatarUrl         = (me['avatarUrl']?.toString().isNotEmpty ?? false) ? me['avatarUrl'].toString() : null;
+    _licensePhotoUrl   = (p['licensePhotoUrl']?.toString().isNotEmpty ?? false) ? p['licensePhotoUrl'].toString() : null;
+    _icPhotoUrl        = (p['icPhotoUrl']?.toString().isNotEmpty ?? false) ? p['icPhotoUrl'].toString() : null;
+    _licenseClasses..clear()..addAll(csv(p['licenseClass']));
+    _coverageZones..clear()..addAll(csv(p['coverageZones']));
+    _licenseExpiry     = parse(p['licenseExpiry']?.toString());
+    _dateOfBirth       = parse(p['dateOfBirth']?.toString());
+    _termsAccepted     = true;   // they consented at first registration
+    _licenseSameAsIc   = _licenseNumber.text.isNotEmpty && _licenseNumber.text == _icNumber.text;
   }
 
   void _onBlur(FocusNode node, VoidCallback validate) {
@@ -331,6 +367,62 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
+  // Resubmit mode → validate (no email/password/code) and update the rejected
+  // application straight away, flipping it back to Pending.
+  Future<void> _resubmit() async {
+    setState(() {
+      _fullNameError     = _validateFullName(_fullName.text);
+      _phoneError        = _validatePhone(_phone.text);
+      _vehicleBrandError = _validateBrand(_vehicleBrand.text);
+      _vehicleModelError = _validateModel(_vehicleModel.text);
+      _vehiclePlateError = _validatePlate(_vehiclePlate.text);
+      _licenseNumberError = _licenseSameAsIc ? null : _validateLicenseNo(_licenseNumber.text);
+      _icNumberError      = _validateIcNo(_icNumber.text);
+      _licenseClassError  = _validateLicenseClass();
+      _licenseExpiryError = _validateLicenseExpiry();
+      _dobError           = _validateDob();
+      _termsError         = _termsAccepted ? null : 'Please agree to the Terms and PDPA notice.';
+      _coverageError      = _coverageZones.isEmpty ? 'Select at least one delivery area.' : null;
+      _docsError = _photosUploaded ? null : 'Please add your profile photo, licence photo and IC photo.';
+    });
+    if (_fullNameError != null || _phoneError != null ||
+        _vehicleBrandError != null || _vehicleModelError != null || _vehiclePlateError != null ||
+        _licenseNumberError != null || _icNumberError != null || _docsError != null ||
+        _licenseClassError != null || _licenseExpiryError != null || _dobError != null ||
+        _termsError != null || _coverageError != null) return;
+
+    setState(() => _loading = true);
+    try {
+      final message = await context.read<AuthProvider>().authService.resubmitCourier(
+            fullName:         _fullName.text.trim(),
+            phoneNumber:      _phone.text.trim(),
+            vehicleType:      _vehicleType,
+            vehicleBrand:     _vehicleBrand.text.trim(),
+            vehicleModel:     _vehicleModel.text.trim(),
+            vehiclePlate:     _vehiclePlate.text.trim(),
+            licenseNumber:    _licenseSameAsIc ? _icNumber.text.trim() : _licenseNumber.text.trim(),
+            licensePhotoUrl:  _licensePhotoUrl ?? '',
+            licenseClasses:   _licenseClasses.toList(),
+            licenseExpiry:    _licenseExpiry != null ? _fmtDate(_licenseExpiry!) : '',
+            icNumber:         _icNumber.text.trim(),
+            icPhotoUrl:       _icPhotoUrl ?? '',
+            dateOfBirth:      _dateOfBirth != null ? _fmtDate(_dateOfBirth!) : '',
+            termsAccepted:    _termsAccepted,
+            coverageZones:    _coverageZones.toList(),
+            avatarUrl:        _avatarUrl ?? '',
+          );
+      if (!mounted) return;
+      // Back to Pending — sign out so they wait for the admin's review.
+      context.showSnackBarNow(SnackBar(content: Text(message), duration: const Duration(seconds: 5)));
+      await context.read<AuthProvider>().logout();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _docsError = e.toString());
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   // Step 2 → verify code and submit application
   Future<void> _submit() async {
     final code = _code.text.trim();
@@ -414,12 +506,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_step == _Step.form ? 'Apply to be a courier' : 'Verify email'),
+        title: Text(_step == _Step.verify
+            ? 'Verify email'
+            : _isResubmit ? 'Update your application' : 'Apply to be a courier'),
         leading: _step == _Step.verify
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () => setState(() { _step = _Step.form; _codeError = null; }),
               )
+            : null,
+        actions: _isResubmit
+            ? [
+                TextButton(
+                  onPressed: () => context.read<AuthProvider>().logout(),
+                  child: const Text('Sign out', style: TextStyle(color: Colors.white)),
+                ),
+              ]
             : null,
       ),
       body: _step == _Step.form ? _formStep() : _verifyStep(),
@@ -429,12 +531,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget _formStep() => ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Text(
-            'Create a courier account. Your application is reviewed by an admin '
-            'before you can sign in.',
-            style: TextStyle(fontSize: 13),
-          ),
-          const SizedBox(height: 16),
+          if (_isResubmit) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Your application was rejected', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Text(
+                    (widget.resubmit!['rejectionReason']?.toString().isNotEmpty ?? false)
+                        ? widget.resubmit!['rejectionReason'].toString()
+                        : 'Please review your details and resubmit.',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text('Fix the details below and resubmit for review.', style: TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ] else ...[
+            const Text(
+              'Create a courier account. Your application is reviewed by an admin '
+              'before you can sign in.',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+          ],
           _sectionHeader('Personal details', top: 0),
           _field(
             controller: _fullName,
@@ -450,6 +578,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
             label:    'Email',
             keyboard: TextInputType.emailAddress,
             error:    _emailError,
+            enabled:  !_isResubmit,   // email is fixed once registered
             onChanged: (v) => setState(() => _emailError = _validateEmail(v)),
           ),
           _field(
@@ -467,46 +596,49 @@ class _RegisterScreenState extends State<RegisterScreen> {
             error: _dobError,
             onTap: _pickDateOfBirth,
           ),
-          _sectionHeader('Account security'),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: TextField(
-              controller:  _password,
-              focusNode:   _passwordFocus,
-              obscureText: _obscurePw,
-              onChanged: (v) => setState(() {
-                _passwordError = _validatePassword(v);
-                if (_confirm.text.isNotEmpty) _confirmError = _validateConfirm();
-              }),
-              decoration: InputDecoration(
-                labelText:  'Password',
-                border:     const OutlineInputBorder(),
-                errorText:  _passwordError,
-                suffixIcon: IconButton(
-                  icon: Icon(_obscurePw ? Icons.visibility_off : Icons.visibility),
-                  onPressed: () => setState(() => _obscurePw = !_obscurePw),
+          // Password is set at registration only — not editable on resubmit.
+          if (!_isResubmit) ...[
+            _sectionHeader('Account security'),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: TextField(
+                controller:  _password,
+                focusNode:   _passwordFocus,
+                obscureText: _obscurePw,
+                onChanged: (v) => setState(() {
+                  _passwordError = _validatePassword(v);
+                  if (_confirm.text.isNotEmpty) _confirmError = _validateConfirm();
+                }),
+                decoration: InputDecoration(
+                  labelText:  'Password',
+                  border:     const OutlineInputBorder(),
+                  errorText:  _passwordError,
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscurePw ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setState(() => _obscurePw = !_obscurePw),
+                  ),
                 ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: TextField(
-              controller:  _confirm,
-              focusNode:   _confirmFocus,
-              obscureText: _obscureCfm,
-              onChanged:   (_) => setState(() => _confirmError = _validateConfirm()),
-              decoration:  InputDecoration(
-                labelText:  'Confirm password',
-                border:     const OutlineInputBorder(),
-                errorText:  _confirmError,
-                suffixIcon: IconButton(
-                  icon: Icon(_obscureCfm ? Icons.visibility_off : Icons.visibility),
-                  onPressed: () => setState(() => _obscureCfm = !_obscureCfm),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: TextField(
+                controller:  _confirm,
+                focusNode:   _confirmFocus,
+                obscureText: _obscureCfm,
+                onChanged:   (_) => setState(() => _confirmError = _validateConfirm()),
+                decoration:  InputDecoration(
+                  labelText:  'Confirm password',
+                  border:     const OutlineInputBorder(),
+                  errorText:  _confirmError,
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscureCfm ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setState(() => _obscureCfm = !_obscureCfm),
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
           _sectionHeader('Vehicle details'),
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
@@ -691,12 +823,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
           const SizedBox(height: 16),
           FilledButton(
-            onPressed: _loading ? null : _sendCode,
+            onPressed: _loading ? null : (_isResubmit ? _resubmit : _sendCode),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
               child: _loading
                   ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Text('Submit'),
+                  : Text(_isResubmit ? 'Resubmit application' : 'Submit'),
             ),
           ),
         ],

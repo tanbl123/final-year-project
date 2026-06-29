@@ -72,6 +72,49 @@ class AuthService {
         'Registration submitted. Your account is pending admin approval.';
   }
 
+  /// POST /courier/application/resubmit — a REJECTED courier fixes and resubmits
+  /// their application. Same fields as registration minus email/password/code.
+  /// Sets the account back to Pending; returns the server's confirmation message.
+  Future<String> resubmitCourier({
+    required String fullName,
+    required String phoneNumber,
+    required String vehicleType,
+    required String vehicleBrand,
+    required String vehicleModel,
+    required String vehiclePlate,
+    required String licenseNumber,
+    required String licensePhotoUrl,
+    required List<String> licenseClasses,
+    required String licenseExpiry,
+    required String icNumber,
+    required String icPhotoUrl,
+    required String dateOfBirth,
+    required bool termsAccepted,
+    required List<String> coverageZones,
+    required String avatarUrl,
+  }) async {
+    final data = await api.post('/courier/application/resubmit', {
+      'fullName': fullName,
+      'phoneNumber': phoneNumber,
+      'vehicleType': vehicleType,
+      'vehicleBrand': vehicleBrand,
+      'vehicleModel': vehicleModel,
+      'vehiclePlate': vehiclePlate,
+      'licenseNumber': licenseNumber,
+      'licensePhotoUrl': licensePhotoUrl,
+      'licenseClass': licenseClasses,
+      'licenseExpiry': licenseExpiry,
+      'icNumber': icNumber,
+      'icPhotoUrl': icPhotoUrl,
+      'dateOfBirth': dateOfBirth,
+      'termsAccepted': termsAccepted,
+      'coverageZones': coverageZones,
+      'avatarUrl': avatarUrl,
+    });
+    return (data as Map<String, dynamic>)['message']?.toString() ??
+        'Application resubmitted. It is pending admin approval again.';
+  }
+
   /// POST /uploads/registration-doc — public (pre-login) upload for the courier's
   /// licence / IC / profile photo during registration. Returns the stored URL.
   Future<String> uploadRegistrationDoc(File file) async {

@@ -4,12 +4,14 @@ class CourierUser {
   final String role;
   final String fullName;
   final String status;
+  final String? rejectionReason;   // set when status == 'Rejected'
 
   CourierUser({
     required this.userId,
     required this.role,
     required this.fullName,
     required this.status,
+    this.rejectionReason,
   });
 
   factory CourierUser.fromJson(Map<String, dynamic> j) => CourierUser(
@@ -17,6 +19,7 @@ class CourierUser {
         role: j['role'] as String? ?? '',
         fullName: j['fullName'] as String? ?? '',
         status: j['status'] as String? ?? '',
+        rejectionReason: j['rejectionReason'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -24,6 +27,7 @@ class CourierUser {
         'role': role,
         'fullName': fullName,
         'status': status,
+        'rejectionReason': rejectionReason,
       };
 }
 
