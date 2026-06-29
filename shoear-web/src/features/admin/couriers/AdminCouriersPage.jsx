@@ -20,6 +20,33 @@ function ageFrom(dateStr) {
   return age;
 }
 
+// A labelled photo that opens full-size in a new tab when clicked.
+function Photo({ label, url }) {
+  return (
+    <div>
+      <div className="text-muted small mb-1">{label}</div>
+      {url ? (
+        <a href={url} target="_blank" rel="noreferrer" title="Open full size">
+          <img src={url} alt={label}
+            style={{ width: '100%', height: 140, objectFit: 'cover' }}
+            className="border rounded" />
+        </a>
+      ) : (
+        <div className="border rounded bg-light d-flex align-items-center justify-content-center text-muted small"
+          style={{ height: 140 }}>not provided</div>
+      )}
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div className="mb-2">
+      <span className="text-muted small">{label}: </span>{children}
+    </div>
+  );
+}
+
 // Courier approval queue — delivery personnel who self-applied via the delivery
 // app start as Pending and appear here. Mirrors the supplier approval flow.
 function AdminCouriersPage() {
@@ -28,6 +55,7 @@ function AdminCouriersPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');       // transient success message
   const [busyId, setBusyId] = useState('');        // userId currently being actioned
+  const [viewing, setViewing] = useState(null);    // courier whose full form is open
 
   const { page, setPage, totalPages, pageItems } = usePagination(couriers, PAGE_SIZE);
 
@@ -52,6 +80,7 @@ function AdminCouriersPage() {
     try {
       await approveCourier(courier.userId);
       setCouriers((prev) => prev.filter((c) => c.userId !== courier.userId));
+      setViewing(null);
       setNotice(`${courier.fullName} approved.`);
     } catch (err) {
       setError(err.message);
@@ -61,6 +90,7 @@ function AdminCouriersPage() {
   }
 
   function openReject(courier) {
+    setViewing(null);
     setRejecting(courier);
     setReason('');
     setTerminal(false);
@@ -111,14 +141,13 @@ function AdminCouriersPage() {
                 <th>Courier</th>
                 <th>Contact</th>
                 <th>Vehicle</th>
-                <th>Identity &amp; licence</th>
                 <th>Submitted</th>
                 <th className="text-end">Actions</th>
               </tr>
             </thead>
             <tbody>
               {pageItems.map((c) => (
-                <tr key={c.userId}>
+                <tr key={c.userId} style={{ cursor: 'pointer' }} onClick={() => setViewing(c)}>
                   <td>
                     <div className="d-flex align-items-center gap-2">
                       {c.avatarUrl ? (
@@ -142,46 +171,11 @@ function AdminCouriersPage() {
                   <td className="small">
                     {c.vehicleType && c.vehicleBrand ? `${c.vehicleType} • ${c.vehicleBrand} ${c.vehicleModel} — ${c.vehiclePlate}` : '—'}
                   </td>
-                  <td className="small">
-                    <div>
-                      <span className="text-muted">Licence:</span> {c.licenseNumber || '—'}
-                      {c.licenseClass && c.licenseClass.split(',').filter(Boolean).map((lc) => (
-                        <span key={lc} className="ms-1 badge bg-light text-dark border">{lc}</span>
-                      ))}
-                      {c.licensePhotoUrl && (
-                        <a href={c.licensePhotoUrl} target="_blank" rel="noreferrer" className="ms-1">view</a>
-                      )}
-                    </div>
-                    {c.licenseExpiry && (
-                      <div className={isExpired(c.licenseExpiry) ? 'text-danger' : 'text-muted'}>
-                        Expires {c.licenseExpiry}{isExpired(c.licenseExpiry) ? ' (expired)' : ''}
-                      </div>
-                    )}
-                    <div>
-                      <span className="text-muted">IC:</span> {c.icNumber || '—'}
-                      {c.icPhotoUrl && (
-                        <a href={c.icPhotoUrl} target="_blank" rel="noreferrer" className="ms-1">view</a>
-                      )}
-                    </div>
-                    {c.dateOfBirth && (
-                      <div className="text-muted">DOB: {c.dateOfBirth} ({ageFrom(c.dateOfBirth)} yrs)</div>
-                    )}
-                    <div className="text-muted">
-                      {c.termsAcceptedAt
-                        ? <span className="text-success">✓ T&amp;C / PDPA agreed</span>
-                        : <span className="text-danger">T&amp;C not agreed</span>}
-                    </div>
-                    <div className="mt-1">
-                      <span className="text-muted">Covers:</span>{' '}
-                      {c.coverageZones
-                        ? c.coverageZones.split(',').filter(Boolean).map((z) => (
-                            <span key={z} className="badge bg-info-subtle text-dark border me-1">{z}</span>
-                          ))
-                        : '—'}
-                    </div>
-                  </td>
                   <td className="text-muted small">{new Date(c.created_at).toLocaleDateString()}</td>
-                  <td className="text-end text-nowrap">
+                  <td className="text-end text-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <button className="btn btn-outline-primary btn-sm me-2" onClick={() => setViewing(c)}>
+                      Details
+                    </button>
                     <button
                       className="btn btn-success btn-sm me-2"
                       disabled={busyId === c.userId}
@@ -205,6 +199,104 @@ function AdminCouriersPage() {
           <Pagination page={page} totalPages={totalPages} onChange={setPage}
             summary={`Page ${page} of ${totalPages} · ${couriers.length} pending`} />
         </div>
+      )}
+
+      {/* ── Full application detail modal ── */}
+      {viewing && (
+        <>
+          <div className="modal d-block" tabIndex="-1" role="dialog">
+            <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" role="document">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">Courier application — {viewing.fullName}</h5>
+                  <button type="button" className="btn-close" onClick={() => setViewing(null)}></button>
+                </div>
+                <div className="modal-body text-start">
+                  <div className="row g-4">
+                    {/* Left: details */}
+                    <div className="col-md-7">
+                      <h6 className="text-uppercase text-muted small">Personal</h6>
+                      <Field label="Full name"><strong>{viewing.fullName}</strong></Field>
+                      <Field label="Username">@{viewing.username}</Field>
+                      <Field label="Email">{viewing.email}</Field>
+                      <Field label="Phone">{viewing.phoneNumber}</Field>
+                      <Field label="Date of birth">
+                        {viewing.dateOfBirth
+                          ? `${viewing.dateOfBirth} (${ageFrom(viewing.dateOfBirth)} yrs)`
+                          : '—'}
+                      </Field>
+
+                      <h6 className="text-uppercase text-muted small mt-3">Identity & licence</h6>
+                      <Field label="IC / identity no.">{viewing.icNumber || '—'}</Field>
+                      <Field label="Licence no.">{viewing.licenseNumber || '—'}</Field>
+                      <Field label="Licence class">
+                        {viewing.licenseClass
+                          ? viewing.licenseClass.split(',').filter(Boolean).map((lc) => (
+                              <span key={lc} className="badge bg-light text-dark border me-1">{lc}</span>
+                            ))
+                          : '—'}
+                      </Field>
+                      <Field label="Licence expiry">
+                        {viewing.licenseExpiry
+                          ? <span className={isExpired(viewing.licenseExpiry) ? 'text-danger fw-semibold' : ''}>
+                              {viewing.licenseExpiry}{isExpired(viewing.licenseExpiry) ? ' (expired)' : ''}
+                            </span>
+                          : '—'}
+                      </Field>
+
+                      <h6 className="text-uppercase text-muted small mt-3">Vehicle</h6>
+                      <Field label="Vehicle">
+                        {viewing.vehicleType && viewing.vehicleBrand
+                          ? `${viewing.vehicleType} • ${viewing.vehicleBrand} ${viewing.vehicleModel} — ${viewing.vehiclePlate}`
+                          : '—'}
+                      </Field>
+
+                      <h6 className="text-uppercase text-muted small mt-3">Coverage & consent</h6>
+                      <Field label="Delivers to">
+                        {viewing.coverageZones
+                          ? viewing.coverageZones.split(',').filter(Boolean).map((z) => (
+                              <span key={z} className="badge bg-info-subtle text-dark border me-1">{z}</span>
+                            ))
+                          : '—'}
+                      </Field>
+                      <Field label="Terms / PDPA">
+                        {viewing.termsAcceptedAt
+                          ? <span className="text-success">✓ Agreed</span>
+                          : <span className="text-danger">Not agreed</span>}
+                      </Field>
+                      <Field label="Submitted">{new Date(viewing.created_at).toLocaleString()}</Field>
+                    </div>
+
+                    {/* Right: photos */}
+                    <div className="col-md-5">
+                      <h6 className="text-uppercase text-muted small">Documents</h6>
+                      <div className="d-flex flex-column gap-3">
+                        <Photo label="Profile photo" url={viewing.avatarUrl} />
+                        <Photo label="IC photo" url={viewing.icPhotoUrl} />
+                        <Photo label="Driving licence photo" url={viewing.licensePhotoUrl} />
+                      </div>
+                      <div className="form-text mt-1">Click a photo to open it full size.</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-outline-secondary" onClick={() => setViewing(null)}>
+                    Close
+                  </button>
+                  <button type="button" className="btn btn-outline-danger"
+                    disabled={busyId === viewing.userId} onClick={() => openReject(viewing)}>
+                    Reject
+                  </button>
+                  <button type="button" className="btn btn-success"
+                    disabled={busyId === viewing.userId} onClick={() => approve(viewing)}>
+                    {busyId === viewing.userId ? '…' : 'Approve'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="modal-backdrop show"></div>
+        </>
       )}
 
       {rejecting && (
