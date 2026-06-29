@@ -21,7 +21,13 @@ export function rangeForPreset(preset, customFrom = '', customTo = '') {
       return { from: iso(f), to: iso(now), label: 'This month' };
     }
     case 'custom':
-      if (customFrom && customTo) return { from: customFrom, to: customTo, label: `${customFrom} to ${customTo}` };
+      if (customFrom && customTo) {
+        const today = iso(now);
+        // never let a manually-typed future date through
+        const f = customFrom > today ? today : customFrom;
+        const t = customTo > today ? today : customTo;
+        return { from: f, to: t, label: `${f} to ${t}` };
+      }
       return { from: null, to: null, label: 'All time' };
     default:
       return { from: null, to: null, label: 'All time' };
@@ -35,6 +41,7 @@ export default function ReportPeriodBar({ onChange }) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
 
+  const today = iso(new Date());   // no future dates — there are no future sales
   const apply = (p, f, t) => onChange(rangeForPreset(p, f, t));
 
   return (
@@ -64,7 +71,7 @@ export default function ReportPeriodBar({ onChange }) {
             <label className="form-label small text-muted mb-1">From</label>
             <input
               type="date" className="form-control form-control-sm" value={from}
-              max={to || undefined}
+              max={to || today}
               onChange={(e) => { setFrom(e.target.value); if (e.target.value && to) apply('custom', e.target.value, to); }}
             />
           </div>
@@ -72,7 +79,7 @@ export default function ReportPeriodBar({ onChange }) {
             <label className="form-label small text-muted mb-1">To</label>
             <input
               type="date" className="form-control form-control-sm" value={to}
-              min={from || undefined}
+              min={from || undefined} max={today}
               onChange={(e) => { setTo(e.target.value); if (from && e.target.value) apply('custom', from, e.target.value); }}
             />
           </div>
