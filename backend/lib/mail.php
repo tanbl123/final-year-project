@@ -151,6 +151,41 @@ function sendVerificationCodeEmail(array $config, string $toEmail, string $code,
   sendMail($config, $toEmail, '', $subject, $text, $html);
 }
 
+// Tell a courier applicant the admin's decision on their application.
+// $status is 'Active' (approved), 'Rejected' (fixable) or 'Banned' (final).
+function sendCourierDecisionEmail(array $config, string $toEmail, string $fullName, string $status, ?string $reason): void {
+  $name      = $fullName !== '' ? $fullName : 'there';
+  $reasonTxt = ($reason !== null && $reason !== '') ? $reason : '';
+
+  if ($status === 'Active') {
+    $subject = 'Your ShoeAR courier application is approved 🎉';
+    $text = "Hi $name,\n\nGreat news — your ShoeAR courier application has been approved!\n\n"
+          . "Open the ShoeAR Express app and sign in to set up your payout (bank) account, then you can start accepting deliveries.\n\n— ShoeAR";
+    $body = '<p>Great news — your ShoeAR courier application has been <strong>approved</strong>!</p>'
+          . '<p>Open the ShoeAR Express app and sign in to set up your payout account, then you can start accepting deliveries.</p>';
+  } elseif ($status === 'Rejected') {
+    $subject = 'Your ShoeAR courier application needs changes';
+    $text = "Hi $name,\n\nThanks for applying to be a ShoeAR courier. We need a few changes before we can approve your application.\n\n"
+          . ($reasonTxt !== '' ? "Reason: $reasonTxt\n\n" : '')
+          . "Please sign in to the ShoeAR Express app, fix the details, and resubmit your application for review.\n\n— ShoeAR";
+    $body = '<p>Thanks for applying to be a ShoeAR courier. We need a few changes before we can approve your application.</p>'
+          . ($reasonTxt !== '' ? '<p><strong>Reason:</strong> ' . htmlspecialchars($reasonTxt, ENT_QUOTES) . '</p>' : '')
+          . '<p>Please sign in to the ShoeAR Express app, fix the details, and <strong>resubmit</strong> your application for review.</p>';
+  } else { // Banned
+    $subject = 'Your ShoeAR courier application was declined';
+    $text = "Hi $name,\n\nThank you for your interest in becoming a ShoeAR courier. Unfortunately your application has been declined and cannot be resubmitted.\n\n"
+          . ($reasonTxt !== '' ? "Reason: $reasonTxt\n\n" : '')
+          . "— ShoeAR";
+    $body = '<p>Thank you for your interest in becoming a ShoeAR courier. Unfortunately your application has been <strong>declined</strong> and cannot be resubmitted.</p>'
+          . ($reasonTxt !== '' ? '<p><strong>Reason:</strong> ' . htmlspecialchars($reasonTxt, ENT_QUOTES) . '</p>' : '');
+  }
+
+  $html = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:auto">'
+        . '<h2 style="margin:0 0 12px">🛵 ShoeAR Express</h2>'
+        . "<p>Hi " . htmlspecialchars($name, ENT_QUOTES) . ",</p>" . $body . '</div>';
+  sendMail($config, $toEmail, $fullName, $subject, $text, $html);
+}
+
 // Compose + send the "forgot password" reset-code email.
 function sendPasswordResetCodeEmail(array $config, string $toEmail, string $code, int $ttlMinutes): void {
   $subject = 'Your ShoeAR password reset code';

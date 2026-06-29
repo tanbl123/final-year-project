@@ -591,14 +591,14 @@ if ($method === 'POST' && preg_match('#^/admin/couriers/([^/]+)/approve$#', $pat
   $auth = requireAuth($secret);
   requireAdmin($auth);
   $pdo  = getPDO();
-  handleApproveCourier($pdo, $m[1]);
+  handleApproveCourier($pdo, $m[1], $config);
 }
 
 if ($method === 'POST' && preg_match('#^/admin/couriers/([^/]+)/reject$#', $path, $m)) {
   $auth = requireAuth($secret);
   requireAdmin($auth);
   $pdo  = getPDO();
-  handleRejectCourier($pdo, $m[1]);
+  handleRejectCourier($pdo, $m[1], $config);
 }
 
 // supplier business-detail change requests (re-approval queue)

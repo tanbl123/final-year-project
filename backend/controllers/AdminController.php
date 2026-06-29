@@ -80,8 +80,8 @@ function handleListPendingCouriers(PDO $pdo): void {
 
 // Shared: move a currently-Pending courier to a new status. Optionally records a
 // rejection reason (shown to the courier at login) — passing null clears it.
-function setCourierStatus(PDO $pdo, string $userId, string $newStatus, ?string $reason = null): void {
-  $stmt = $pdo->prepare("SELECT status, role FROM `user` WHERE userId = :id");
+function setCourierStatus(PDO $pdo, string $userId, string $newStatus, ?string $reason = null, array $config = []): void {
+  $stmt = $pdo->prepare("SELECT status, role, email, fullName FROM `user` WHERE userId = :id");
   $stmt->execute(['id' => $userId]);
   $row = $stmt->fetch();
 
@@ -110,18 +110,27 @@ function setCourierStatus(PDO $pdo, string $userId, string $newStatus, ?string $
     }
   }
 
+  // Email the applicant the decision — the reliable channel for someone who
+  // hasn't logged in yet. Best-effort: a mail hiccup must not fail the action.
+  if (function_exists('sendCourierDecisionEmail') && function_exists('mailConfigured')
+      && mailConfigured($config) && !empty($row['email'])) {
+    try {
+      sendCourierDecisionEmail($config, $row['email'], $row['fullName'] ?? '', $newStatus, $reason);
+    } catch (Throwable $e) { /* ignore — the in-app notification still stands */ }
+  }
+
   sendJson(200, true, ['userId' => $userId, 'status' => $newStatus]);
 }
 
 // POST /admin/couriers/{userId}/approve — clears any past rejection reason.
-function handleApproveCourier(PDO $pdo, string $userId): void {
-  setCourierStatus($pdo, $userId, 'Active', null);
+function handleApproveCourier(PDO $pdo, string $userId, array $config = []): void {
+  setCourierStatus($pdo, $userId, 'Active', null, $config);
 }
 
 // POST /admin/couriers/{userId}/reject — body: { reason, terminal? }.
 // terminal=true bans the applicant permanently; otherwise they're Rejected and
 // see the reason at login. A reason is required so the courier knows why.
-function handleRejectCourier(PDO $pdo, string $userId): void {
+function handleRejectCourier(PDO $pdo, string $userId, array $config = []): void {
   $body     = getJsonBody();
   $reason   = trim($body['reason'] ?? '');
   $terminal = !empty($body['terminal']);
@@ -132,7 +141,7 @@ function handleRejectCourier(PDO $pdo, string $userId): void {
   if (mb_strlen($reason) > 255) {
     $reason = mb_substr($reason, 0, 255);
   }
-  setCourierStatus($pdo, $userId, $terminal ? 'Banned' : 'Rejected', $reason);
+  setCourierStatus($pdo, $userId, $terminal ? 'Banned' : 'Rejected', $reason, $config);
 }
 
 // ── Product approvals ────────────────────────────────────────────────
