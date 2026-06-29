@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getSalesReport } from './reportService';
 import { useAuth } from '../../auth/AuthContext';
 import ReportPeriodBar from '../../../components/ReportPeriodBar';
+import ReportPreviewModal from '../../../components/ReportPreviewModal';
 
 const ALL_TIME = { from: null, to: null, label: 'All time' };
 
@@ -30,6 +31,7 @@ function ReportsPage() {
 
   useEffect(() => {
     let active = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     getSalesReport({ from: range.from, to: range.to })
       .then((d) => { if (active) setData(d); })
@@ -38,13 +40,15 @@ function ReportsPage() {
     return () => { active = false; };
   }, [range.from, range.to]);
 
+  const [preview, setPreview] = useState(false);
+
   const hasSales = !!data && data.summary.products > 0;
   const growth = data?.period?.growthPct;
 
-  async function exportPdf() {
-    const { generateReportPdf } = await import('../../../utils/reportPdf'); // lazy: keep jsPDF out of the main bundle
+  // Report options for preview + download (same document for both).
+  function buildReportOpts() {
     const rate = data.commissionRate;
-    generateReportPdf({
+    return {
       title: 'Sales Report',
       generatedBy: user?.fullName,
       period: range.label,
@@ -68,7 +72,7 @@ function ReportsPage() {
       ]),
       foot: [['Total', data.summary.unitsSold, rm(data.summary.grossSales), rm(data.summary.netEarnings)]],
       columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
-    });
+    };
   }
 
   return (
@@ -80,11 +84,13 @@ function ReportsPage() {
         </div>
         <div className="d-flex align-items-end gap-2 flex-wrap">
           <ReportPeriodBar onChange={setRange} />
-          <button className="btn btn-outline-primary" onClick={exportPdf} disabled={!hasSales}>
-            ⬇ Export PDF
+          <button className="btn btn-outline-primary" onClick={() => setPreview(true)} disabled={!hasSales}>
+            👁 Preview &amp; export
           </button>
         </div>
       </div>
+
+      <ReportPreviewModal open={preview} onClose={() => setPreview(false)} build={buildReportOpts} />
 
       <div className="d-flex align-items-center gap-2 mb-3 mt-2">
         <span className="text-muted small">Showing: <span className="fw-semibold">{range.label}</span></span>

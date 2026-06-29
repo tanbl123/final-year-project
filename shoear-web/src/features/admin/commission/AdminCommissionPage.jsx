@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Toast from '../../../components/Toast';
 import ReportPeriodBar from '../../../components/ReportPeriodBar';
+import ReportPreviewModal from '../../../components/ReportPreviewModal';
 
 const rm = (n) => 'RM ' + Number(n || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const ALL_TIME = { from: null, to: null, label: 'All time' };
@@ -20,6 +21,7 @@ function AdminCommissionPage() {
   const [newRate, setNewRate] = useState('');
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState(false);
+  const [preview, setPreview] = useState(false);
 
   function load(r = range) {
     setLoading(true);
@@ -68,10 +70,10 @@ function AdminCommissionPage() {
   const hasReport = !!data && data.summary.suppliers > 0;
   const growth = data?.period?.growthPct;
 
-  async function exportPdf() {
-    const { generateReportPdf } = await import('../../../utils/reportPdf'); // lazy: keep jsPDF out of the main bundle
+  // Report options for preview + download (same document for both).
+  function buildReportOpts() {
     const rate = data.commissionRate;
-    generateReportPdf({
+    return {
       title: 'Commission Report',
       generatedBy: user?.fullName,
       period: range.label,
@@ -89,7 +91,7 @@ function AdminCommissionPage() {
       body: data.bySupplier.map((s) => [s.companyName, s.units, rm(s.gross), rm(s.commission)]),
       foot: [['Total', '—', rm(data.summary.grossSales), rm(data.summary.totalCommission)]],
       columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
-    });
+    };
   }
 
   return (
@@ -176,8 +178,8 @@ function AdminCommissionPage() {
             <h5 className="mb-0">Commission earned by supplier</h5>
             <div className="d-flex align-items-end gap-2 flex-wrap">
               <ReportPeriodBar onChange={setRange} />
-              <button className="btn btn-outline-primary btn-sm" onClick={exportPdf} disabled={!hasReport}>
-                ⬇ Export PDF
+              <button className="btn btn-outline-primary btn-sm" onClick={() => setPreview(true)} disabled={!hasReport}>
+                👁 Preview &amp; export
               </button>
             </div>
           </div>
@@ -260,6 +262,8 @@ function AdminCommissionPage() {
       />
 
       <Toast message={toast} onClose={() => setToast('')} />
+
+      <ReportPreviewModal open={preview} onClose={() => setPreview(false)} build={buildReportOpts} />
     </div>
   );
 }

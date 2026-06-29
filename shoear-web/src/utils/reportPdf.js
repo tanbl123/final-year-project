@@ -29,7 +29,12 @@ function makeReference(prefix, now) {
  * @param {(string|number)[][]} [opts.foot] totals row(s)
  * @param {object} [opts.columnStyles] jspdf-autotable column styles
  */
-export function generateReportPdf({
+/**
+ * Build the report PDF document (without saving) so callers can either preview
+ * it (doc.output('blob')) or download it (doc.save). Returns { doc, filename }.
+ * See generateReportPdf for the option shape.
+ */
+export function buildReportDoc({
   title,
   generatedBy,
   period = 'All time',
@@ -88,6 +93,14 @@ export function generateReportPdf({
   }
 
   // ── Detailed data table ───────────────────────────────────────────────────
+  // Columns the caller right-aligns (numeric) — keep their HEADER and FOOTER
+  // cells right-aligned too, so the column header sits above its figures
+  // instead of drifting to the left of a wide auto-sized column.
+  const rightCols = new Set(
+    Object.entries(columnStyles)
+      .filter(([, s]) => s && s.halign === 'right')
+      .map(([k]) => Number(k)),
+  );
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
@@ -98,6 +111,11 @@ export function generateReportPdf({
     footStyles: { fillColor: [240, 240, 245], textColor: 20, fontStyle: 'bold' },
     styles: { fontSize: 9, cellPadding: 5 },
     columnStyles,
+    didParseCell: (data) => {
+      if ((data.section === 'head' || data.section === 'foot') && rightCols.has(data.column.index)) {
+        data.cell.styles.halign = 'right';
+      }
+    },
     // footer on every page
     didDrawPage: () => {
       doc.setFontSize(8);
@@ -110,5 +128,14 @@ export function generateReportPdf({
     },
   });
 
-  doc.save(`${title.replace(/\s+/g, '_')}_${ref}.pdf`);
+  return { doc, filename: `${title.replace(/\s+/g, '_')}_${ref}.pdf` };
+}
+
+/**
+ * Build and immediately download the report PDF (the existing one-click export).
+ * @param {object} opts see buildReportDoc
+ */
+export function generateReportPdf(opts) {
+  const { doc, filename } = buildReportDoc(opts);
+  doc.save(filename);
 }
