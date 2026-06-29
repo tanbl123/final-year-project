@@ -86,11 +86,8 @@ function handleCourierStripeOnboard(PDO $pdo, array $config, array $auth): void 
 
   try {
     if (!$accountId) {
-      $account = stripeApi($secret, 'POST', '/v1/accounts', [
-        'type'         => 'express',
-        'country'      => 'MY',
-        'capabilities' => ['transfers' => ['requested' => 'true']],
-      ]);
+      $account = stripeApi($secret, 'POST', '/v1/accounts',
+        stripeConnectAccountParams(['transfers' => ['requested' => 'true']]));
       $accountId = $account['id'];
       $pdo->prepare('UPDATE delivery_personnel SET stripeAccountId = :sid WHERE deliveryPersonnelId = :id')
           ->execute(['sid' => $accountId, 'id' => $row['deliveryPersonnelId']]);

@@ -31,14 +31,11 @@ function handleStripeOnboard(PDO $pdo, array $config, array $auth): void {
   try {
     // create the Connect account on first use and remember its id
     if (!$accountId) {
-      $account = stripeApi($secret, 'POST', '/v1/accounts', [
-        'type'         => 'express',
-        'country'      => 'MY',
-        'capabilities' => [
+      $account = stripeApi($secret, 'POST', '/v1/accounts',
+        stripeConnectAccountParams([
           'transfers'     => ['requested' => 'true'],
           'card_payments' => ['requested' => 'true'],
-        ],
-      ]);
+        ]));
       $accountId = $account['id'];
       $pdo->prepare('UPDATE supplier SET stripeAccountId = :sid WHERE supplierId = :id')
           ->execute(['sid' => $accountId, 'id' => $row['supplierId']]);

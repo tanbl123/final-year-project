@@ -42,3 +42,25 @@ function stripeApi(string $secret, string $method, string $path, array $params =
   }
   return $data;
 }
+
+// Params for creating a Connect account for a Malaysian platform.
+//
+// MY risk-control rules forbid the PLATFORM from being liable for losses — which
+// is the default for `type: 'express'` accounts, so Stripe rejects them with
+// "Platforms in MY cannot create accounts where the platform is loss-liable".
+// Instead we use `controller` properties to put loss liability on the CONNECTED
+// account, while keeping Stripe-hosted (Express-style) onboarding via account
+// links (requirement_collection = 'stripe'). $capabilities is e.g.
+// ['transfers' => ['requested' => 'true']].
+function stripeConnectAccountParams(array $capabilities): array {
+  return [
+    'country'      => 'MY',
+    'capabilities' => $capabilities,
+    'controller'   => [
+      'losses'                 => ['payments' => 'stripe'],   // connected account bears losses, not the platform
+      'fees'                   => ['payer' => 'account'],
+      'requirement_collection' => 'stripe',                   // Stripe collects requirements → hosted onboarding works
+      'stripe_dashboard'       => ['type' => 'express'],
+    ],
+  ];
+}
