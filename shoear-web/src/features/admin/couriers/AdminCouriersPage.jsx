@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getPendingCouriers, approveCourier, rejectCourier } from '../adminService';
+import { getPendingCouriers, approveCourier, rejectCourier, refreshBadges } from '../adminService';
 import Pagination from '../../../components/Pagination';
 import { usePagination } from '../../../hooks/usePagination';
 
@@ -81,6 +81,7 @@ function AdminCouriersPage() {
       await approveCourier(courier.userId);
       setCouriers((prev) => prev.filter((c) => c.userId !== courier.userId));
       setViewing(null);
+      refreshBadges();   // drop the sidebar "Couriers" count immediately
       setNotice(`${courier.fullName} approved.`);
     } catch (err) {
       setError(err.message);
@@ -106,6 +107,7 @@ function AdminCouriersPage() {
     try {
       await rejectCourier(courier.userId, { reason: reason.trim(), terminal });
       setCouriers((prev) => prev.filter((c) => c.userId !== courier.userId));
+      refreshBadges();   // drop the sidebar "Couriers" count immediately
       setNotice(`${courier.fullName} ${terminal ? 'banned' : 'rejected'}.`);
     } catch (err) {
       setError(err.message);

@@ -6,6 +6,13 @@ export function getBadgeCounts() {
   return apiGet('/admin/badge-counts', getToken());
 }
 
+// Ask the sidebar to re-fetch its badge counts right now (instead of waiting
+// for the next poll). Call after any action that changes a work-queue count,
+// e.g. approving/rejecting a courier. The Sidebar listens for this event.
+export function refreshBadges() {
+  window.dispatchEvent(new Event('shoear:badges-refresh'));
+}
+
 // Platform overview dashboard: { kpis, actions, recentOrders, trend, period }.
 // Optional { from, to } (YYYY-MM-DD) scopes the KPIs/trend to a period.
 export function getAdminDashboard({ from, to } = {}) {

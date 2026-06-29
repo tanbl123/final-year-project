@@ -79,7 +79,9 @@ function useBadgeCounts(isAdmin) {
     };
     load();
     const id = setInterval(load, 45000);
-    return () => { active = false; clearInterval(id); };
+    // let action pages (approve/reject/etc.) refresh the counts immediately
+    window.addEventListener('shoear:badges-refresh', load);
+    return () => { active = false; clearInterval(id); window.removeEventListener('shoear:badges-refresh', load); };
   }, [isAdmin]);
   return counts;
 }
