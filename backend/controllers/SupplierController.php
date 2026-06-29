@@ -412,7 +412,12 @@ function handleShipStandardDelivery(PDO $pdo, array $config, array $auth, string
     [$sender, $receiver, $parcel] = shipmentPartiesFor($pdo, $config, $deliveryId);
     $booked = easyParcelBook($pdo, $config, $sender, $receiver, $parcel);
     if (!$booked) {
-      sendJson(502, false, null, ['code' => 'BOOKING_FAILED', 'message' => 'Could not auto-book the shipment. Please enter the carrier and tracking number manually.']);
+      $detail = function_exists('easyParcelError') ? easyParcelError() : '';
+      sendJson(502, false, null, [
+        'code'    => 'BOOKING_FAILED',
+        'message' => 'Could not auto-book the shipment. Please enter the carrier and tracking number manually.',
+        'detail'  => $detail,   // EasyParcel's reason — surfaced to help diagnose during setup/testing
+      ]);
     }
     $carrier  = $booked['carrier'];
     $tracking = $booked['tracking'];

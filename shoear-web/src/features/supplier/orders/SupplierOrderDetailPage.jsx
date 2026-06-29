@@ -66,8 +66,9 @@ function SupplierOrderDetailPage() {
       setToast(`Booked with ${res.trackingCarrier} — tracking ${res.trackingNumber}.`);
       load();
     } catch (err) {
-      // auto-book failed → leave the manual form for the supplier to use
-      setShipErr(`${err.message} `);
+      // auto-book failed → leave the manual form for the supplier to use.
+      // Surface EasyParcel's reason (err.detail) when present to aid diagnosis.
+      setShipErr(err.detail ? `${err.message} (${err.detail})` : `${err.message} `);
     } finally {
       setShipBusy(false);
     }

@@ -21,7 +21,10 @@ async function request(path, options = {}) {
   }
 
   if (!json.success) {
-    throw new Error(json.error?.message || 'Request failed.');
+    const err = new Error(json.error?.message || 'Request failed.');
+    err.code = json.error?.code;
+    if (json.error?.detail) { err.detail = json.error.detail; }   // extra diagnostic (e.g. EasyParcel's reason)
+    throw err;
   }
   return json.data;
 }

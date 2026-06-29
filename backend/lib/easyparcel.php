@@ -203,6 +203,16 @@ function easyParcelAccessToken(PDO $pdo, array $config): ?string {
   return (string) $tok['access_token'];
 }
 
+// Last booking failure reason — set at each failure point below, read by the
+// supplier ship endpoint so a failed auto-book reports WHY (insufficient
+// balance, a rejected field, an auth problem, …) instead of a blank fallback.
+// Pass a string to set it; call with no argument to read it.
+function easyParcelError(?string $set = null): string {
+  static $err = '';
+  if ($set !== null) { $err = $set; }
+  return $err;
+}
+
 // ── Authenticated JSON POST to an Open API endpoint. Decoded array or null. ──
 function easyParcelApiPost(string $token, string $endpoint, array $payload): ?array {
   $ch = curl_init(EP_API_BASE . '/open_api/' . EP_API_VERSION . $endpoint);
@@ -220,7 +230,10 @@ function easyParcelApiPost(string $token, string $endpoint, array $payload): ?ar
   $res  = curl_exec($ch);
   $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
   curl_close($ch);
-  if ($code < 200 || $code >= 300) { return null; }
+  if ($code < 200 || $code >= 300) {
+    easyParcelError("HTTP {$code} from {$endpoint}: " . substr(trim((string) $res), 0, 600));
+    return null;
+  }
   $data = json_decode((string) $res, true);
   return is_array($data) ? $data : null;
 }
@@ -230,13 +243,17 @@ function easyParcelApiPost(string $token, string $endpoint, array $payload): ?ar
 // $parcel: [weight, content, value]. Returns
 //   ['carrier','tracking','tracking_url','awb_link'] or null on any failure.
 function easyParcelBook(PDO $pdo, array $config, array $sender, array $receiver, array $parcel): ?array {
-  if (!easyParcelEnabled($config)) { return null; }
+  easyParcelError('');   // reset for this attempt
+  if (!easyParcelEnabled($config)) { easyParcelError('EasyParcel app credentials are not configured.'); return null; }
   $token = easyParcelAccessToken($pdo, $config);
-  if (!$token) { return null; }
+  if (!$token) { easyParcelError('Not connected (no valid token) — reconnect EasyParcel in admin → Integrations.'); return null; }
 
   $pickSub = easyParcelSubdivision($sender['state'] ?? '');
   $sendSub = easyParcelSubdivision($receiver['state'] ?? '');
-  if ($pickSub === '' || $sendSub === '') { return null; }
+  if ($pickSub === '' || $sendSub === '') {
+    easyParcelError("Unrecognised state — sender '{$sender['state']}' / receiver '{$receiver['state']}'.");
+    return null;
+  }
   $weight = (float) ($parcel['weight'] ?? 1);
   $value  = (float) ($parcel['value'] ?? 0);
 
@@ -246,14 +263,18 @@ function easyParcelBook(PDO $pdo, array $config, array $sender, array $receiver,
     'receiver' => ['postcode' => $receiver['code'], 'subdivision_code' => $sendSub, 'country' => 'MY'],
     'weight' => $weight, 'width' => 10, 'length' => 10, 'height' => 10, 'parcel_value' => $value,
   ]]]);
+  if ($q === null) { return null; }   // easyParcelApiPost already recorded the HTTP error
   $quotes = $q['data'][0]['quotations'] ?? [];
-  if (!is_array($quotes) || !$quotes) { return null; }
+  if (!is_array($quotes) || !$quotes) {
+    easyParcelError('No courier rates returned for this route. ' . substr(json_encode($q['data'][0] ?? $q), 0, 400));
+    return null;
+  }
   usort($quotes, static fn($a, $b) =>
     (float) ($a['pricing']['total_amount'] ?? 0) <=> (float) ($b['pricing']['total_amount'] ?? 0));
   $svc       = $quotes[0];
   $serviceId = $svc['courier']['service_id'] ?? '';
   $courier   = $svc['courier']['courier_name'] ?? ($svc['courier']['service_name'] ?? 'Courier');
-  if ($serviceId === '') { return null; }
+  if ($serviceId === '') { easyParcelError('Quotation returned no service_id.'); return null; }
 
   // 2) submit the order (charges the wallet / free credit) → AWB + tracking
   $s = easyParcelApiPost($token, '/shipment/submit_orders', ['shipment' => [[
@@ -283,10 +304,15 @@ function easyParcelBook(PDO $pdo, array $config, array $sender, array $receiver,
       'sms_tracking' => false, 'email_tracking' => true, 'whatsapp_tracking' => false,
     ],
   ]]]);
+  if ($s === null) { return null; }   // easyParcelApiPost already recorded the HTTP error
   $ship = $s['data'][0]['shipments'][0] ?? [];
-  if (($ship['status'] ?? '') !== 'success') { return null; }
+  if (($ship['status'] ?? '') !== 'success') {
+    $why = $ship['errors'] ?? ($ship['message'] ?? ($s['message'] ?? $s['data'][0] ?? $s));
+    easyParcelError('Order submission rejected: ' . substr(is_string($why) ? $why : json_encode($why), 0, 400));
+    return null;
+  }
   $awb = (string) ($ship['awb_number'] ?? '');
-  if ($awb === '') { return null; }
+  if ($awb === '') { easyParcelError('Order submitted but no AWB/tracking number was returned.'); return null; }
 
   return [
     'carrier'      => $ship['courier'] ?? $courier,
