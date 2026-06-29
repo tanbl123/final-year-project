@@ -168,6 +168,13 @@ if ($method === 'POST' && preg_match('#^/orders/([^/]+)/deliveries/([^/]+)/resen
   handleResendDeliveryOtp($pdo, $auth, $m[1], $m[2]);
 }
 
+// customer confirms receipt of a Standard (3PL) parcel — "Order received"
+if ($method === 'POST' && preg_match('#^/orders/([^/]+)/deliveries/([^/]+)/confirm-receipt$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleConfirmStandardReceipt($pdo, $auth, $m[1], $m[2]);
+}
+
 // ── customer reviews (create on a purchased product; edit/delete your own) ──
 if ($method === 'GET' && preg_match('#^/products/([^/]+)/reviews/mine$#', $path, $m)) {
   $auth = requireAuth($secret);

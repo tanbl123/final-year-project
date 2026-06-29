@@ -310,6 +310,37 @@ function handleResendDeliveryOtp(PDO $pdo, array $auth, string $orderId, string 
   sendJson(200, true, ['deliveryId' => $deliveryId]);
 }
 
+// POST /orders/{orderId}/deliveries/{deliveryId}/confirm-receipt — the customer
+// confirms a STANDARD (3PL) parcel has arrived (Shopee-style "Order received").
+// In-house parcels are confirmed by the courier via OTP + photo, so this is for
+// Standard parcels only. OutForDelivery → Delivered; the order completes once
+// every parcel is delivered.
+function handleConfirmStandardReceipt(PDO $pdo, array $auth, string $orderId, string $deliveryId): void {
+  $customerId = requireCustomerId($pdo, $auth);
+  $stmt = $pdo->prepare(
+    'SELECT d.deliveryId, d.orderId, d.deliveryStatus, d.deliveryMethod
+       FROM delivery d JOIN `order` o ON o.orderId = d.orderId
+      WHERE d.deliveryId = :did AND d.orderId = :oid AND o.customerId = :cid'
+  );
+  $stmt->execute(['did' => $deliveryId, 'oid' => $orderId, 'cid' => $customerId]);
+  $del = $stmt->fetch();
+  if (!$del) {
+    sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Delivery not found.']);
+  }
+  if ($del['deliveryMethod'] !== 'Standard') {
+    sendJson(409, false, null, ['code' => 'CONFLICT', 'message' => 'This parcel is delivered by an in-house courier and is confirmed with the delivery code.']);
+  }
+  if ($del['deliveryStatus'] !== 'OutForDelivery') {
+    sendJson(409, false, null, ['code' => 'CONFLICT', 'message' => 'You can only confirm receipt once the parcel is out for delivery.']);
+  }
+
+  $pdo->prepare("UPDATE delivery SET deliveryStatus = 'Delivered', deliveryDate = NOW() WHERE deliveryId = :id")
+      ->execute(['id' => $deliveryId]);
+  if (function_exists('recomputeOrderStatus')) { recomputeOrderStatus($pdo, $del['orderId']); }
+
+  sendJson(200, true, ['deliveryId' => $deliveryId, 'deliveryStatus' => 'Delivered']);
+}
+
 // POST /deliveries/{deliveryId}/verify-otp — multipart: { otpCode, file }.
 // Confirming a delivery now requires BOTH the customer's OTP (proof of the right
 // person) AND a proof-of-delivery photo (proof of the drop-off) in one step, so

@@ -105,6 +105,12 @@ class OrderService {
     await api.post('/orders/$orderId/deliveries/$deliveryId/resend-otp', {});
   }
 
+  /// POST /orders/{id}/deliveries/{deliveryId}/confirm-receipt — confirm a
+  /// Standard (3PL) parcel has arrived ("Order received"). Marks it Delivered.
+  Future<void> confirmReceipt(String orderId, String deliveryId) async {
+    await api.post('/orders/$orderId/deliveries/$deliveryId/confirm-receipt', {});
+  }
+
   /// POST /uploads/refund-proof — upload a supporting photo for a refund,
   /// returns its stored URL (sent back as refundProof).
   Future<String> uploadRefundProof(File photo) async {

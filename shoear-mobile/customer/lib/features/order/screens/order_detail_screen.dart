@@ -696,6 +696,7 @@ class _ParcelBlock extends StatefulWidget {
 
 class _ParcelBlockState extends State<_ParcelBlock> {
   bool _resending = false;
+  bool _confirming = false;
 
   // Re-send myself the delivery code (notification + push) if I missed it.
   Future<void> _resendOtp() async {
@@ -707,6 +708,34 @@ class _ParcelBlockState extends State<_ParcelBlock> {
       if (mounted) context.showSnack(e.toString());
     } finally {
       if (mounted) setState(() => _resending = false);
+    }
+  }
+
+  // Confirm a Standard (3PL) parcel has arrived — "Order received". Marks it
+  // Delivered and unlocks reviews, mirroring Shopee/Lazada.
+  Future<void> _confirmReceipt() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirm receipt?'),
+        content: const Text(
+            'Only confirm once you have received this parcel. This completes the delivery and lets you review the items.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Not yet')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Confirm')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _confirming = true);
+    try {
+      await context.read<OrderService>().confirmReceipt(widget.orderId, widget.parcel.deliveryId);
+      if (mounted) context.showSnack('Parcel marked as received. Thank you!');
+      bumpRefresh();
+    } catch (e) {
+      if (mounted) context.showSnack(e.toString());
+    } finally {
+      if (mounted) setState(() => _confirming = false);
     }
   }
 
@@ -755,6 +784,21 @@ class _ParcelBlockState extends State<_ParcelBlock> {
           _StandardTrackingCard(
             carrier: parcel.trackingCarrier,
             trackingNumber: parcel.trackingNumber,
+          ),
+        ],
+        // Standard parcel out for delivery → let the customer confirm receipt
+        // (Shopee-style "Order received"), which completes the parcel.
+        if (parcel.isStandard && parcel.deliveryStatus == 'OutForDelivery') ...[
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _confirming ? null : _confirmReceipt,
+              icon: _confirming
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.check_circle_outline, size: 18),
+              label: Text(_confirming ? 'Confirming…' : 'Confirm receipt'),
+            ),
           ),
         ],
         if (showOtp) ...[
