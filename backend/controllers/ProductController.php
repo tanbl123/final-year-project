@@ -522,19 +522,32 @@ function handleListInventory(PDO $pdo, array $auth): void {
   sendJson(200, true, ['inventory' => $rows]);
 }
 
-// GET /supplier/badge-counts — sidebar work-queue counts for a supplier.
-// Currently one: variants that need restocking (low OR out of stock), matching
-// the Inventory page (stock <= 10, excluding Removed products).
+// GET /supplier/badge-counts — sidebar work-queue counts for a supplier:
+//   inventory — variants that need restocking (low OR out of stock), matching
+//               the Inventory page (stock <= 10, excluding Removed products);
+//   orders    — Standard (3PL) parcels still Pending, i.e. the supplier needs
+//               to ship them (book a courier / enter tracking).
 const SUPPLIER_LOW_STOCK = 10;
 function handleSupplierBadgeCounts(PDO $pdo, array $auth): void {
   $supplierId = requireSupplierId($pdo, $auth);
-  $stmt = $pdo->prepare(
+
+  $lowStock = $pdo->prepare(
     'SELECT COUNT(*) FROM product p
        JOIN product_variant pv ON pv.productId = p.productId
       WHERE p.supplierId = :sid AND p.productStatus <> "Removed" AND pv.stockQuantity <= :thr'
   );
-  $stmt->execute(['sid' => $supplierId, 'thr' => SUPPLIER_LOW_STOCK]);
-  sendJson(200, true, ['counts' => ['inventory' => (int) $stmt->fetchColumn()]]);
+  $lowStock->execute(['sid' => $supplierId, 'thr' => SUPPLIER_LOW_STOCK]);
+
+  $toShip = $pdo->prepare(
+    "SELECT COUNT(*) FROM delivery
+      WHERE supplierId = :sid AND deliveryMethod = 'Standard' AND deliveryStatus = 'Pending'"
+  );
+  $toShip->execute(['sid' => $supplierId]);
+
+  sendJson(200, true, ['counts' => [
+    'inventory' => (int) $lowStock->fetchColumn(),
+    'orders'    => (int) $toShip->fetchColumn(),
+  ]]);
 }
 
 // PATCH /supplier/inventory — bulk stock update. Body: { updates: [ { variantId,

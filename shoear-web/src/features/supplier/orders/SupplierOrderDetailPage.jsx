@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { getSupplierOrder, shipStandardParcel, bookStandardParcel, markStandardDelivered, STANDARD_CARRIERS } from './orderService';
+import { refreshBadges } from '../products/productService';
 import BackButton from '../../../components/BackButton';
 import Toast from '../../../components/Toast';
 
@@ -57,6 +58,7 @@ function SupplierOrderDetailPage() {
       setCarrier(''); setTracking('');
       setToast('Parcel marked as shipped.');
       load();
+      refreshBadges();   // one fewer parcel awaiting shipment → update the sidebar
     } catch (err) {
       setShipErr(err.message);
     } finally {
@@ -70,6 +72,7 @@ function SupplierOrderDetailPage() {
       const res = await bookStandardParcel(order.myDelivery.deliveryId);
       setToast(`Booked with ${res.trackingCarrier} — tracking ${res.trackingNumber}.`);
       load();
+      refreshBadges();   // one fewer parcel awaiting shipment → update the sidebar
     } catch (err) {
       // auto-book failed → leave the manual form for the supplier to use.
       // Surface EasyParcel's reason (err.detail) when present to aid diagnosis.
