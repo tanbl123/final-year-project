@@ -17,7 +17,7 @@ export function emptyAddress() {
 // the customer's address form. Mirrors the backend rules in lib/address.php.
 export function validateAddress(a) {
   const e = {};
-  if (!a.line1.trim()) e.line1 = 'Address line 1 is required.';
+  if (!a.line1.trim()) e.line1 = 'Address line is required.';
   if (!a.postcode.trim()) e.postcode = 'Postcode is required.';
   else if (!/^\d{5}$/.test(a.postcode.trim())) e.postcode = 'Postcode must be 5 digits.';
   if (!a.city.trim()) e.city = 'City is required.';

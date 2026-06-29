@@ -47,7 +47,7 @@ class AddressFieldErrors {
 AddressFieldErrors validateAddressValue(AddressValue a) {
   String? line1, postcode, city, state;
   if (a.line1.trim().isEmpty) {
-    line1 = 'Address line 1 is required.';
+    line1 = 'Address line is required.';
   } else if (a.line1.trim().length > 255) {
     line1 = 'Address is too long.';
   }
@@ -192,7 +192,7 @@ class _AddressFieldsState extends State<AddressFields> {
           onChanged: _onLine1,
           maxLength: 255,
           decoration: InputDecoration(
-            labelText: 'Address line 1',
+            labelText: 'Address line',
             hintText: 'Unit, street, building, area',
             border: const OutlineInputBorder(),
             errorText: e.line1,

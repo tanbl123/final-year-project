@@ -231,7 +231,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   String? _validateLine1(String value) {
     final v = value.trim();
-    if (v.isEmpty) return 'Address line 1 is required.';
+    if (v.isEmpty) return 'Address line is required.';
     if (v.length > 255) return 'Address is too long.';
     return null;
   }
@@ -724,7 +724,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           controller: _line1Ctrl,
                           hint: _placesOn
                               ? 'Start typing your address…'
-                              : 'Address line 1 (unit, street)',
+                              : 'Address line (unit, street)',
                           icon: Icons.home_outlined,
                           error: _line1Error,
                           onChanged: (v) {

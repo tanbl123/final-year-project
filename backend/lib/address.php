@@ -40,7 +40,7 @@ function hasStructuredAddress(array $a): bool {
 // error string, or null when valid.
 function structuredAddressError(array $a): ?string {
   if ($a['line1'] === '' || $a['postcode'] === '' || $a['city'] === '' || $a['state'] === '') {
-    return 'Address line 1, postcode, city and state are all required.';
+    return 'Address line, postcode, city and state are all required.';
   }
   if (!preg_match('/^\d{5}$/', $a['postcode'])) {
     return 'Postcode must be 5 digits.';

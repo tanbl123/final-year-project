@@ -82,7 +82,7 @@ function AddressFields({ value, onChange, errors = {}, disabled = false, idPrefi
   return (
     <div className="row g-2">
       <div className="col-12 position-relative">
-        <label htmlFor={`${idPrefix}-line1`} className="form-label small mb-1">Address line 1</label>
+        <label htmlFor={`${idPrefix}-line1`} className="form-label small mb-1">Address line</label>
         <input id={`${idPrefix}-line1`} className={cls('line1')} value={value.line1}
           onChange={onLine1} disabled={disabled} autoComplete="off"
           onBlur={() => setTimeout(() => setSuggestions([]), 150)}

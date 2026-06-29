@@ -305,8 +305,8 @@ function handleGetAdminOrder(PDO $pdo, string $orderId): void {
 // Validate the structured address parts. Returns an error message string, or
 // null when everything is valid.
 function _validateAddressParts(array $a): ?string {
-  if ($a['line1'] === '')                          return 'Address line 1 is required.';
-  if (mb_strlen($a['line1']) > 255)                return 'Address line 1 is too long.';
+  if ($a['line1'] === '')                          return 'Address line is required.';
+  if (mb_strlen($a['line1']) > 255)                return 'Address line is too long.';
   if (!preg_match('/^\d{5}$/', $a['postcode']))    return 'Postcode must be 5 digits.';
   if ($a['city'] === '')                           return 'City is required.';
   if (mb_strlen($a['city']) > 100)                 return 'City is too long.';
