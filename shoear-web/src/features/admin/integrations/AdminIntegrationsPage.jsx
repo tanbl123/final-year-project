@@ -117,26 +117,18 @@ function AdminIntegrationsPage() {
               </div>
             )}
 
-            {status?.configured && (
+            {status?.connected && (
               <dl className="row mb-3 small">
-                <dt className="col-sm-4 text-muted fw-normal">Environment</dt>
-                <dd className="col-sm-8">{status.live ? 'Live (real bookings)' : 'Sandbox (free test credit)'}</dd>
-                {status.connected && (
+                <dt className="col-sm-4 text-muted fw-normal">Connected since</dt>
+                <dd className="col-sm-8">{fmtDate(status.connectedAt)}</dd>
+                <dt className="col-sm-4 text-muted fw-normal">Reconnect needed by</dt>
+                <dd className="col-sm-8">{fmtDate(status.refreshExpiresAt)}</dd>
+                {status.accountId && (
                   <>
-                    <dt className="col-sm-4 text-muted fw-normal">Connected since</dt>
-                    <dd className="col-sm-8">{fmtDate(status.connectedAt)}</dd>
-                    <dt className="col-sm-4 text-muted fw-normal">Reconnect needed by</dt>
-                    <dd className="col-sm-8">{fmtDate(status.refreshExpiresAt)}</dd>
-                    {status.accountId && (
-                      <>
-                        <dt className="col-sm-4 text-muted fw-normal">Account</dt>
-                        <dd className="col-sm-8">{status.accountId}</dd>
-                      </>
-                    )}
+                    <dt className="col-sm-4 text-muted fw-normal">Account</dt>
+                    <dd className="col-sm-8">{status.accountId}</dd>
                   </>
                 )}
-                <dt className="col-sm-4 text-muted fw-normal">Callback URL</dt>
-                <dd className="col-sm-8"><code>{status.redirectUri}</code></dd>
               </dl>
             )}
 
