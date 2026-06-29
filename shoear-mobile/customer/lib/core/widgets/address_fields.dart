@@ -93,8 +93,23 @@ class _AddressFieldsState extends State<AddressFields> {
   String? _placeSession;
   bool _autoFilled = false; // city/state came from a lookup (safe to overwrite)
 
+  @override
+  void initState() {
+    super.initState();
+    // rebuild as line 1 changes so its clear (✕) button shows/hides
+    _line1.addListener(_refresh);
+  }
+
+  void _refresh() => setState(() {});
+
   void _emit() => widget.onChanged(AddressValue(
         line1: _line1.text, postcode: _postcode.text, city: _city.text, state: _state));
+
+  void _clearLine1() {
+    _line1.clear();
+    setState(() => _suggestions = const []);
+    _emit();
+  }
 
   @override
   void dispose() {
@@ -182,6 +197,13 @@ class _AddressFieldsState extends State<AddressFields> {
             border: const OutlineInputBorder(),
             errorText: e.line1,
             counterText: '',
+            suffixIcon: _line1.text.isEmpty
+                ? null
+                : IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Clear',
+                    onPressed: _clearLine1,
+                  ),
           ),
         ),
         if (_suggestions.isNotEmpty)
