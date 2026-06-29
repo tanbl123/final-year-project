@@ -18,12 +18,11 @@ const MY_STATES = [
 ];
 
 // Pull a structured address out of a request body using a field prefix, e.g.
-// 'operational' → operationalLine1, operationalLine2, operationalPostcode,
-// operationalCity, operationalState. Values are trimmed.
+// 'operational' → operationalLine1, operationalPostcode, operationalCity,
+// operationalState. Line 1 holds the whole street address. Values are trimmed.
 function readStructuredAddress(array $body, string $prefix): array {
   return [
     'line1'    => trim((string) ($body["{$prefix}Line1"] ?? '')),
-    'line2'    => trim((string) ($body["{$prefix}Line2"] ?? '')),
     'postcode' => trim((string) ($body["{$prefix}Postcode"] ?? '')),
     'city'     => trim((string) ($body["{$prefix}City"] ?? '')),
     'state'    => trim((string) ($body["{$prefix}State"] ?? '')),
@@ -49,7 +48,7 @@ function structuredAddressError(array $a): ?string {
   if (!in_array($a['state'], MY_STATES, true)) {
     return 'Please choose a valid Malaysian state.';
   }
-  if (mb_strlen($a['line1']) > 150 || mb_strlen($a['line2']) > 150 || mb_strlen($a['city']) > 100) {
+  if (mb_strlen($a['line1']) > 150 || mb_strlen($a['city']) > 100) {
     return 'One of the address fields is too long.';
   }
   return null;
@@ -60,7 +59,6 @@ function structuredAddressError(array $a): ?string {
 function composeAddress(array $a): string {
   $parts = array_filter([
     $a['line1'],
-    $a['line2'],
     trim($a['postcode'] . ' ' . $a['city']),
     $a['state'],
   ], static fn($p) => $p !== '');

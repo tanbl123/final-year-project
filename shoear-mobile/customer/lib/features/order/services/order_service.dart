@@ -18,7 +18,7 @@ class OrderService {
 
   /// The customer's saved structured address (from their profile), used to
   /// prefill the checkout form. Returns an empty map when none is set; keys:
-  /// addressLine1, addressLine2, postcode, city, state.
+  /// addressLine1, postcode, city, state.
   Future<Map<String, String>> savedAddress() async {
     final me = await api.get('/auth/me') as Map<String, dynamic>;
     final profile = me['profile'];
@@ -26,7 +26,6 @@ class OrderService {
     String pick(String k) => (profile[k] as String?)?.trim() ?? '';
     return {
       'addressLine1': pick('addressLine1'),
-      'addressLine2': pick('addressLine2'),
       'postcode':     pick('postcode'),
       'city':         pick('city'),
       'state':        pick('state'),
@@ -38,7 +37,6 @@ class OrderService {
   /// display string and stores both.
   Future<CheckoutResult> checkout({
     required String addressLine1,
-    String addressLine2 = '',
     required String postcode,
     required String city,
     required String state,
@@ -46,7 +44,6 @@ class OrderService {
   }) async => CheckoutResult.fromJson(
         await api.post('/orders', {
           'addressLine1': addressLine1,
-          'addressLine2': addressLine2,
           'postcode':     postcode,
           'city':         city,
           'state':        state,

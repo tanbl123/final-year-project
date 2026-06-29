@@ -159,7 +159,7 @@ function handleGetBusinessDetails(PDO $pdo, array $auth): void {
 
   $cur = $pdo->prepare(
     'SELECT companyName, companyAddress, operationalAddress,
-            operationalLine1, operationalLine2, operationalPostcode, operationalCity, operationalState,
+            operationalLine1, operationalPostcode, operationalCity, operationalState,
             businessRegNo, taxNumber, businessLicenseUrl
        FROM supplier WHERE supplierId = :sid'
   );
@@ -200,13 +200,12 @@ function handleUpdateOperationalAddress(PDO $pdo, array $auth): void {
     $combined = composeAddress($opAddr);
     $pdo->prepare(
       'UPDATE supplier
-          SET operationalAddress = :oa, operationalLine1 = :ol1, operationalLine2 = :ol2,
+          SET operationalAddress = :oa, operationalLine1 = :ol1,
               operationalPostcode = :opc, operationalCity = :oc, operationalState = :ost
         WHERE supplierId = :sid'
     )->execute([
       'oa'  => $combined,
       'ol1' => $opAddr['line1'],
-      'ol2' => $opAddr['line2'] !== '' ? $opAddr['line2'] : null,
       'opc' => $opAddr['postcode'],
       'oc'  => $opAddr['city'],
       'ost' => $opAddr['state'],

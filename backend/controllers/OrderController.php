@@ -307,7 +307,6 @@ function handleGetAdminOrder(PDO $pdo, string $orderId): void {
 function _validateAddressParts(array $a): ?string {
   if ($a['line1'] === '')                          return 'Address line 1 is required.';
   if (mb_strlen($a['line1']) > 255)                return 'Address line 1 is too long.';
-  if (mb_strlen($a['line2']) > 255)                return 'Address line 2 is too long.';
   if (!preg_match('/^\d{5}$/', $a['postcode']))    return 'Postcode must be 5 digits.';
   if ($a['city'] === '')                           return 'City is required.';
   if (mb_strlen($a['city']) > 100)                 return 'City is too long.';
@@ -320,7 +319,6 @@ function _validateAddressParts(array $a): ?string {
 //   "12, Jalan SS2/24, Taman Bahagia, 47300 Petaling Jaya, Selangor"
 function _formatAddress(array $a): string {
   $parts = [$a['line1']];
-  if ($a['line2'] !== '') $parts[] = $a['line2'];
   $parts[] = trim($a['postcode'] . ' ' . $a['city']);
   $parts[] = $a['state'];
   return implode(', ', array_filter($parts, fn($p) => $p !== ''));
@@ -329,7 +327,7 @@ function _formatAddress(array $a): string {
 // POST /orders — turn the customer's cart into an order. Model A: the order is
 // created as `Placed` and the cart is cleared, but STOCK IS NOT TOUCHED here —
 // it's decremented atomically at payment success (see HANDOFF/NOTES). Body:
-// the structured address { addressLine1, addressLine2?, postcode, city, state },
+// the structured address { addressLine1, postcode, city, state },
 // or a legacy { deliveryAddress } string, or neither (falls back to the
 // customer's saved address).
 function handleCheckout(PDO $pdo, array $auth): void {
@@ -339,7 +337,6 @@ function handleCheckout(PDO $pdo, array $auth): void {
   // Structured address parts (the new client always sends these).
   $parts = [
     'line1'    => trim($body['addressLine1'] ?? ''),
-    'line2'    => trim($body['addressLine2'] ?? ''),
     'postcode' => trim($body['postcode'] ?? ''),
     'city'     => trim($body['city'] ?? ''),
     'state'    => trim($body['state'] ?? ''),
@@ -413,13 +410,12 @@ function handleCheckout(PDO $pdo, array $auth): void {
     $orderId = nextId($pdo, 'order', 'orderId', 'ORD');
     $pdo->prepare(
       "INSERT INTO `order` (orderId, customerId, orderDate, orderStatus, orderTotalAmount,
-                            orderDeliveryAddress, deliveryLine1, deliveryLine2,
+                            orderDeliveryAddress, deliveryLine1,
                             deliveryPostcode, deliveryCity, deliveryState)
-       VALUES (:id, :cid, NOW(), 'Placed', :total, :addr, :l1, :l2, :pc, :ct, :st)"
+       VALUES (:id, :cid, NOW(), 'Placed', :total, :addr, :l1, :pc, :ct, :st)"
     )->execute([
       'id' => $orderId, 'cid' => $customerId, 'total' => $total, 'addr' => $address,
       'l1' => $hasStructured ? $parts['line1'] : null,
-      'l2' => $hasStructured && $parts['line2'] !== '' ? $parts['line2'] : null,
       'pc' => $hasStructured ? $parts['postcode'] : null,
       'ct' => $hasStructured ? $parts['city'] : null,
       'st' => $hasStructured ? $parts['state'] : null,
@@ -449,13 +445,12 @@ function handleCheckout(PDO $pdo, array $auth): void {
     // their next checkout (matches Amazon/Shopee: last-used address is the default).
     if ($hasStructured) {
       $pdo->prepare(
-        'UPDATE customer SET shippingAddress = :addr, addressLine1 = :l1, addressLine2 = :l2,
+        'UPDATE customer SET shippingAddress = :addr, addressLine1 = :l1,
                              postcode = :pc, city = :ct, state = :st
            WHERE customerId = :cid'
       )->execute([
         'addr' => $address,
         'l1'   => $parts['line1'],
-        'l2'   => $parts['line2'] !== '' ? $parts['line2'] : null,
         'pc'   => $parts['postcode'],
         'ct'   => $parts['city'],
         'st'   => $parts['state'],

@@ -97,7 +97,6 @@ CREATE TABLE supplier (
     companyAddress  VARCHAR(255) NOT NULL,                -- registered business address (matches SSM)
     operationalAddress VARCHAR(255) NOT NULL,             -- where couriers collect orders (pickup); combined single line, defaults to companyAddress
     operationalLine1    VARCHAR(150) NULL,                -- structured pickup address (source of truth for routing + 3PL rates)
-    operationalLine2    VARCHAR(150) NULL,
     operationalPostcode VARCHAR(10)  NULL,
     operationalCity     VARCHAR(100) NULL,
     operationalState    VARCHAR(50)  NULL,                -- Malaysian state — decides in-house vs standard shipping
@@ -120,7 +119,6 @@ CREATE TABLE customer (
     userId           VARCHAR(10)  NOT NULL,
     shippingAddress  VARCHAR(255) NULL,                   -- combined single-line address (display)
     addressLine1     VARCHAR(255) NULL,                   -- structured parts (source of truth)
-    addressLine2     VARCHAR(255) NULL,
     postcode         VARCHAR(10)  NULL,
     city             VARCHAR(100) NULL,
     state            VARCHAR(50)  NULL,
@@ -302,7 +300,6 @@ CREATE TABLE `order` (
     orderTotalAmount     DECIMAL(10,2) NOT NULL,
     orderDeliveryAddress VARCHAR(255)  NOT NULL,          -- combined single-line address (display)
     deliveryLine1        VARCHAR(255)  NULL,              -- structured snapshot at order time
-    deliveryLine2        VARCHAR(255)  NULL,
     deliveryPostcode     VARCHAR(10)   NULL,
     deliveryCity         VARCHAR(100)  NULL,
     deliveryState        VARCHAR(50)   NULL,
