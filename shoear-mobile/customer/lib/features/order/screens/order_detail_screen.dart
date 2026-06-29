@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -713,7 +714,11 @@ class _ParcelBlockState extends State<_ParcelBlock> {
   Widget build(BuildContext context) {
     final parcel = widget.parcel;
     final color = _deliveryColors[parcel.deliveryStatus] ?? Colors.grey;
-    final showOtp = parcel.deliveryStatus == 'OutForDelivery' && (parcel.otpCode?.isNotEmpty ?? false);
+    // OTP is an IN-HOUSE courier mechanism only — a 3PL (Standard) parcel is
+    // tracked by carrier + tracking number instead, so never show the OTP for it.
+    final showOtp = !parcel.isStandard
+        && parcel.deliveryStatus == 'OutForDelivery'
+        && (parcel.otpCode?.isNotEmpty ?? false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -743,6 +748,14 @@ class _ParcelBlockState extends State<_ParcelBlock> {
         if (parcel.estimatedDeliveryTime != null) ...[
           const SizedBox(height: 8),
           Text('Est. delivery: ${_fmt(parcel.estimatedDeliveryTime!)}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+        ],
+        // 3PL (Standard) parcel: show the carrier + tracking number instead of an OTP.
+        if (parcel.isStandard && parcel.deliveryStatus != 'Failed') ...[
+          const SizedBox(height: 10),
+          _StandardTrackingCard(
+            carrier: parcel.trackingCarrier,
+            trackingNumber: parcel.trackingNumber,
+          ),
         ],
         if (showOtp) ...[
           const SizedBox(height: 10),
@@ -784,6 +797,72 @@ class _ParcelBlockState extends State<_ParcelBlock> {
     final h = l.hour % 12 == 0 ? 12 : l.hour % 12;
     final ampm = l.hour < 12 ? 'AM' : 'PM';
     return '${l.day}/${l.month}/${l.year} · $h:${l.minute.toString().padLeft(2, '0')} $ampm';
+  }
+}
+
+// ── Standard (3PL) shipping card: carrier + tracking number with copy ───────
+// Shown on a Standard parcel in place of the in-house OTP box. Before the seller
+// ships it (no tracking number yet) we show a short "will appear" note instead.
+class _StandardTrackingCard extends StatelessWidget {
+  final String? carrier;
+  final String? trackingNumber;
+  const _StandardTrackingCard({this.carrier, this.trackingNumber});
+
+  @override
+  Widget build(BuildContext context) {
+    final indigo = Colors.indigo;
+    final hasTracking = trackingNumber != null && trackingNumber!.isNotEmpty;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: indigo.shade50,
+        border: Border.all(color: indigo.shade100),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.local_shipping_outlined, size: 16, color: indigo.shade700),
+              const SizedBox(width: 6),
+              Text('Standard shipping',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: indigo.shade700)),
+            ],
+          ),
+          if (!hasTracking) ...[
+            const SizedBox(height: 6),
+            Text('Your parcel will be shipped by courier. The tracking number will appear here once the seller ships it.',
+                style: TextStyle(fontSize: 12, color: indigo.shade900)),
+          ] else ...[
+            const SizedBox(height: 8),
+            if (carrier != null && carrier!.isNotEmpty)
+              Text('Courier: ${carrier!}', style: TextStyle(fontSize: 12, color: indigo.shade900)),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Expanded(
+                  child: SelectableText(
+                    trackingNumber!,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700, letterSpacing: 1),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: trackingNumber!));
+                    if (context.mounted) context.showSnack('Tracking number copied.');
+                  },
+                  icon: Icon(Icons.copy, size: 16, color: indigo.shade700),
+                  label: Text('Copy', style: TextStyle(fontSize: 12, color: indigo.shade700)),
+                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 

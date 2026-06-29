@@ -169,8 +169,25 @@ class ParcelDelivery {
   final String? otpCode;
   final String? proofOfDelivery;
   final String supplierName;
+  final String deliveryMethod; // 'InHouse' (own courier + OTP) or 'Standard' (3PL)
+  final String? trackingCarrier; // Standard only: e.g. "J&T Express"
+  final String? trackingNumber; // Standard only: the AWB / tracking number
 
-  ParcelDelivery({required this.deliveryId, required this.deliveryStatus, this.estimatedDeliveryTime, this.otpCode, this.proofOfDelivery, required this.supplierName});
+  ParcelDelivery({
+    required this.deliveryId,
+    required this.deliveryStatus,
+    this.estimatedDeliveryTime,
+    this.otpCode,
+    this.proofOfDelivery,
+    required this.supplierName,
+    this.deliveryMethod = 'InHouse',
+    this.trackingCarrier,
+    this.trackingNumber,
+  });
+
+  /// A 3PL (standard-shipping) parcel — the customer tracks it by carrier +
+  /// tracking number instead of confirming an OTP with an in-house courier.
+  bool get isStandard => deliveryMethod == 'Standard';
 
   factory ParcelDelivery.fromJson(Map<String, dynamic> j) => ParcelDelivery(
         deliveryId: j['deliveryId'] as String? ?? '',
@@ -179,6 +196,13 @@ class ParcelDelivery {
         otpCode: j['otpCode']?.toString(),
         proofOfDelivery: j['proofOfDelivery'] as String?,
         supplierName: j['supplierName'] as String? ?? '',
+        deliveryMethod: j['deliveryMethod'] as String? ?? 'InHouse',
+        trackingCarrier: (j['trackingCarrier'] as String?)?.trim().isEmpty ?? true
+            ? null
+            : j['trackingCarrier'] as String?,
+        trackingNumber: (j['trackingNumber'] as String?)?.trim().isEmpty ?? true
+            ? null
+            : j['trackingNumber'] as String?,
       );
 }
 
