@@ -299,13 +299,8 @@ function handleGetAdminOrder(PDO $pdo, string $orderId): void {
 
 // ── Customer checkout + order tracking (Customer token) ──────────────────────
 
-// The 16 Malaysian states and federal territories — the allowed values for the
-// structured delivery address's state field.
-const MY_STATES = [
-  'Johor', 'Kedah', 'Kelantan', 'Melaka', 'Negeri Sembilan', 'Pahang',
-  'Perak', 'Perlis', 'Pulau Pinang', 'Sabah', 'Sarawak', 'Selangor',
-  'Terengganu', 'Kuala Lumpur', 'Labuan', 'Putrajaya',
-];
+// The 16 Malaysian states and federal territories (MY_STATES) are defined once
+// in lib/address.php, which is required before every controller.
 
 // Validate the structured address parts. Returns an error message string, or
 // null when everything is valid.
