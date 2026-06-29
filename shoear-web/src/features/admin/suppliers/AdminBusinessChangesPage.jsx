@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import Pagination from '../../../components/Pagination';
+import Toast from '../../../components/Toast';
 import { usePagination } from '../../../hooks/usePagination';
 import {
   getSupplierChangeRequests, approveChangeRequest, rejectChangeRequest, refreshBadges,
@@ -85,12 +86,8 @@ function AdminBusinessChangesPage() {
       <h1 className="mb-1">📝 Business Detail Changes</h1>
       <p className="text-muted">Approved suppliers requesting changes to their verified business details.</p>
 
-      {notice && (
-        <div className="alert alert-success py-2 d-flex justify-content-between align-items-center">
-          <span>{notice}</span>
-          <button type="button" className="btn-close" onClick={() => setNotice('')}></button>
-        </div>
-      )}
+      {/* success confirmations are transient → toast (errors stay inline below) */}
+      <Toast message={notice} onClose={() => setNotice('')} />
       {error && <div className="alert alert-danger py-2">{error}</div>}
 
       {loading ? (

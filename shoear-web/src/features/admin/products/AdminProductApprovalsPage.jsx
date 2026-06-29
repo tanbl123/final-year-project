@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getPendingProducts, approveProduct, rejectProduct, refreshBadges } from '../adminService';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Pagination from '../../../components/Pagination';
+import Toast from '../../../components/Toast';
 import { usePagination } from '../../../hooks/usePagination';
 
 const PAGE_SIZE = 10;
@@ -49,12 +50,8 @@ function AdminProductApprovalsPage() {
       <h1 className="mb-1">📦 Product Approvals</h1>
       <p className="text-muted">Review products submitted by suppliers.</p>
 
-      {notice && (
-        <div className="alert alert-success py-2 d-flex justify-content-between align-items-center">
-          <span>{notice}</span>
-          <button type="button" className="btn-close" onClick={() => setNotice('')}></button>
-        </div>
-      )}
+      {/* success confirmations are transient → toast (errors stay inline below) */}
+      <Toast message={notice} onClose={() => setNotice('')} />
       {error && <div className="alert alert-danger py-2">{error}</div>}
 
       {loading ? (
