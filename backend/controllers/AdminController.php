@@ -95,6 +95,21 @@ function setCourierStatus(PDO $pdo, string $userId, string $newStatus, ?string $
   $upd = $pdo->prepare("UPDATE `user` SET status = :s, rejectionReason = :r WHERE userId = :id");
   $upd->execute(['s' => $newStatus, 'r' => $reason, 'id' => $userId]);
 
+  // Tell the courier the outcome (in-app notification + best-effort FCM push).
+  if (function_exists('createNotification')) {
+    $reasonBit = ($reason !== null && $reason !== '') ? 'Reason: ' . $reason . ' ' : '';
+    if ($newStatus === 'Active') {
+      createNotification($pdo, $userId, 'CourierApproved', 'Application approved 🎉',
+        'Your courier account is approved. Sign in to set up your payout account and start delivering.');
+    } elseif ($newStatus === 'Rejected') {
+      createNotification($pdo, $userId, 'CourierRejected', 'Application needs changes',
+        $reasonBit . 'Sign in to fix your details and resubmit your application.');
+    } elseif ($newStatus === 'Banned') {
+      createNotification($pdo, $userId, 'CourierBanned', 'Application declined',
+        $reasonBit . 'Your application was declined and cannot be resubmitted.');
+    }
+  }
+
   sendJson(200, true, ['userId' => $userId, 'status' => $newStatus]);
 }
 
