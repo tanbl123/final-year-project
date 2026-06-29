@@ -99,17 +99,48 @@ function handleCourierStripeOnboard(PDO $pdo, array $config, array $auth): void 
           ->execute(['sid' => $accountId, 'id' => $row['deliveryPersonnelId']]);
     }
 
-    $appUrl = rtrim($config['app_url'], '/');
+    // The courier onboards from the MOBILE app, so we can't return to the web
+    // app (localhost:5173 is unreachable on a phone). Return to a backend landing
+    // page on the SAME host the app called us on (reachable from the device); the
+    // app re-checks payout status when the courier returns.
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $base   = $scheme . '://' . $host . '/shoear/api/v1/stripe/return';
     $link = stripeApi($secret, 'POST', '/v1/account_links', [
       'account'     => $accountId,
-      'refresh_url' => $appUrl . '/courier/earnings?refresh=1',
-      'return_url'  => $appUrl . '/courier/earnings?done=1',
+      'refresh_url' => $base . '?state=refresh',
+      'return_url'  => $base . '?state=done',
       'type'        => 'account_onboarding',
     ]);
     sendJson(200, true, ['url' => $link['url']]);
   } catch (Throwable $e) {
     sendJson(502, false, null, ['code' => 'STRIPE_ERROR', 'message' => $e->getMessage()]);
   }
+}
+
+// GET /stripe/return — landing page Stripe redirects the browser to after the
+// hosted onboarding. Used by the mobile flow, where returning to the web app
+// (localhost) isn't reachable. Renders a simple page telling the user to return
+// to the app, which re-checks payout status on resume. Public (a browser nav,
+// no JWT); outputs HTML, not JSON.
+function handleStripeReturnPage(): void {
+  $refresh = (($_GET['state'] ?? '') === 'refresh');
+  $emoji = $refresh ? '⚠️' : '✅';
+  $title = $refresh ? 'Setup not finished' : 'Bank account setup complete';
+  $msg   = $refresh
+    ? 'Your session expired before setup finished. Please return to the ShoeAR Express app and tap “Set up bank account” again.'
+    : 'Your payout account is set up. You can close this tab and return to the ShoeAR Express app — your earnings will be paid here.';
+  header('Content-Type: text/html; charset=utf-8');
+  echo '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+     . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+     . '<title>' . $title . '</title></head>'
+     . '<body style="margin:0;font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;color:#1f2937">'
+     . '<div style="max-width:380px;margin:0 auto;text-align:center;padding:64px 24px">'
+     . '<div style="font-size:64px;line-height:1">' . $emoji . '</div>'
+     . '<h2 style="margin:20px 0 10px;font-size:22px">' . $title . '</h2>'
+     . '<p style="color:#6b7280;line-height:1.6;margin:0">' . $msg . '</p>'
+     . '</div></body></html>';
+  exit;
 }
 
 // GET /courier/stripe/status — report payout status, syncing payoutsEnabled

@@ -440,6 +440,13 @@ if ($method === 'GET' && $path === '/easyparcel/callback') {
   handleEasyParcelCallback($pdo, $config);
 }
 
+// ── Stripe onboarding return landing page (PUBLIC: a browser redirect back from
+// Stripe-hosted onboarding; used by the mobile flow where the web app isn't
+// reachable). Renders a "return to the app" HTML page. ──
+if ($method === 'GET' && $path === '/stripe/return') {
+  handleStripeReturnPage();
+}
+
 // ── own profile (any signed-in user) ──
 if ($method === 'GET' && $path === '/auth/me') {
   $auth = requireAuth($secret);
