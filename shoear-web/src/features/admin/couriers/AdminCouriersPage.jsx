@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getPendingCouriers, approveCourier, rejectCourier, refreshBadges } from '../adminService';
 import Pagination from '../../../components/Pagination';
+import Toast from '../../../components/Toast';
 import { usePagination } from '../../../hooks/usePagination';
 
 const PAGE_SIZE = 10;
@@ -121,12 +122,8 @@ function AdminCouriersPage() {
       <h1 className="mb-1">🛵 Courier Approvals</h1>
       <p className="text-muted">Review delivery personnel accounts awaiting approval.</p>
 
-      {notice && (
-        <div className="alert alert-success py-2 d-flex justify-content-between align-items-center">
-          <span>{notice}</span>
-          <button type="button" className="btn-close" onClick={() => setNotice('')}></button>
-        </div>
-      )}
+      {/* success confirmations are transient → toast (errors stay inline below) */}
+      <Toast message={notice} onClose={() => setNotice('')} />
       {error && <div className="alert alert-danger py-2">{error}</div>}
 
       {loading ? (
