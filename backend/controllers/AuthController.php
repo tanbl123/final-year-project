@@ -444,8 +444,8 @@ function handleRegisterCourier(PDO $pdo): void {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'IC must be 12 digits (e.g. 901231145678).']);
   }
   // Driving licence class(es) — at least one, each a recognised value.
-  // 'D' = car (manual, covers auto too); 'D-AUTO' = car restricted to automatic.
-  $allowedClasses = ['B2', 'B', 'D', 'D-AUTO', 'E', 'E1', 'E2'];
+  // 'D' = car (manual + automatic); 'DA' = car restricted to automatic only.
+  $allowedClasses = ['B2', 'B', 'D', 'DA', 'E', 'E1', 'E2'];
   if (count($licenseClasses) === 0) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please select at least one driving licence class.']);
   }

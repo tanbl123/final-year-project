@@ -57,14 +57,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _licenseNumberError, _icNumberError, _docsError;
 
   // Extra KYC: licence class + expiry, date of birth (18+), PDPA/T&C consent.
-  // A courier may hold several classes (e.g. B2 + D). 'D' = car (manual, covers
-  // auto); 'D-AUTO' = car restricted to automatic transmission.
+  // A courier may hold several classes (e.g. B2 + D). 'D' = car (manual +
+  // automatic); 'DA' = car restricted to automatic transmission only.
   final Set<String> _licenseClasses = {};
   static const _licenseClassOptions = [
     ('B2', 'B2 — Motorcycle (≤ 250cc)'),
     ('B', 'B — Motorcycle (any cc)'),
-    ('D', 'D — Car (manual)'),
-    ('D-AUTO', 'D — Car (automatic only)'),
+    ('D', 'D — Car (manual & automatic)'),
+    ('DA', 'DA — Car (automatic only)'),
     ('E', 'E — Lorry / van'),
     ('E1', 'E1 — Light lorry'),
     ('E2', 'E2 — Medium lorry'),
