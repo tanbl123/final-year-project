@@ -115,7 +115,9 @@ function AdminOverviewPage() {
             {/* Sales trend */}
             <div className="col-lg-7">
               <div className="card h-100">
-                <div className="card-header bg-white fw-semibold">Sales — last 14 days</div>
+                <div className="card-header bg-white fw-semibold">
+                  {range.from ? `Sales — ${range.label}` : 'Sales — last 14 days'}
+                </div>
                 <div className="card-body">
                   <SalesTrendChart data={d.trend} />
                 </div>
