@@ -19,9 +19,29 @@ const DASHBOARD_TREND_CAP   = 366;  // safety cap on trend bars for huge ranges
 // [{date, gross}] series the chart renders as-is.
 function dashboardTrend(PDO $pdo, ?string $supplierId, ?string $fromDt, ?string $toDt): array {
   if ($fromDt === null) {
-    $start = new DateTime('today');
-    $start->modify('-' . (DASHBOARD_TREND_DAYS - 1) . ' days');
+    // All-time: span from the earliest paid sale to today so the chart matches
+    // the all-time KPIs (capped below for long histories). Falls back to the
+    // last 14 days only when there are no sales yet.
     $end = new DateTime('today');
+    $minSql = "SELECT MIN(DATE(pay.paymentDate))
+                 FROM payment pay
+                 JOIN `order` o ON o.orderId = pay.orderId";
+    $minParams = [];
+    if ($supplierId !== null) {
+      $minSql .= " JOIN order_item oi ON oi.orderId = o.orderId
+                   JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+                   JOIN product p ON p.productId = pv.productId
+                  WHERE pay.paymentStatus = 'Successful' AND p.supplierId = :sid";
+      $minParams['sid'] = $supplierId;
+    } else {
+      $minSql .= " WHERE pay.paymentStatus = 'Successful'";
+    }
+    $mst = $pdo->prepare($minSql);
+    $mst->execute($minParams);
+    $firstDay = $mst->fetchColumn();
+    $start = $firstDay
+      ? new DateTime($firstDay)
+      : (clone $end)->modify('-' . (DASHBOARD_TREND_DAYS - 1) . ' days');
   } else {
     $start = new DateTime(substr($fromDt, 0, 10));
     $end   = new DateTime(substr($toDt, 0, 10));
