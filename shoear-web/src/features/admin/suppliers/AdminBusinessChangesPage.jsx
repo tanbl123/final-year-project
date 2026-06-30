@@ -114,6 +114,13 @@ function AdminBusinessChangesPage() {
                   </div>
                 </div>
 
+                {r.newCompanyName && r.newCompanyName !== r.curCompanyName && (
+                  <div className="alert alert-warning py-2 small mb-2">
+                    ⚠️ <strong>Legal-identity change:</strong> company name “{r.curCompanyName}” → “{r.newCompanyName}”.
+                    The SSM number is unchanged — confirm this is a genuine rebrand of the same registered company, not a different business.
+                  </div>
+                )}
+
                 <div className="row g-2 small text-muted fw-semibold border-bottom pb-1">
                   <div className="col-4">Field</div>
                   <div className="col-4">Current</div>

@@ -324,6 +324,11 @@ function BusinessDetailsCard({ onToast }) {
                 onChange={(e) => setReqField('companyName', e.target.value)}
                 onClear={() => setReqField('companyName', '')} />
               {reqErrors.companyName && <div className="invalid-feedback d-block">{reqErrors.companyName}</div>}
+              {req.companyName.trim() && req.companyName.trim() !== (cur.companyName || '') && (
+                <div className="form-text text-warning">
+                  ⚠️ Changing your company name is a legal-identity change — the admin will review it carefully. (Your SSM number stays the same.)
+                </div>
+              )}
             </div>
             <div className="mb-3">
               <label className="form-label">Business address</label>
@@ -336,12 +341,11 @@ function BusinessDetailsCard({ onToast }) {
             </div>
             <div className="mb-3">
               <label className="form-label">Business registration no. (SSM)</label>
-              <ClearableInput type="text" maxLength="50"
-                className={reqErrors.businessRegNo ? 'is-invalid' : ''}
-                value={req.businessRegNo}
-                onChange={(e) => setReqField('businessRegNo', e.target.value)}
-                onClear={() => setReqField('businessRegNo', '')} />
-              {reqErrors.businessRegNo && <div className="invalid-feedback d-block">{reqErrors.businessRegNo}</div>}
+              <input type="text" className="form-control" value={req.businessRegNo} disabled readOnly />
+              <div className="form-text">
+                🔒 Locked — your SSM number is your registered legal identity and can&apos;t be changed.
+                To trade under a different company, register a new account.
+              </div>
             </div>
             <div className="mb-3">
               <label className="form-label">Tax / SST number (optional)</label>

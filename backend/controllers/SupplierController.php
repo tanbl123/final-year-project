@@ -288,7 +288,13 @@ function handleSubmitChangeRequest(PDO $pdo, array $auth): void {
   } else {
     $companyAddress = trim($body['companyAddress'] ?? '');
   }
-  $businessRegNo      = trim($body['businessRegNo'] ?? '');
+  // The SSM registration number is the legal-identity ANCHOR — immutable after
+  // approval. Ignore any submitted value and keep the current one: a different
+  // SSM means a different registered company, which must register fresh (not
+  // edit), so an approved account can never be re-pointed to another entity.
+  $curSsm = $pdo->prepare('SELECT businessRegNo FROM supplier WHERE supplierId = :sid');
+  $curSsm->execute(['sid' => $supplierId]);
+  $businessRegNo      = (string) ($curSsm->fetchColumn() ?: '');
   $taxNumber          = trim($body['taxNumber'] ?? '');
   $businessLicenseUrl = trim($body['businessLicenseUrl'] ?? '');
 
