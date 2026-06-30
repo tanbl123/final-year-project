@@ -7,6 +7,7 @@ import 'package:delivery/features/auth/services/account_service.dart';
 import 'package:delivery/features/auth/state/auth_provider.dart';
 import 'package:delivery/features/auth/screens/change_password_screen.dart';
 import 'package:delivery/features/profile/screens/edit_profile_screen.dart';
+import 'package:delivery/features/profile/screens/vehicle_licence_screen.dart';
 import 'package:delivery/features/earnings/screens/earnings_screen.dart';
 
 /// The courier's profile: view/edit details, change password, sign out.
@@ -69,6 +70,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
+                onPressed: _openVehicleLicence,
+                icon: const Icon(Icons.badge_outlined),
+                label: const Text('Vehicle & licence'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
                 onPressed: _openChangePassword,
                 icon: const Icon(Icons.lock_outline),
                 label: const Text('Change password'),
@@ -107,7 +114,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           vehicleType:  profile['vehicleType']?.toString()  ?? 'Motorcycle',
           vehicleBrand: profile['vehicleBrand']?.toString() ?? '',
           vehicleModel: profile['vehicleModel']?.toString() ?? '',
-          vehiclePlate: profile['vehiclePlate']?.toString() ?? '',
           coverageZones: profile['coverageZones']?.toString() ?? '',
           avatarUrl: (me['avatarUrl'] as String?)?.isNotEmpty == true ? me['avatarUrl'] as String : null,
         ),
@@ -117,6 +123,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (saved == true && mounted) {
       context.showSnack('Profile updated.');
     }
+  }
+
+  Future<void> _openVehicleLicence() async {
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const VehicleLicenceScreen()),
+    );
+    if (changed == true && mounted) _reload();
   }
 
   Future<void> _openChangePassword() async {

@@ -20,7 +20,6 @@ class EditProfileScreen extends StatefulWidget {
   final String vehicleType;
   final String vehicleBrand;
   final String vehicleModel;
-  final String vehiclePlate;
   final String coverageZones; // CSV of states from the profile
   final String? avatarUrl;
 
@@ -32,7 +31,6 @@ class EditProfileScreen extends StatefulWidget {
     required this.vehicleType,
     required this.vehicleBrand,
     required this.vehicleModel,
-    required this.vehiclePlate,
     required this.coverageZones,
     required this.avatarUrl,
   });
@@ -48,7 +46,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late String _vehicleType = widget.vehicleType;
   late final TextEditingController _vehicleBrand = TextEditingController(text: widget.vehicleBrand);
   late final TextEditingController _vehicleModel = TextEditingController(text: widget.vehicleModel);
-  late final TextEditingController _vehiclePlate = TextEditingController(text: widget.vehiclePlate);
 
   // Delivery coverage: states the courier delivers to (drives auto-dispatch).
   // Pre-loaded from the CSV in the profile; must match the backend MY_STATES list.
@@ -75,12 +72,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _nameError;
   String? _usernameError;
   String? _phoneError;
-  String? _plateError;
 
   @override
   void initState() {
     super.initState();
-    for (final c in [_name, _username, _phone, _vehicleBrand, _vehicleModel, _vehiclePlate]) {
+    for (final c in [_name, _username, _phone, _vehicleBrand, _vehicleModel]) {
       c.addListener(() => setState(() {}));
     }
     _nameFocus.addListener(() => _onBlur(_nameFocus, () => _nameError = _validateName(_name.text)));
@@ -110,7 +106,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   void dispose() {
-    for (final c in [_name, _username, _phone, _vehicleBrand, _vehicleModel, _vehiclePlate]) {
+    for (final c in [_name, _username, _phone, _vehicleBrand, _vehicleModel]) {
       c.dispose();
     }
     for (final f in [_nameFocus, _usernameFocus, _phoneFocus]) {
@@ -126,7 +122,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _vehicleType  != widget.vehicleType  ||
       _vehicleBrand.text.trim() != widget.vehicleBrand.trim() ||
       _vehicleModel.text.trim() != widget.vehicleModel.trim() ||
-      _vehiclePlate.text.trim() != widget.vehiclePlate.trim() ||
       _coverageChanged;
 
   // compare the chosen zones against the originals, order-independent
@@ -231,7 +226,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             vehicleType:  _vehicleType,
             vehicleBrand: _vehicleBrand.text.trim(),
             vehicleModel: _vehicleModel.text.trim(),
-            vehiclePlate: _vehiclePlate.text.trim(),
             coverageZones: _states.where(_coverageZones.contains).toList(),
           );
       await context.read<AuthProvider>().applyProfile(fullName: _name.text.trim());
@@ -244,8 +238,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           _saving = false;
           if (lower.contains('phone')) {
             _phoneError = msg;
-          } else if (lower.contains('plate')) {
-            _plateError = msg;
           } else if (lower.contains('area') || lower.contains('coverage')) {
             _coverageError = msg;
           } else if (lower.contains('name')) {
@@ -353,8 +345,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               brand: _vehicleBrand,
               model: _vehicleModel,
             ),
-            _field(_vehiclePlate, 'Plate number (e.g. ABC 1234)', maxLength: 20, error: _plateError,
-                onChanged: (_) => setState(() => _plateError = null)),
             const Padding(
               padding: EdgeInsets.only(bottom: 8),
               child: Text('Delivery coverage — orders are assigned to couriers who '

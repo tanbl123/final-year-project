@@ -117,6 +117,19 @@ export function rejectChangeRequest(requestId, reason) {
   return apiPost(`/admin/supplier-changes/${requestId}/reject`, { reason }, getToken());
 }
 
+// ── courier vehicle/licence change requests (re-approval queue) ───────
+export function getCourierChangeRequests() {
+  return apiGet('/admin/courier-changes', getToken());
+}
+
+export function approveCourierChangeRequest(requestId) {
+  return apiPost(`/admin/courier-changes/${requestId}/approve`, {}, getToken());
+}
+
+export function rejectCourierChangeRequest(requestId, reason) {
+  return apiPost(`/admin/courier-changes/${requestId}/reject`, { reason }, getToken());
+}
+
 // ── category management ──────────────────────────────────────────────
 // List categories with how many products use each.
 export function getCategoriesAdmin() {

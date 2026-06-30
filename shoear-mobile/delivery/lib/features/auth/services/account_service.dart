@@ -18,7 +18,6 @@ class AccountService {
     String? vehicleType,
     String? vehicleBrand,
     String? vehicleModel,
-    String? vehiclePlate,
     List<String>? coverageZones,
   }) async {
     await api.put('/auth/me', {
@@ -28,8 +27,30 @@ class AccountService {
       if (vehicleType  != null) 'vehicleType':  vehicleType,
       if (vehicleBrand != null) 'vehicleBrand': vehicleBrand,
       if (vehicleModel != null) 'vehicleModel': vehicleModel,
-      if (vehiclePlate != null) 'vehiclePlate': vehiclePlate,
       if (coverageZones != null) 'coverageZones': coverageZones,
+    });
+  }
+
+  /// GET /courier/verification — current plate + licence (verified fields) and
+  /// the latest change request (Pending banner / Rejected reason).
+  Future<Map<String, dynamic>> verification() async =>
+      await api.get('/courier/verification') as Map<String, dynamic>;
+
+  /// POST /courier/verification/change-request — propose new plate/licence
+  /// values for admin re-approval. The account stays active while pending.
+  Future<void> submitVerificationChange({
+    required String vehiclePlate,
+    required String licenseNumber,
+    required List<String> licenseClasses,
+    required String licenseExpiry,   // YYYY-MM-DD
+    required String licensePhotoUrl,
+  }) async {
+    await api.post('/courier/verification/change-request', {
+      'vehiclePlate': vehiclePlate,
+      'licenseNumber': licenseNumber,
+      'licenseClass': licenseClasses,
+      'licenseExpiry': licenseExpiry,
+      'licensePhotoUrl': licensePhotoUrl,
     });
   }
 

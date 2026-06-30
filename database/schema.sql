@@ -156,6 +156,32 @@ CREATE TABLE delivery_personnel (
         ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
+-- Courier vehicle/licence change requests (post-approval re-verification). The
+-- plate + driving-licence fields decide who is legally allowed to deliver, so an
+-- approved courier proposes changes here instead of editing them directly; the
+-- account stays Active until an admin approves and the values are copied onto
+-- the live delivery_personnel row.
+CREATE TABLE courier_change_request (
+    requestId           VARCHAR(10)  NOT NULL,                 -- CCR0001
+    deliveryPersonnelId VARCHAR(10)  NOT NULL,
+    vehiclePlate        VARCHAR(20)  NOT NULL,
+    licenseNumber       VARCHAR(50)  NOT NULL,
+    licenseClass        VARCHAR(60)  NOT NULL,                 -- comma-separated, e.g. 'B2,D'
+    licenseExpiry       DATE         NULL,
+    licensePhotoUrl     VARCHAR(255) NULL,
+    requestStatus       ENUM('Pending','Approved','Rejected') NOT NULL DEFAULT 'Pending',
+    reviewNote          VARCHAR(255) NULL,
+    reviewedBy          VARCHAR(10)  NULL,
+    created_at          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at         DATETIME     NULL,
+    PRIMARY KEY (requestId),
+    KEY idx_ccr_courier (deliveryPersonnelId),
+    KEY idx_ccr_status (requestStatus),
+    CONSTRAINT fk_ccr_courier FOREIGN KEY (deliveryPersonnelId)
+        REFERENCES delivery_personnel(deliveryPersonnelId)
+        ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- =====================================================================
 --  2. CATALOG TABLES
 -- =====================================================================

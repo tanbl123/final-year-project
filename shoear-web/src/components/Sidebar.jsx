@@ -11,7 +11,8 @@ const ADMIN_NAV = [
     { to: '/admin', label: 'Dashboard', icon: '📊', end: true },
     { to: '/admin/suppliers', label: 'Suppliers', icon: '🏪', badge: 'suppliers' },
     { to: '/admin/couriers', label: 'Couriers', icon: '🛵', badge: 'couriers' },
-    { to: '/admin/changes', label: 'Changes', icon: '📝', badge: 'changes' },
+    { to: '/admin/changes', label: 'Supplier Changes', icon: '📝', badge: 'changes' },
+    { to: '/admin/courier-changes', label: 'Courier Changes', icon: '🛠️', badge: 'courierChanges' },
     { to: '/admin/users', label: 'Users', icon: '👥' },
   ] },
   { group: 'Catalog', items: [

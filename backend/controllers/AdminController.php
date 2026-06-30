@@ -392,6 +392,94 @@ function handleRejectChangeRequest(PDO $pdo, array $auth, string $requestId): vo
   sendJson(200, true, ['requestId' => $requestId, 'status' => 'Rejected']);
 }
 
+// ── courier vehicle/licence change requests ──────────────────────────
+// GET /admin/courier-changes — pending plate/licence change requests with the
+// current (live) values alongside the proposed ones, so the admin sees the diff.
+function handleListCourierChangeRequests(PDO $pdo): void {
+  $stmt = $pdo->query(
+    "SELECT r.requestId, r.created_at,
+            r.vehiclePlate AS newPlate, r.licenseNumber AS newLicenseNumber,
+            r.licenseClass AS newLicenseClass, r.licenseExpiry AS newLicenseExpiry,
+            r.licensePhotoUrl AS newLicensePhotoUrl,
+            dp.deliveryPersonnelId, u.fullName, u.email, u.username,
+            dp.vehiclePlate AS curPlate, dp.licenseNumber AS curLicenseNumber,
+            dp.licenseClass AS curLicenseClass, dp.licenseExpiry AS curLicenseExpiry,
+            dp.licensePhotoUrl AS curLicensePhotoUrl
+       FROM courier_change_request r
+       JOIN delivery_personnel dp ON dp.deliveryPersonnelId = r.deliveryPersonnelId
+       JOIN `user` u              ON u.userId = dp.userId
+      WHERE r.requestStatus = 'Pending'
+      ORDER BY r.created_at ASC"
+  );
+  sendJson(200, true, ['requests' => $stmt->fetchAll()]);
+}
+
+// Load a still-Pending courier change request, or 404/409. Returns the row.
+function loadPendingCourierChangeRequest(PDO $pdo, string $requestId): array {
+  $stmt = $pdo->prepare('SELECT * FROM courier_change_request WHERE requestId = :id');
+  $stmt->execute(['id' => $requestId]);
+  $req = $stmt->fetch();
+  if (!$req) {
+    sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Change request not found.']);
+  }
+  if ($req['requestStatus'] !== 'Pending') {
+    sendJson(409, false, null, ['code' => 'CONFLICT', 'message' => 'This request has already been reviewed.']);
+  }
+  return $req;
+}
+
+// POST /admin/courier-changes/{requestId}/approve — copy the proposed plate +
+// licence values onto the live delivery_personnel row.
+function handleApproveCourierChangeRequest(PDO $pdo, array $auth, string $requestId): void {
+  $req = loadPendingCourierChangeRequest($pdo, $requestId);
+
+  $pdo->beginTransaction();
+  try {
+    $pdo->prepare(
+      'UPDATE delivery_personnel
+          SET vehiclePlate = :plate, licenseNumber = :ln, licenseClass = :lc,
+              licenseExpiry = :le, licensePhotoUrl = :lp
+        WHERE deliveryPersonnelId = :id'
+    )->execute([
+      'plate' => $req['vehiclePlate'], 'ln' => $req['licenseNumber'],
+      'lc' => $req['licenseClass'], 'le' => $req['licenseExpiry'],
+      'lp' => $req['licensePhotoUrl'], 'id' => $req['deliveryPersonnelId'],
+    ]);
+
+    $pdo->prepare(
+      "UPDATE courier_change_request
+          SET requestStatus = 'Approved', reviewedBy = :by, reviewed_at = NOW()
+        WHERE requestId = :id"
+    )->execute(['by' => $auth['userId'], 'id' => $requestId]);
+
+    $pdo->commit();
+  } catch (Throwable $e) {
+    $pdo->rollBack();
+    sendJson(500, false, null, ['code' => 'SERVER', 'message' => 'Could not apply the change. Please try again.']);
+  }
+
+  sendJson(200, true, ['requestId' => $requestId, 'status' => 'Approved']);
+}
+
+// POST /admin/courier-changes/{requestId}/reject — body: { reason }.
+function handleRejectCourierChangeRequest(PDO $pdo, array $auth, string $requestId): void {
+  $req    = loadPendingCourierChangeRequest($pdo, $requestId);
+  $body   = getJsonBody();
+  $reason = trim($body['reason'] ?? '');
+  if ($reason === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A reason is required so the courier knows what to fix.']);
+  }
+  if (mb_strlen($reason) > 255) { $reason = mb_substr($reason, 0, 255); }
+
+  $pdo->prepare(
+    "UPDATE courier_change_request
+        SET requestStatus = 'Rejected', reviewNote = :rn, reviewedBy = :by, reviewed_at = NOW()
+      WHERE requestId = :id"
+  )->execute(['rn' => $reason, 'by' => $auth['userId'], 'id' => $requestId]);
+
+  sendJson(200, true, ['requestId' => $requestId, 'status' => 'Rejected']);
+}
+
 // GET /admin/badge-counts — one cheap call powering the sidebar work-queue
 // badges: how many items in each queue are waiting for the admin to act. The
 // web app polls this periodically so the admin sees pending work at a glance.
@@ -401,6 +489,7 @@ function adminBadgeCounts(PDO $pdo): array {
     'suppliers'  => "SELECT COUNT(*) FROM `user` WHERE role = 'Supplier' AND status = 'Pending'",
     'couriers'   => "SELECT COUNT(*) FROM `user` WHERE role = 'DeliveryPersonnel' AND status = 'Pending'",
     'changes'    => "SELECT COUNT(*) FROM supplier_change_request WHERE requestStatus = 'Pending'",
+    'courierChanges' => "SELECT COUNT(*) FROM courier_change_request WHERE requestStatus = 'Pending'",
     'products'   => "SELECT COUNT(*) FROM product WHERE productStatus = 'Pending'",
     // Operations queues
     'deliveries' => "SELECT COUNT(*) FROM delivery WHERE deliveryPersonnelId IS NULL AND deliveryMethod = 'InHouse'",

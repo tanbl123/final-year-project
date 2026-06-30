@@ -1055,23 +1055,20 @@ function handleUpdateMe(PDO $pdo, array $auth): void {
         ->execute(['sa' => trim((string) $body['shippingAddress']), 'id' => $auth['userId']]);
   }
 
-  // delivery personnel may also update their vehicle details (no-op for others)
+  // delivery personnel may instantly update operational vehicle details (type,
+  // brand, model). The PLATE is NOT here — it's a verified field that decides
+  // which vehicle the courier is registered to drive, so changing it goes
+  // through the courier change-request → admin re-approval flow
+  // (CourierController) and any plate submitted here is ignored.
   if (array_key_exists('vehicleType', $body) || array_key_exists('vehicleBrand', $body) ||
-      array_key_exists('vehicleModel', $body) || array_key_exists('vehiclePlate', $body)) {
+      array_key_exists('vehicleModel', $body)) {
     $allowedTypes = ['Motorcycle', 'Car', 'Van', 'Truck'];
     $vType  = trim((string) ($body['vehicleType']  ?? 'Motorcycle'));
     $vBrand = trim((string) ($body['vehicleBrand'] ?? ''));
     $vModel = trim((string) ($body['vehicleModel'] ?? ''));
-    $vPlate = strtoupper(trim((string) ($body['vehiclePlate'] ?? '')));
     if (!in_array($vType, $allowedTypes, true)) $vType = 'Motorcycle';
-    if ($vPlate !== '' && mb_strlen($vPlate) < 3) {
-      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Plate number must be at least 3 characters.']);
-    }
-    if ($vPlate !== '' && !preg_match('/^[A-Za-z0-9 \-]+$/', $vPlate)) {
-      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Only letters, numbers, spaces or hyphens.']);
-    }
-    $pdo->prepare('UPDATE delivery_personnel SET vehicleType = :vt, vehicleBrand = :vb, vehicleModel = :vm, vehiclePlate = :vp WHERE userId = :id')
-        ->execute(['vt' => $vType, 'vb' => $vBrand, 'vm' => $vModel, 'vp' => $vPlate, 'id' => $auth['userId']]);
+    $pdo->prepare('UPDATE delivery_personnel SET vehicleType = :vt, vehicleBrand = :vb, vehicleModel = :vm WHERE userId = :id')
+        ->execute(['vt' => $vType, 'vb' => $vBrand, 'vm' => $vModel, 'id' => $auth['userId']]);
   }
 
   // delivery personnel may also update their coverage zones (service areas) —

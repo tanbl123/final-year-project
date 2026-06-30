@@ -14,6 +14,7 @@ const ACTIONS = [
   { key: 'couriers',   label: 'Courier applications',  to: '/admin/couriers' },
   { key: 'products',   label: 'Product approvals',     to: '/admin/products' },
   { key: 'changes',    label: 'Business changes',      to: '/admin/changes' },
+  { key: 'courierChanges', label: 'Courier vehicle/licence changes', to: '/admin/courier-changes' },
   { key: 'deliveries', label: 'Unassigned deliveries', to: '/admin/deliveries' },
   { key: 'issues',     label: 'Delivery issues',       to: '/admin/delivery-issues' },
   { key: 'refunds',    label: 'Refund requests',       to: '/admin/refunds' },
@@ -46,6 +47,7 @@ function AdminOverviewPage() {
 
   useEffect(() => {
     let active = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     getAdminDashboard({ from: range.from, to: range.to })
       .then((res) => { if (active) setD(res); })

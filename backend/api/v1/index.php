@@ -39,6 +39,7 @@ require __DIR__ . '/../../controllers/VehicleController.php';
 require __DIR__ . '/../../controllers/DashboardController.php';
 require __DIR__ . '/../../controllers/CourierPayoutController.php';
 require __DIR__ . '/../../controllers/EasyParcelController.php';
+require __DIR__ . '/../../controllers/CourierController.php';
 
 // ── Always answer with JSON, even on a PHP error ──
 // A stray warning/notice or an uncaught error would otherwise print into the
@@ -555,6 +556,19 @@ if ($method === 'POST' && $path === '/supplier/business-details/change-request')
   handleSubmitChangeRequest($pdo, $auth);
 }
 
+// ── courier vehicle/licence (post-approval changes via re-approval) ──
+if ($method === 'GET' && $path === '/courier/verification') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleGetCourierVerification($pdo, $auth);
+}
+
+if ($method === 'POST' && $path === '/courier/verification/change-request') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleSubmitCourierChangeRequest($pdo, $auth);
+}
+
 // ── reports ──
 if ($method === 'GET' && $path === '/reports/sales') {
   $auth = requireAuth($secret);
@@ -676,6 +690,28 @@ if ($method === 'POST' && preg_match('#^/admin/supplier-changes/([^/]+)/reject$#
   requireAdmin($auth);
   $pdo  = getPDO();
   handleRejectChangeRequest($pdo, $auth, $m[1]);
+}
+
+// courier vehicle/licence change requests (re-approval queue)
+if ($method === 'GET' && $path === '/admin/courier-changes') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleListCourierChangeRequests($pdo);
+}
+
+if ($method === 'POST' && preg_match('#^/admin/courier-changes/([^/]+)/approve$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleApproveCourierChangeRequest($pdo, $auth, $m[1]);
+}
+
+if ($method === 'POST' && preg_match('#^/admin/courier-changes/([^/]+)/reject$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleRejectCourierChangeRequest($pdo, $auth, $m[1]);
 }
 
 if ($method === 'GET' && $path === '/admin/products/pending') {
