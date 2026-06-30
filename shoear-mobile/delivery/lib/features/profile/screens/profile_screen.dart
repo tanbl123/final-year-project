@@ -108,6 +108,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           vehicleBrand: profile['vehicleBrand']?.toString() ?? '',
           vehicleModel: profile['vehicleModel']?.toString() ?? '',
           vehiclePlate: profile['vehiclePlate']?.toString() ?? '',
+          coverageZones: profile['coverageZones']?.toString() ?? '',
           avatarUrl: (me['avatarUrl'] as String?)?.isNotEmpty == true ? me['avatarUrl'] as String : null,
         ),
       ),

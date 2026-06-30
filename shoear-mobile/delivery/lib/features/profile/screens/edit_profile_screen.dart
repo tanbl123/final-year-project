@@ -21,6 +21,7 @@ class EditProfileScreen extends StatefulWidget {
   final String vehicleBrand;
   final String vehicleModel;
   final String vehiclePlate;
+  final String coverageZones; // CSV of states from the profile
   final String? avatarUrl;
 
   const EditProfileScreen({
@@ -32,6 +33,7 @@ class EditProfileScreen extends StatefulWidget {
     required this.vehicleBrand,
     required this.vehicleModel,
     required this.vehiclePlate,
+    required this.coverageZones,
     required this.avatarUrl,
   });
 
@@ -47,6 +49,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _vehicleBrand = TextEditingController(text: widget.vehicleBrand);
   late final TextEditingController _vehicleModel = TextEditingController(text: widget.vehicleModel);
   late final TextEditingController _vehiclePlate = TextEditingController(text: widget.vehiclePlate);
+
+  // Delivery coverage: states the courier delivers to (drives auto-dispatch).
+  // Pre-loaded from the CSV in the profile; must match the backend MY_STATES list.
+  static const _states = [
+    'Johor', 'Kedah', 'Kelantan', 'Melaka', 'Negeri Sembilan', 'Pahang',
+    'Perak', 'Perlis', 'Pulau Pinang', 'Sabah', 'Sarawak', 'Selangor',
+    'Terengganu', 'Kuala Lumpur', 'Labuan', 'Putrajaya',
+  ];
+  late final Set<String> _coverageZones = widget.coverageZones
+      .split(',')
+      .map((e) => e.trim())
+      .where((e) => e.isNotEmpty)
+      .toSet();
+  String? _coverageError;
 
   final _nameFocus = FocusNode();
   final _usernameFocus = FocusNode();
@@ -110,7 +126,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _vehicleType  != widget.vehicleType  ||
       _vehicleBrand.text.trim() != widget.vehicleBrand.trim() ||
       _vehicleModel.text.trim() != widget.vehicleModel.trim() ||
-      _vehiclePlate.text.trim() != widget.vehiclePlate.trim();
+      _vehiclePlate.text.trim() != widget.vehiclePlate.trim() ||
+      _coverageChanged;
+
+  // compare the chosen zones against the originals, order-independent
+  bool get _coverageChanged {
+    final original = widget.coverageZones
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet();
+    return original.length != _coverageZones.length ||
+        !original.containsAll(_coverageZones);
+  }
 
   Future<bool> _confirmDiscard() async {
     final leave = await showDialog<bool>(
@@ -189,8 +217,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       _nameError = _validateName(_name.text);
       _usernameError = _validateUsername(_username.text);
       _phoneError = _validatePhone(_phone.text);
+      _coverageError = _coverageZones.isEmpty ? 'Select at least one delivery area.' : null;
     });
-    if (_nameError != null || _usernameError != null || _phoneError != null) {
+    if (_nameError != null || _usernameError != null || _phoneError != null || _coverageError != null) {
       setState(() => _saving = false);
       return;
     }
@@ -203,6 +232,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             vehicleBrand: _vehicleBrand.text.trim(),
             vehicleModel: _vehicleModel.text.trim(),
             vehiclePlate: _vehiclePlate.text.trim(),
+            coverageZones: _states.where(_coverageZones.contains).toList(),
           );
       await context.read<AuthProvider>().applyProfile(fullName: _name.text.trim());
       if (mounted) Navigator.of(context).pop(true);
@@ -216,6 +246,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             _phoneError = msg;
           } else if (lower.contains('plate')) {
             _plateError = msg;
+          } else if (lower.contains('area') || lower.contains('coverage')) {
+            _coverageError = msg;
           } else if (lower.contains('name')) {
             _nameError = msg;
           } else {
@@ -223,6 +255,48 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           }
         });
       }
+    }
+  }
+
+  // Multi-select the states the courier delivers to.
+  Future<void> _pickCoverageZones() async {
+    final temp = Set<String>.from(_coverageZones);
+    final result = await showDialog<Set<String>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Delivery coverage areas'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                for (final s in _states)
+                  CheckboxListTile(
+                    value: temp.contains(s),
+                    title: Text(s),
+                    controlAffinity: ListTileControlAffinity.leading,
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    onChanged: (v) => setLocal(() { if (v == true) { temp.add(s); } else { temp.remove(s); } }),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, temp), child: const Text('Done')),
+          ],
+        ),
+      ),
+    );
+    if (result != null) {
+      setState(() {
+        _coverageZones
+          ..clear()
+          ..addAll(result);
+        if (_coverageZones.isNotEmpty) _coverageError = null;
+      });
     }
   }
 
@@ -281,6 +355,35 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             _field(_vehiclePlate, 'Plate number (e.g. ABC 1234)', maxLength: 20, error: _plateError,
                 onChanged: (_) => setState(() => _plateError = null)),
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text('Delivery coverage — orders are assigned to couriers who '
+                  'cover the delivery area.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: InkWell(
+                onTap: _pickCoverageZones,
+                child: InputDecorator(
+                  decoration: InputDecoration(
+                    labelText: 'Delivery coverage areas',
+                    border: const OutlineInputBorder(),
+                    errorText: _coverageError,
+                    suffixIcon: const Icon(Icons.arrow_drop_down),
+                  ),
+                  child: Text(
+                    _coverageZones.isEmpty
+                        ? 'Select states'
+                        : (_states.where(_coverageZones.contains).join(', ')),
+                    style: TextStyle(
+                      color: _coverageZones.isEmpty
+                          ? Theme.of(context).hintColor
+                          : Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 8),
             FilledButton(
               onPressed: (_saving || !_dirty) ? null : _save,

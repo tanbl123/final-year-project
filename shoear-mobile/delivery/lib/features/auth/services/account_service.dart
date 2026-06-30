@@ -19,6 +19,7 @@ class AccountService {
     String? vehicleBrand,
     String? vehicleModel,
     String? vehiclePlate,
+    List<String>? coverageZones,
   }) async {
     await api.put('/auth/me', {
       'fullName': fullName,
@@ -28,6 +29,7 @@ class AccountService {
       if (vehicleBrand != null) 'vehicleBrand': vehicleBrand,
       if (vehicleModel != null) 'vehicleModel': vehicleModel,
       if (vehiclePlate != null) 'vehiclePlate': vehiclePlate,
+      if (coverageZones != null) 'coverageZones': coverageZones,
     });
   }
 

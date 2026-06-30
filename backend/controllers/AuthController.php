@@ -1074,6 +1074,26 @@ function handleUpdateMe(PDO $pdo, array $auth): void {
         ->execute(['vt' => $vType, 'vb' => $vBrand, 'vm' => $vModel, 'vp' => $vPlate, 'id' => $auth['userId']]);
   }
 
+  // delivery personnel may also update their coverage zones (service areas) —
+  // operational, so directly editable (drives zone-based dispatch). Same
+  // validation as registration: at least one, all valid Malaysian states.
+  if (array_key_exists('coverageZones', $body)) {
+    $raw = $body['coverageZones'] ?? [];
+    $zones = is_array($raw)
+      ? array_values(array_unique(array_filter(array_map('trim', $raw))))
+      : array_values(array_unique(array_filter(array_map('trim', explode(',', (string) $raw)))));
+    if (count($zones) === 0) {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please select at least one delivery coverage area.']);
+    }
+    foreach ($zones as $z) {
+      if (!in_array($z, MY_STATES, true)) {
+        sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'One of your coverage areas is not a valid state.']);
+      }
+    }
+    $pdo->prepare('UPDATE delivery_personnel SET coverageZones = :cz WHERE userId = :id')
+        ->execute(['cz' => implode(',', $zones), 'id' => $auth['userId']]);
+  }
+
   sendJson(200, true, ['fullName' => $fullName, 'phoneNumber' => $phone, 'username' => $username]);
 }
 
