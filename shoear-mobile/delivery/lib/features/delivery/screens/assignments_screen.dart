@@ -5,6 +5,7 @@ import 'package:delivery/features/delivery/models/delivery.dart';
 import 'package:delivery/features/delivery/services/delivery_service.dart';
 import 'package:delivery/features/delivery/screens/delivery_detail_screen.dart';
 import 'package:delivery/features/delivery/widgets/status_chip.dart';
+import 'package:delivery/features/notification/widgets/notification_bell.dart';
 
 /// The courier's active jobs (Assigned / PickedUp / OutForDelivery).
 class AssignmentsScreen extends StatefulWidget {
@@ -34,7 +35,10 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('My deliveries')),
+      appBar: AppBar(
+        title: const Text('My deliveries'),
+        actions: const [NotificationBell()],
+      ),
       body: RefreshIndicator(
         onRefresh: _refresh,
         child: FutureBuilder<List<DeliverySummary>>(

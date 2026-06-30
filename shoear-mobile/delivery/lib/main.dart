@@ -9,6 +9,7 @@ import 'package:delivery/features/delivery/services/delivery_service.dart';
 import 'package:delivery/features/earnings/services/earnings_service.dart';
 import 'package:delivery/features/notification/services/notification_service.dart';
 import 'package:delivery/features/notification/services/push_service.dart';
+import 'package:delivery/features/notification/state/notification_provider.dart';
 import 'package:delivery/features/shell/main_shell.dart';
 
 void main() async {
@@ -42,6 +43,12 @@ class CourierApp extends StatelessWidget {
         ChangeNotifierProxyProvider<AuthProvider, PushService>(
           create: (_) => pushService,
           update: (_, auth, push) => push!..syncWithAuth(auth.isLoggedIn),
+        ),
+        // in-app notification bell: loads on login, clears on logout; a
+        // foreground push refreshes it (via pushService.onMessageCallback)
+        ChangeNotifierProxyProvider<AuthProvider, NotificationProvider>(
+          create: (_) => NotificationProvider(NotificationService(api), pushService),
+          update: (_, auth, notif) => notif!..syncWithAuth(auth.isLoggedIn),
         ),
       ],
       child: MaterialApp(

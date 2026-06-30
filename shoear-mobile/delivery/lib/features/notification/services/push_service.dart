@@ -15,6 +15,10 @@ class PushService extends ChangeNotifier {
   bool _available = false;
   bool? _wasLoggedIn;
 
+  /// Called when a push arrives (or is tapped) while the app is running — wired
+  /// to refresh the in-app bell so the badge stays in sync.
+  void Function()? onMessageCallback;
+
   PushService(this._notifications);
 
   bool get available => _available;
@@ -24,6 +28,10 @@ class PushService extends ChangeNotifier {
     try {
       await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
       _available = true;
+      // FCM shows tray notifications itself when backgrounded; in the foreground
+      // we refresh the bell so the new notification appears immediately.
+      FirebaseMessaging.onMessage.listen((_) => onMessageCallback?.call());
+      FirebaseMessaging.onMessageOpenedApp.listen((_) => onMessageCallback?.call());
     } catch (_) {
       _available = false;
     }

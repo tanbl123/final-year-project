@@ -458,6 +458,15 @@ function handleApproveCourierChangeRequest(PDO $pdo, array $auth, string $reques
     sendJson(500, false, null, ['code' => 'SERVER', 'message' => 'Could not apply the change. Please try again.']);
   }
 
+  // Tell the courier the outcome (in-app notification + best-effort FCM push).
+  if (function_exists('createNotification')) {
+    $uid = courierUserId($pdo, (string) $req['deliveryPersonnelId']);
+    if ($uid !== '') {
+      createNotification($pdo, $uid, 'system', 'Vehicle & licence change approved ✓',
+        'Your updated plate / driving-licence details have been approved and are now active.');
+    }
+  }
+
   sendJson(200, true, ['requestId' => $requestId, 'status' => 'Approved']);
 }
 
@@ -477,7 +486,28 @@ function handleRejectCourierChangeRequest(PDO $pdo, array $auth, string $request
       WHERE requestId = :id"
   )->execute(['rn' => $reason, 'by' => $auth['userId'], 'id' => $requestId]);
 
+  // Tell the courier why it was rejected (in-app notification + FCM push) so
+  // they can fix it and resubmit without waiting to stumble on the screen.
+  if (function_exists('createNotification')) {
+    $uid = courierUserId($pdo, (string) $req['deliveryPersonnelId']);
+    if ($uid !== '') {
+      createNotification($pdo, $uid, 'system', 'Vehicle & licence change rejected',
+        'Reason: ' . $reason . ' — open Profile → Vehicle & licence to correct it and resubmit.');
+    }
+  }
+
   sendJson(200, true, ['requestId' => $requestId, 'status' => 'Rejected']);
+}
+
+// Resolve the user behind a delivery_personnel id (for notifications). '' if gone.
+function courierUserId(PDO $pdo, string $deliveryPersonnelId): string {
+  try {
+    $stmt = $pdo->prepare('SELECT userId FROM delivery_personnel WHERE deliveryPersonnelId = :id');
+    $stmt->execute(['id' => $deliveryPersonnelId]);
+    return (string) ($stmt->fetchColumn() ?: '');
+  } catch (Throwable $e) {
+    return '';
+  }
 }
 
 // GET /admin/badge-counts — one cheap call powering the sidebar work-queue
