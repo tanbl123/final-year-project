@@ -387,8 +387,10 @@ function RegisterPage() {
       <div className="mb-3">
         <label className="form-label">Business registration document</label>
         {form.businessLicenseUrl ? (
-          <div className="d-flex align-items-center gap-2">
+          <div className="d-flex align-items-center gap-2 flex-wrap">
             <span className="badge text-bg-success text-truncate" style={{ minWidth: 0 }} title={licenseName || 'Document uploaded'}>📄 {licenseName || 'Document uploaded'}</span>
+            <a href={form.businessLicenseUrl} target="_blank" rel="noreferrer"
+              className="btn btn-outline-secondary btn-sm flex-shrink-0">Preview</a>
             <button type="button" className="btn btn-outline-danger btn-sm flex-shrink-0" onClick={removeLicense}>Remove</button>
           </div>
         ) : (
