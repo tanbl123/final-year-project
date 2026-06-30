@@ -24,7 +24,8 @@ function makeInit(initialValues) {
     images: (initialValues?.images ?? []).map((url) => ({ url })),
     modelUrl: initialValues?.modelUrl ?? '',
     modelName: initialValues?.modelUrl ? '3D model uploaded' : '',
-    tryOn: !!initialValues?.virtualTryOnEnable,
+    // VTO only counts as on when a model exists — never load as checked-but-disabled
+    tryOn: !!initialValues?.virtualTryOnEnable && !!initialValues?.modelUrl,
   };
 }
 
@@ -297,7 +298,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
         price: Math.round(Number(price) * 100) / 100,
         categoryId,
         description: description.trim(),
-        virtualTryOnEnable: tryOn,
+        virtualTryOnEnable: tryOn && !!modelUrl,   // never enable VTO without a model
         variants: cleanVariants,
         images: images.map((img) => img.url),
         modelUrl,
