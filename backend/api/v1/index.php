@@ -568,6 +568,12 @@ if ($method === 'POST' && $path === '/supplier/business-details/change-request')
   handleSubmitChangeRequest($pdo, $auth);
 }
 
+if ($method === 'PATCH' && $path === '/supplier/display-name') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleUpdateDisplayName($pdo, $auth);
+}
+
 // ── courier vehicle/licence (post-approval changes via re-approval) ──
 if ($method === 'GET' && $path === '/courier/verification') {
   $auth = requireAuth($secret);

@@ -620,7 +620,7 @@ function handleGetCustomerOrder(PDO $pdo, array $auth, string $orderId): void {
   $dl = $pdo->prepare(
     "SELECT d.deliveryId, d.deliveryStatus, d.estimatedDeliveryTime, d.otpCode, d.proofOfDelivery,
             d.deliveryMethod, d.trackingCarrier, d.trackingNumber,
-            s.companyName AS supplierName
+            COALESCE(NULLIF(s.displayName, ''), s.companyName) AS supplierName
        FROM delivery d
        JOIN supplier s ON s.supplierId = d.supplierId
       WHERE d.orderId = :oid

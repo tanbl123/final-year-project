@@ -240,7 +240,10 @@ function AdminUsersPage() {
                     </dd>
                     {detail.role === 'Supplier' && detail.profile && (
                       <>
-                        <dt className="col-4">Company</dt><dd className="col-8">{detail.profile.companyName}</dd>
+                        <dt className="col-4">Company (legal)</dt><dd className="col-8">{detail.profile.companyName}</dd>
+                        {detail.profile.displayName && detail.profile.displayName !== detail.profile.companyName && (
+                          <><dt className="col-4">Store name</dt><dd className="col-8">{detail.profile.displayName}</dd></>
+                        )}
                         <dt className="col-4">Business address</dt><dd className="col-8">{detail.profile.companyAddress}</dd>
                         <dt className="col-4">Pickup address</dt><dd className="col-8">{detail.profile.operationalAddress || detail.profile.companyAddress}</dd>
                       </>

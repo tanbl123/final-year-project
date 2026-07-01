@@ -93,7 +93,9 @@ CREATE TABLE admin (
 CREATE TABLE supplier (
     supplierId      VARCHAR(10)  NOT NULL,                -- SUP0001
     userId          VARCHAR(10)  NOT NULL,
-    companyName     VARCHAR(150) NOT NULL,
+    companyName     VARCHAR(150) NOT NULL,                -- LEGAL registered business name (SSM); admin-verified, used for invoices/admin
+    displayName          VARCHAR(150) NOT NULL DEFAULT '', -- customer-facing STORE name; self-editable (30-day cooldown). Falls back to companyName.
+    displayNameUpdatedAt DATETIME     NULL,               -- last store-name change (drives the cooldown)
     companyAddress  VARCHAR(255) NOT NULL,                -- registered business address (matches SSM); combined single line
     companyLine1    VARCHAR(150) NULL,                    -- structured business address parts
     companyPostcode VARCHAR(10)  NULL,

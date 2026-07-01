@@ -213,16 +213,16 @@ function handleGetReceipt(PDO $pdo, array $auth, string $orderId): void {
 
   // seller(s) on the order — a marketplace receipt should name who sold the items
   $sel = $pdo->prepare(
-    "SELECT DISTINCT s.companyName
+    "SELECT DISTINCT COALESCE(NULLIF(s.displayName, ''), s.companyName) AS sellerName
        FROM order_item oi
        JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
        JOIN product p          ON p.productId = pv.productId
        JOIN supplier s         ON s.supplierId = p.supplierId
       WHERE oi.orderId = :oid
-      ORDER BY s.companyName"
+      ORDER BY sellerName"
   );
   $sel->execute(['oid' => $orderId]);
-  $rcpt['sellers'] = array_column($sel->fetchAll(), 'companyName');
+  $rcpt['sellers'] = array_column($sel->fetchAll(), 'sellerName');
 
   $it = $pdo->prepare(
     "SELECT p.productName, p.productBrand AS brand, oi.orderSize AS size, oi.orderQuantity AS qty,

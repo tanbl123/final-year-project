@@ -283,13 +283,13 @@ function handleRegister(PDO $pdo): void {
     $supplierId = nextId($pdo, 'supplier', 'supplierId', 'SUP');
     $pdo->prepare(
       'INSERT INTO supplier
-         (supplierId, userId, companyName, companyAddress,
+         (supplierId, userId, companyName, displayName, companyAddress,
           companyLine1, companyPostcode, companyCity, companyState,
           operationalAddress, operationalLine1, operationalPostcode, operationalCity, operationalState,
           businessRegNo, businessLicenseUrl, taxNumber)
-       VALUES (:sid, :uid, :cn, :ca, :cl1, :cpc, :cc, :cst, :oa, :ol1, :opc, :oc, :ost, :brn, :blu, :tax)'
+       VALUES (:sid, :uid, :cn, :dn, :ca, :cl1, :cpc, :cc, :cst, :oa, :ol1, :opc, :oc, :ost, :brn, :blu, :tax)'
     )->execute([
-      'sid' => $supplierId, 'uid' => $userId, 'cn' => $companyName, 'ca' => $companyAddress,
+      'sid' => $supplierId, 'uid' => $userId, 'cn' => $companyName, 'dn' => $companyName, 'ca' => $companyAddress,
       'cl1' => $coStructured ? $coAddr['line1'] : null,
       'cpc' => $coStructured ? $coAddr['postcode'] : null,
       'cc'  => $coStructured ? $coAddr['city'] : null,
@@ -975,7 +975,8 @@ function handleMe(PDO $pdo, array $auth): void {
 
   $profile = null;
   if ($u['role'] === 'Supplier') {
-    $p = $pdo->prepare('SELECT supplierId, companyName, companyAddress, operationalAddress,
+    $p = $pdo->prepare('SELECT supplierId, companyName, displayName, displayNameUpdatedAt,
+                               companyAddress, operationalAddress,
                                bankName, bankAccountName, bankAccountNumber
                           FROM supplier WHERE userId = :id');
   } elseif ($u['role'] === 'Customer') {

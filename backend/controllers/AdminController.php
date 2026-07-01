@@ -249,7 +249,7 @@ function handleGetUser(PDO $pdo, string $userId): void {
 
   $profile = null;
   if ($u['role'] === 'Supplier') {
-    $p = $pdo->prepare('SELECT supplierId, companyName, companyAddress, operationalAddress FROM supplier WHERE userId = :id');
+    $p = $pdo->prepare('SELECT supplierId, companyName, displayName, companyAddress, operationalAddress FROM supplier WHERE userId = :id');
   } elseif ($u['role'] === 'Customer') {
     $p = $pdo->prepare('SELECT customerId, shippingAddress FROM customer WHERE userId = :id');
   } elseif ($u['role'] === 'DeliveryPersonnel') {

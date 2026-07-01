@@ -333,6 +333,57 @@ function handleSubmitChangeRequest(PDO $pdo, array $auth): void {
     'message' => 'Your changes were submitted for admin review.']);
 }
 
+// How long a supplier must wait between store-name changes (deters a seller
+// building trust as one brand then switching to impersonate another).
+const SUPPLIER_DISPLAY_NAME_COOLDOWN_DAYS = 30;
+
+// PATCH /supplier/display-name — body { displayName }. The customer-facing store
+// name is self-editable (unlike the verified legal company name) but throttled
+// by a cooldown, mirroring Shopee/Etsy. Returns the new name + when it can next
+// be changed.
+function handleUpdateDisplayName(PDO $pdo, array $auth): void {
+  $supplierId  = requireSupplierId($pdo, $auth);
+  $body        = getJsonBody();
+  $displayName = trim($body['displayName'] ?? '');
+
+  if ($displayName === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Store name is required.']);
+  }
+  if (mb_strlen($displayName) < 2 || mb_strlen($displayName) > 60) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Store name must be 2–60 characters.']);
+  }
+  // letters/numbers to start, then letters/numbers/spaces and a little punctuation
+  if (!preg_match('/^[\p{L}\p{N}][\p{L}\p{N} .,&\'\-]*$/u', $displayName)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Store name can only use letters, numbers, spaces and . , & \' -']);
+  }
+
+  $cur = $pdo->prepare('SELECT displayName, displayNameUpdatedAt FROM supplier WHERE supplierId = :sid');
+  $cur->execute(['sid' => $supplierId]);
+  $row         = $cur->fetch() ?: [];
+  $currentName = (string) ($row['displayName'] ?? '');
+
+  // unchanged → no-op (don't consume the cooldown)
+  if ($displayName === $currentName) {
+    sendJson(200, true, ['displayName' => $displayName, 'nextChangeAt' => null]);
+  }
+
+  // enforce the cooldown against the last change
+  if (!empty($row['displayNameUpdatedAt'])) {
+    $nextAllowed = (new DateTime((string) $row['displayNameUpdatedAt']))
+      ->modify('+' . SUPPLIER_DISPLAY_NAME_COOLDOWN_DAYS . ' days');
+    if (new DateTime() < $nextAllowed) {
+      sendJson(429, false, null, ['code' => 'COOLDOWN',
+        'message' => 'You can change your store name again on ' . $nextAllowed->format('j M Y') . '.']);
+    }
+  }
+
+  $pdo->prepare('UPDATE supplier SET displayName = :dn, displayNameUpdatedAt = NOW() WHERE supplierId = :sid')
+      ->execute(['dn' => $displayName, 'sid' => $supplierId]);
+
+  $next = (new DateTime())->modify('+' . SUPPLIER_DISPLAY_NAME_COOLDOWN_DAYS . ' days')->format('Y-m-d H:i:s');
+  sendJson(200, true, ['displayName' => $displayName, 'nextChangeAt' => $next]);
+}
+
 // ── standard shipping (3PL) — supplier ships the parcel themselves ──────────
 // Carriers a supplier can pick when shipping a Standard parcel.
 const STANDARD_CARRIERS = ['J&T Express', 'Pos Laju', 'Ninja Van', 'DHL eCommerce', 'GDEX', 'City-Link', 'Other'];

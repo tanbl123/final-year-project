@@ -7,6 +7,7 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import EyeIcon from '../../components/EyeIcon';
 import ClearableInput from '../../components/ClearableInput';
 import BusinessDetailsCard from './BusinessDetailsCard';
+import StoreNameCard from './StoreNameCard';
 
 const EMPTY_PW = { currentPassword: '', newPassword: '', confirmPassword: '' };
 const EMPTY_BANK = { bankName: '', bankAccountName: '', bankAccountNumber: '' };
@@ -58,6 +59,7 @@ function ProfilePage() {
   const [bankSaving, setBankSaving] = useState(false);
 
   const [discard, setDiscard] = useState(null);   // 'profile' | 'password' | 'bank' when confirming a discard
+  const [storeNameOverride, setStoreNameOverride] = useState(null); // live store name after a save (suppliers)
 
   useEffect(() => {
     let active = true;
@@ -259,6 +261,12 @@ function ProfilePage() {
     );
   }
 
+  // Suppliers are shown their customer-facing store name here; everyone else
+  // their personal full name. (The legal company name lives in Business details.)
+  const headerName = me.role === 'Supplier'
+    ? (storeNameOverride ?? me.profile?.displayName ?? me.fullName)
+    : me.fullName;
+
   return (
     <div className="container py-4 text-start" style={{ maxWidth: 720 }}>
       <h1 className="mb-4">My Profile</h1>
@@ -272,11 +280,11 @@ function ProfilePage() {
 
       <div className="card">
         <div className="card-body">
-          {/* header: big avatar + name */}
+          {/* header: big avatar + name (suppliers show their customer-facing store name) */}
           <div className="d-flex align-items-center gap-3 mb-4">
-            <Avatar name={me.fullName} size={72} />
+            <Avatar name={headerName} size={72} />
             <div>
-              <h4 className="mb-0">{me.fullName}</h4>
+              <h4 className="mb-0">{headerName}</h4>
               <div className="text-muted">
                 @{me.username}
                 <span className={`badge ms-2 text-bg-light`}>{roleLabel(me.role)}</span>
@@ -287,19 +295,10 @@ function ProfilePage() {
 
           {editing ? (
             <form onSubmit={save}>
-              {me.role === 'Supplier' ? (
-                // A supplier's account name IS their verified company name (set at
-                // registration, changed only via Business details → admin review).
-                // Show it read-only here so it can't silently diverge.
-                <div className="mb-3">
-                  <label className="form-label">Store name</label>
-                  <input type="text" className="form-control" value={form.fullName} disabled readOnly />
-                  <div className="form-text">
-                    This is your company name, shown to customers. To change it, use
-                    {' '}<strong>Business details</strong> below — it needs admin review.
-                  </div>
-                </div>
-              ) : (
+              {/* Suppliers have no personal "Full name": their customer-facing name
+                  is the Store name (below), and their legal name is in Business
+                  details. Everyone else edits their full name here. */}
+              {me.role !== 'Supplier' && (
                 <div className="mb-3">
                   <label className="form-label">Full name</label>
                   <ClearableInput type="text" maxLength="100" required autoFocus
@@ -372,6 +371,16 @@ function ProfilePage() {
           )}
         </div>
       </div>
+
+      {/* store name (suppliers only) — customer-facing shop brand, self-editable w/ cooldown */}
+      {me.role === 'Supplier' && (
+        <StoreNameCard
+          initialName={me.profile?.displayName || me.fullName}
+          updatedAt={me.profile?.displayNameUpdatedAt || null}
+          onSaved={(nm) => setStoreNameOverride(nm)}
+          onToast={setToast}
+        />
+      )}
 
       {/* business details (suppliers only) — verified identity + re-approval flow */}
       {me.role === 'Supplier' && <BusinessDetailsCard onToast={setToast} />}

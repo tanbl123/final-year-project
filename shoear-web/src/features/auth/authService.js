@@ -1,4 +1,4 @@
-import { apiPost, apiGet, apiPut, apiUpload, getToken } from '../../api/client';
+import { apiPost, apiGet, apiPut, apiPatch, apiUpload, getToken } from '../../api/client';
 
 // REAL login against the PHP API (POST /auth/login).
 // `identifier` may be either an email or a username.
@@ -99,6 +99,12 @@ export function updateOperationalAddress(addr) {
 // Goes to the admin re-approval queue; the account stays Active meanwhile.
 export function submitBusinessChangeRequest(data) {
   return apiPost('/supplier/business-details/change-request', data, getToken());
+}
+
+// Update the customer-facing store display name (self-editable, 30-day cooldown).
+// Resolves with { displayName, nextChangeAt } or throws (e.g. COOLDOWN).
+export function updateStoreName(displayName) {
+  return apiPatch('/supplier/display-name', { displayName }, getToken());
 }
 
 // The signed-in user's own profile (GET /auth/me).

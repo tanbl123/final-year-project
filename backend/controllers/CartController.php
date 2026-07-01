@@ -30,7 +30,7 @@ function cartPayload(PDO $pdo, string $cartId): array {
     "SELECT ci.cartItemId, ci.cartItemQuantity AS quantity,
             pv.productVariantId AS variantId, pv.size, pv.stockQuantity AS stock,
             p.productId, p.productName, p.productBrand AS brand, p.productPrice AS price,
-            p.supplierId, s.companyName AS supplierName,
+            p.supplierId, COALESCE(NULLIF(s.displayName, ''), s.companyName) AS supplierName,
             (SELECT pi.productImageUrl FROM product_image pi
               WHERE pi.productId = p.productId ORDER BY pi.productImageId LIMIT 1) AS imageUrl
        FROM cart_item ci
@@ -38,7 +38,7 @@ function cartPayload(PDO $pdo, string $cartId): array {
        JOIN product p          ON p.productId = pv.productId
        JOIN supplier s         ON s.supplierId = p.supplierId
       WHERE ci.cartId = :cid
-      ORDER BY s.companyName, ci.cartItemId"
+      ORDER BY COALESCE(NULLIF(s.displayName, ''), s.companyName), ci.cartItemId"
   );
   $stmt->execute(['cid' => $cartId]);
 
