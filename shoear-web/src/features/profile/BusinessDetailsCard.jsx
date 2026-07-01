@@ -332,6 +332,14 @@ function BusinessDetailsCard({ onToast }) {
             </div>
             <div className="mb-3">
               <label className="form-label">Business address</label>
+              {/* Legacy suppliers stored only a combined address string (no structured
+                  parts), so the fields can't prefill — show the current address as a
+                  reference so they can re-enter it in the structured fields below. */}
+              {!cur.companyLine1 && !cur.companyPostcode && !cur.companyCity && !cur.companyState && cur.companyAddress && (
+                <div className="form-text mb-1">
+                  Current address on file: <strong>{cur.companyAddress}</strong> — please re-enter it in the fields below.
+                </div>
+              )}
               <AddressFields value={reqAddr} idPrefix="req-co"
                 onChange={(next) => {
                   setReqAddr(next);
