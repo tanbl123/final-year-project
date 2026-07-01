@@ -113,14 +113,14 @@ function AddressFields({ value, onChange, errors = {}, disabled = false, idPrefi
       <div className="col-sm-4">
         <label htmlFor={`${idPrefix}-postcode`} className="form-label small mb-1">Postcode</label>
         <input id={`${idPrefix}-postcode`} className={cls('postcode')} value={value.postcode}
-          onChange={onPostcode} disabled={disabled} inputMode="numeric" maxLength={5} placeholder="50480" />
+          onChange={onPostcode} disabled={disabled} inputMode="numeric" maxLength={5} placeholder="e.g. 50480" />
         {errors.postcode && <div className="invalid-feedback d-block">{errors.postcode}</div>}
       </div>
 
       <div className="col-sm-8">
         <label htmlFor={`${idPrefix}-city`} className="form-label small mb-1">City</label>
         <input id={`${idPrefix}-city`} className={cls('city')} value={value.city}
-          onChange={set('city')} disabled={disabled} maxLength={100} placeholder="Kuala Lumpur" />
+          onChange={set('city')} disabled={disabled} maxLength={100} placeholder="e.g. Kuala Lumpur" />
         {errors.city && <div className="invalid-feedback d-block">{errors.city}</div>}
       </div>
 
