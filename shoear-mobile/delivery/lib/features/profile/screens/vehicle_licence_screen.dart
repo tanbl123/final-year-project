@@ -276,9 +276,9 @@ class _VehicleLicenceScreenState extends State<VehicleLicenceScreen> {
         const Padding(
           padding: EdgeInsets.only(top: 4, bottom: 12),
           child: Text(
-            'These details are verified. Changing them needs admin re-approval, so '
-            'they\'re not editable directly — submit a change request and keep delivering '
-            'while we review it.',
+            'Your vehicle plate and driving licence are verified details. To change '
+            'them you\'ll need admin re-approval — submit a request below and keep '
+            'taking deliveries while we review it.',
             style: TextStyle(fontSize: 12, color: Colors.grey),
           ),
         ),
@@ -315,7 +315,7 @@ class _VehicleLicenceScreenState extends State<VehicleLicenceScreen> {
           color: Colors.blue,
           icon: Icons.info_outline,
           title: 'These changes need admin re-approval',
-          body: 'Your account keeps working while we review. Update only what changed.',
+          body: 'You can keep taking deliveries while we review. Update only what changed.',
         ),
         const SizedBox(height: 8),
         TextField(
