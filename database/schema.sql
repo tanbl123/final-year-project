@@ -148,6 +148,7 @@ CREATE TABLE delivery_personnel (
     dateOfBirth         DATE         NULL,                  -- for the 18+ eligibility check
     termsAcceptedAt     DATETIME     NULL,                  -- when PDPA/T&C consent was given
     coverageZones       VARCHAR(255) NOT NULL DEFAULT '',   -- comma-separated states the courier delivers to
+    isAvailable         TINYINT(1)   NOT NULL DEFAULT 1,    -- 1 = online/on-duty (dispatch only picks online couriers)
     stripeAccountId     VARCHAR(60)  NULL,                  -- Stripe Connect account (acct_...) for payouts
     payoutsEnabled      TINYINT(1)   NOT NULL DEFAULT 0,    -- set once Stripe verifies payouts
     PRIMARY KEY (deliveryPersonnelId),

@@ -119,6 +119,57 @@ function sweepReviewReminders(PDO $pdo): int {
   return $sent;
 }
 
+// Re-dispatch in-house parcels that are still waiting for a courier. When an
+// order is paid but no ONLINE courier covers its state, the parcel is left
+// Pending + unassigned (the "queue"). This sweep retries the auto-assign for
+// each such parcel, so the moment a suitable courier comes online (or a new one
+// is approved, or a busy one frees up) the queued order is picked up
+// automatically — no admin action needed. The courier is notified of the new job.
+function sweepRedispatchDeliveries(PDO $pdo): int {
+  if (!function_exists('assignDelivery')) { return 0; }
+  try {
+    $rows = $pdo->query(
+      "SELECT orderId, supplierId
+         FROM delivery
+        WHERE deliveryMethod = 'InHouse'
+          AND deliveryStatus = 'Pending'
+          AND deliveryPersonnelId IS NULL"
+    )->fetchAll();
+  } catch (Throwable $e) {
+    return 0;
+  }
+  $assigned = 0;
+  foreach ($rows as $r) {
+    try {
+      $res = assignDelivery($pdo, (string) $r['orderId'], (string) $r['supplierId']);
+      if (($res['deliveryPersonnelId'] ?? null) !== null && ($res['auto'] ?? false)) {
+        $assigned++;
+        if (function_exists('recomputeOrderStatus')) {
+          recomputeOrderStatus($pdo, (string) $r['orderId']);
+        }
+        notifyCourierNewAssignment($pdo, (string) $res['deliveryPersonnelId'], (string) $r['orderId']);
+      }
+    } catch (Throwable $e) { /* skip this parcel */ }
+  }
+  return $assigned;
+}
+
+// Tell a courier they've just been assigned a delivery (in-app + FCM push).
+function notifyCourierNewAssignment(PDO $pdo, string $deliveryPersonnelId, string $orderId): void {
+  if (!function_exists('createNotification')) { return; }
+  try {
+    $stmt = $pdo->prepare('SELECT userId FROM delivery_personnel WHERE deliveryPersonnelId = :id');
+    $stmt->execute(['id' => $deliveryPersonnelId]);
+    $userId = (string) ($stmt->fetchColumn() ?: '');
+  } catch (Throwable $e) {
+    return;
+  }
+  if ($userId !== '') {
+    createNotification($pdo, $userId, 'delivery', 'New delivery assigned 📦',
+      "You've been assigned a new delivery for order $orderId. Open the app to start it.", $orderId);
+  }
+}
+
 // Run every time-based sweep. Returns per-sweep counts (handy for the demo).
 // Also tidies up expired unpaid orders (which notifies on auto-cancel).
 function runNotificationSweeps(PDO $pdo): array {
@@ -130,6 +181,7 @@ function runNotificationSweeps(PDO $pdo): array {
     'paymentReminders' => sweepPaymentReminders($pdo),
     'abandonedCarts'   => sweepAbandonedCarts($pdo),
     'reviewReminders'  => sweepReviewReminders($pdo),
+    'redispatched'     => sweepRedispatchDeliveries($pdo),
     'autoCancelled'    => $cancelled,
   ];
 }

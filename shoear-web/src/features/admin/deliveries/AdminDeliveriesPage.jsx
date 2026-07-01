@@ -269,9 +269,13 @@ function AdminDeliveriesPage() {
                             ? <span className="badge text-bg-success">✓ Covers {assignTarget.deliveryState}</span>
                             : <span className="badge text-bg-light border text-muted">Outside area</span>
                         )}
-                        {i === 0 && c.deliveryPersonnelId !== assignTarget.deliveryPersonnelId && (
+                        {i === 0 && c.available && c.coversZone && c.deliveryPersonnelId !== assignTarget.deliveryPersonnelId && (
                           <span className="badge text-bg-primary">Suggested</span>
                         )}
+                        <span className={`badge ${c.available ? 'text-bg-success' : 'text-bg-secondary'}`}
+                          title={c.available ? 'On duty — auto-assignable' : 'Off duty — auto-assign skips them (you can still assign manually)'}>
+                          {c.available ? '🟢 Online' : '⚪ Offline'}
+                        </span>
                         <span className="badge text-bg-light">
                           {c.activeLoad} active
                         </span>

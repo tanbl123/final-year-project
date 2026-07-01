@@ -48,7 +48,7 @@ function scoreCouriers(PDO $pdo, ?string $state = null): array {
             u.fullName,
             u.userId,
             dp.vehicleType, dp.vehicleBrand, dp.vehicleModel, dp.vehiclePlate,
-            dp.coverageZones,
+            dp.coverageZones, dp.isAvailable,
             COUNT(d.deliveryId) AS activeLoad
        FROM delivery_personnel dp
        JOIN `user` u
@@ -56,7 +56,7 @@ function scoreCouriers(PDO $pdo, ?string $state = null): array {
        LEFT JOIN delivery d
          ON d.deliveryPersonnelId = dp.deliveryPersonnelId
         AND d.deliveryStatus IN ('Assigned', 'PickedUp', 'OutForDelivery')
-      GROUP BY dp.deliveryPersonnelId, u.fullName, u.userId, dp.vehicleType, dp.vehicleBrand, dp.vehicleModel, dp.vehiclePlate, dp.coverageZones"
+      GROUP BY dp.deliveryPersonnelId, u.fullName, u.userId, dp.vehicleType, dp.vehicleBrand, dp.vehicleModel, dp.vehiclePlate, dp.coverageZones, dp.isAvailable"
   )->fetchAll();
 
   $wantZone = $state !== null && $state !== '';
@@ -66,14 +66,18 @@ function scoreCouriers(PDO $pdo, ?string $state = null): array {
     $r['coverageZones'] = $zones;
     // No state to match → treat everyone as covering (load-only ranking).
     $r['coversZone']    = $wantZone ? in_array($state, $zones, true) : true;
+    // Online/on-duty status — dispatch only auto-assigns to available couriers.
+    $r['available']     = (bool) (int) $r['isAvailable'];
     $r['score']         = scoreCourier($r);
   }
   unset($r);
 
-  // Couriers covering the zone first; then best (lowest) score; then a stable
-  // id tie-breaker so the pick is deterministic when several are equally idle.
+  // Rank: online couriers covering the zone first, then best (lowest) score,
+  // then a stable id tie-breaker. Offline / non-covering couriers still appear
+  // (so the admin roster can show them) but sink to the bottom.
   usort($rows, function ($a, $b) {
-    return (($b['coversZone'] ? 1 : 0) <=> ($a['coversZone'] ? 1 : 0))
+    return (($b['available'] ? 1 : 0)  <=> ($a['available'] ? 1 : 0))
+        ?: (($b['coversZone'] ? 1 : 0) <=> ($a['coversZone'] ? 1 : 0))
         ?: ($a['score'] <=> $b['score'])
         ?: strcmp($a['deliveryPersonnelId'], $b['deliveryPersonnelId']);
   });
@@ -147,8 +151,8 @@ function assignDelivery(PDO $pdo, string $orderId, string $supplierId): array {
   $best = null;
   if (!$isStandard) {
     $candidates = scoreCouriers($pdo, $custState !== '' ? $custState : null);
-    foreach ($candidates as $c) {         // already ranked covering-first, then load
-      if ($c['coversZone']) { $best = $c; break; }
+    foreach ($candidates as $c) {         // ranked online-first, covering-first, then load
+      if ($c['coversZone'] && $c['available']) { $best = $c; break; }
     }
   }
 

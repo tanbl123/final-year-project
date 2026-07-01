@@ -119,6 +119,36 @@ function handleAssignDelivery(PDO $pdo, string $deliveryId): void {
 // The courier works their assigned deliveries: pick up → out for delivery →
 // confirm with the customer's OTP (or mark failed), and attach proof.
 
+// GET /delivery/availability — the courier's current online/offline status.
+function handleGetCourierAvailability(PDO $pdo, array $auth): void {
+  $stmt = $pdo->prepare('SELECT isAvailable FROM delivery_personnel WHERE userId = :id');
+  $stmt->execute(['id' => $auth['userId']]);
+  $val = $stmt->fetchColumn();
+  if ($val === false) {
+    sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Courier profile not found.']);
+  }
+  sendJson(200, true, ['available' => (bool) (int) $val]);
+}
+
+// PATCH /delivery/availability — body { available: bool }. The courier flips
+// themselves online (on-duty) or offline. Dispatch only auto-assigns to online
+// couriers, so this is how a courier controls their own working hours.
+function handleSetCourierAvailability(PDO $pdo, array $auth): void {
+  $body      = getJsonBody();
+  $available = (($body['available'] ?? false) === true) ? 1 : 0;
+  $stmt = $pdo->prepare('UPDATE delivery_personnel SET isAvailable = :a WHERE userId = :id');
+  $stmt->execute(['a' => $available, 'id' => $auth['userId']]);
+  if ($stmt->rowCount() < 1) {
+    // rowCount can be 0 if the value was unchanged; confirm the courier exists
+    $chk = $pdo->prepare('SELECT 1 FROM delivery_personnel WHERE userId = :id');
+    $chk->execute(['id' => $auth['userId']]);
+    if (!$chk->fetch()) {
+      sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Courier profile not found.']);
+    }
+  }
+  sendJson(200, true, ['available' => (bool) $available]);
+}
+
 // GET /delivery/assignments — this courier's ACTIVE deliveries. Couriers DO get
 // the customer's address + phone (they need it to deliver).
 function handleListAssignments(PDO $pdo, array $auth): void {

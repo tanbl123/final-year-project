@@ -25,6 +25,19 @@ class DeliveryService {
         .toList();
   }
 
+  /// GET /delivery/availability — the courier's current online/offline status.
+  Future<bool> getAvailability() async {
+    final data = await api.get('/delivery/availability') as Map<String, dynamic>;
+    return data['available'] == true;
+  }
+
+  /// PATCH /delivery/availability — go online (on-duty) or offline. Only online
+  /// couriers are auto-assigned new deliveries.
+  Future<bool> setAvailability(bool available) async {
+    final data = await api.patch('/delivery/availability', {'available': available}) as Map<String, dynamic>;
+    return data['available'] == true;
+  }
+
   /// GET /deliveries/{id} — full detail.
   Future<DeliveryDetail> detail(String deliveryId) async {
     final data = await api.get('/deliveries/$deliveryId') as Map<String, dynamic>;

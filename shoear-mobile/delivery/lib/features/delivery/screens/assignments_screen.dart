@@ -5,6 +5,7 @@ import 'package:delivery/features/delivery/models/delivery.dart';
 import 'package:delivery/features/delivery/services/delivery_service.dart';
 import 'package:delivery/features/delivery/screens/delivery_detail_screen.dart';
 import 'package:delivery/features/delivery/widgets/status_chip.dart';
+import 'package:delivery/features/delivery/widgets/availability_toggle.dart';
 import 'package:delivery/features/notification/widgets/notification_bell.dart';
 
 /// The courier's active jobs (Assigned / PickedUp / OutForDelivery).
@@ -39,7 +40,11 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
         title: const Text('My deliveries'),
         actions: const [NotificationBell()],
       ),
-      body: RefreshIndicator(
+      body: Column(
+        children: [
+          const AvailabilityToggle(),
+          Expanded(
+            child: RefreshIndicator(
         onRefresh: _refresh,
         child: FutureBuilder<List<DeliverySummary>>(
           future: _future,
@@ -72,7 +77,10 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
           },
         ),
       ),
-    );
+            ),
+          ],
+        ),
+      );
   }
 
   Widget _card(DeliverySummary d) {

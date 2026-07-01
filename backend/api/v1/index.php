@@ -278,6 +278,18 @@ if ($method === 'GET' && $path === '/delivery/history') {
   handleListDeliveryHistory($pdo, $auth);
 }
 
+if ($method === 'GET' && $path === '/delivery/availability') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleGetCourierAvailability($pdo, $auth);
+}
+
+if ($method === 'PATCH' && $path === '/delivery/availability') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleSetCourierAvailability($pdo, $auth);
+}
+
 if ($method === 'GET' && preg_match('#^/deliveries/([^/]+)$#', $path, $m)) {
   $auth = requireAuth($secret);
   $pdo  = getPDO();
