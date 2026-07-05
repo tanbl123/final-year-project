@@ -186,14 +186,40 @@ function runNotificationSweeps(PDO $pdo): array {
   ];
 }
 
+// Retrain the recommender model from the latest data (best-effort). Real
+// platforms retrain their models on a schedule/batch — this is the same idea:
+// tell the Python ML service to reload so new reviews/products are reflected.
+// No-op if the ML service isn't configured or is unreachable.
+function sweepReloadRecommender(array $config): bool {
+  $base = trim($config['ml_service_url'] ?? '');
+  if ($base === '') { return false; }
+  try {
+    $ch = curl_init(rtrim($base, '/') . '/reload');
+    curl_setopt_array($ch, [
+      CURLOPT_RETURNTRANSFER => true,
+      CURLOPT_POST           => true,
+      CURLOPT_TIMEOUT        => 20,   // training can take a few seconds
+      CURLOPT_CONNECTTIMEOUT => 2,
+    ]);
+    $res  = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    return $res !== false && $code >= 200 && $code < 300;
+  } catch (Throwable $e) {
+    return false;
+  }
+}
+
 // Everything the manual "Run reminders" button does, in one call: the
-// notification sweeps + the gated courier monthly payout. Used by BOTH the
-// manual endpoint and the app-level auto-runner so they behave identically.
+// notification sweeps + the gated courier monthly payout + a recommender
+// model refresh. Used by BOTH the manual endpoint and the app-level auto-runner
+// so they behave identically.
 function runAllSweeps(PDO $pdo, array $config): array {
   $result = runNotificationSweeps($pdo);
   if (function_exists('sweepCourierPayouts')) {
     $result['courierPayouts'] = sweepCourierPayouts($pdo, $config);
   }
+  $result['recommenderReloaded'] = sweepReloadRecommender($config);
   return $result;
 }
 

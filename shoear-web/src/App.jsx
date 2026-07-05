@@ -73,6 +73,7 @@ function Layout() {
         `• Review reminders: ${s.reviewReminders ?? 0}\n` +
         `• Orders auto-cancelled: ${s.autoCancelled ?? 0}\n` +
         `• Parcels re-assigned to couriers: ${s.redispatched ?? 0}\n` +
+        `• Recommender model: ${s.recommenderReloaded ? 'refreshed' : 'not configured/reachable'}\n` +
         payoutLine
       );
     } catch (e) {
