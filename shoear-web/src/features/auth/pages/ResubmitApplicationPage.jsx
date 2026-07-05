@@ -18,7 +18,7 @@ function ResubmitApplicationPage() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('');
   const [reason, setReason] = useState('');
-  const [readonly, setReadonly] = useState({ username: '', email: '' });
+  const [readonly, setReadonly] = useState({ email: '' });
   const [form, setForm] = useState({
     companyName: '', phoneNumber: '',
     businessRegNo: '', taxNumber: '', businessLicenseUrl: '',
@@ -42,7 +42,7 @@ function ResubmitApplicationPage() {
         if (!active) return;
         setStatus(a.status);
         setReason(a.rejectionReason || '');
-        setReadonly({ username: a.username, email: a.email });
+        setReadonly({ email: a.email });
         setForm({
           companyName: a.companyName || '',
           phoneNumber: a.phoneNumber || '',
@@ -208,10 +208,6 @@ function ResubmitApplicationPage() {
 
       <form onSubmit={handleSubmit} className="card card-body shadow-sm text-start" noValidate>
         <h6 className="text-muted text-uppercase small fw-bold">Account (cannot be changed)</h6>
-        <div className="mb-3">
-          <label className="form-label">Username</label>
-          <input className="form-control" value={readonly.username} disabled />
-        </div>
         <div className="mb-3">
           <label className="form-label">Email</label>
           <input className="form-control" value={readonly.email} disabled />
