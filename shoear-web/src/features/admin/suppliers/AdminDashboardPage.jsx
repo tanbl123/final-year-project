@@ -6,12 +6,22 @@ import { usePagination } from '../../../hooks/usePagination';
 
 const PAGE_SIZE = 10;
 
+// A labelled field row for the detail modal (mirrors the courier page).
+function Field({ label, children }) {
+  return (
+    <div className="mb-2">
+      <span className="text-muted small">{label}: </span>{children}
+    </div>
+  );
+}
+
 function AdminDashboardPage() {
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');       // transient success message
   const [busyId, setBusyId] = useState('');        // userId currently being actioned
+  const [viewing, setViewing] = useState(null);    // supplier whose full application is open
 
   const { page, setPage, totalPages, pageItems } = usePagination(suppliers, PAGE_SIZE);
 
@@ -37,6 +47,7 @@ function AdminDashboardPage() {
     try {
       await approveSupplier(supplier.userId);
       setSuppliers((prev) => prev.filter((s) => s.userId !== supplier.userId));
+      setViewing(null);
       setNotice(`${supplier.companyName} approved.`);
       refreshBadges();
     } catch (err) {
@@ -47,6 +58,7 @@ function AdminDashboardPage() {
   }
 
   function openReject(supplier) {
+    setViewing(null);
     setRejecting(supplier);
     setReason('');
     setTerminal(false);
@@ -100,7 +112,7 @@ function AdminDashboardPage() {
             </thead>
             <tbody>
               {pageItems.map((s) => (
-                <tr key={s.userId}>
+                <tr key={s.userId} style={{ cursor: 'pointer' }} onClick={() => setViewing(s)}>
                   <td>
                     <div className="fw-semibold">{s.companyName}</div>
                     <div className="text-muted small">@{s.username}</div>
@@ -117,13 +129,17 @@ function AdminDashboardPage() {
                     <div>Reg: {s.businessRegNo || '—'}</div>
                     {s.taxNumber && <div className="text-muted">Tax: {s.taxNumber}</div>}
                     {s.businessLicenseUrl ? (
-                      <a href={s.businessLicenseUrl} target="_blank" rel="noreferrer">📄 View document</a>
+                      <a href={s.businessLicenseUrl} target="_blank" rel="noreferrer"
+                         onClick={(e) => e.stopPropagation()}>📄 View document</a>
                     ) : (
                       <span className="text-muted">No document</span>
                     )}
                   </td>
                   <td className="text-muted small">{new Date(s.created_at).toLocaleDateString()}</td>
-                  <td className="text-end text-nowrap">
+                  <td className="text-end text-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <button className="btn btn-outline-primary btn-sm me-2" onClick={() => setViewing(s)}>
+                      Details
+                    </button>
                     <button
                       className="btn btn-success btn-sm me-2"
                       disabled={busyId === s.userId}
@@ -147,6 +163,79 @@ function AdminDashboardPage() {
           <Pagination page={page} totalPages={totalPages} onChange={setPage}
             summary={`Page ${page} of ${totalPages} · ${suppliers.length} pending`} />
         </div>
+      )}
+
+      {/* ── Full application detail modal ── */}
+      {viewing && (
+        <>
+          <div className="modal d-block" tabIndex="-1" role="dialog">
+            <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" role="document">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">Supplier application — {viewing.companyName}</h5>
+                  <button type="button" className="btn-close" onClick={() => setViewing(null)}></button>
+                </div>
+                <div className="modal-body text-start">
+                  <h6 className="text-uppercase text-muted small">Company</h6>
+                  <Field label="Legal company name"><strong>{viewing.companyName}</strong></Field>
+                  <Field label="Store display name">{viewing.displayName || <span className="text-muted">— (falls back to company name)</span>}</Field>
+                  <Field label="Username">@{viewing.username}</Field>
+
+                  <h6 className="text-uppercase text-muted small mt-3">Registered business address</h6>
+                  <Field label="Address">
+                    {[viewing.companyLine1, viewing.companyPostcode, viewing.companyCity, viewing.companyState]
+                      .filter(Boolean).join(', ') || viewing.companyAddress || '—'}
+                  </Field>
+
+                  <h6 className="text-uppercase text-muted small mt-3">Operational (pickup) address</h6>
+                  <Field label="Address">
+                    {[viewing.operationalLine1, viewing.operationalPostcode, viewing.operationalCity, viewing.operationalState]
+                      .filter(Boolean).join(', ') || viewing.operationalAddress || '—'}
+                  </Field>
+                  <Field label="Pickup state">
+                    {viewing.operationalState
+                      ? <span className="badge bg-info-subtle text-dark border">{viewing.operationalState}</span>
+                      : '—'}
+                    <span className="text-muted small ms-2">(decides in-house vs standard shipping)</span>
+                  </Field>
+
+                  <h6 className="text-uppercase text-muted small mt-3">Business verification</h6>
+                  <Field label="Registration no. (SSM)">{viewing.businessRegNo || '—'}</Field>
+                  <Field label="Tax / SST number">{viewing.taxNumber || <span className="text-muted">— (not provided)</span>}</Field>
+                  <Field label="Document">
+                    {viewing.businessLicenseUrl
+                      ? <a href={viewing.businessLicenseUrl} target="_blank" rel="noreferrer">📄 View document</a>
+                      : <span className="text-muted">No document</span>}
+                  </Field>
+
+                  <h6 className="text-uppercase text-muted small mt-3">Bank / payout</h6>
+                  <Field label="Bank">{viewing.bankName || <span className="text-muted">— (not provided)</span>}</Field>
+                  <Field label="Account name">{viewing.bankAccountName || '—'}</Field>
+                  <Field label="Account number">{viewing.bankAccountNumber || '—'}</Field>
+
+                  <h6 className="text-uppercase text-muted small mt-3">Contact</h6>
+                  <Field label="Email">{viewing.email}</Field>
+                  <Field label="Phone">{viewing.phoneNumber || '—'}</Field>
+                  <Field label="Submitted">{new Date(viewing.created_at).toLocaleString()}</Field>
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-outline-secondary" onClick={() => setViewing(null)}>
+                    Close
+                  </button>
+                  <button type="button" className="btn btn-outline-danger"
+                    disabled={busyId === viewing.userId} onClick={() => openReject(viewing)}>
+                    Reject
+                  </button>
+                  <button type="button" className="btn btn-success"
+                    disabled={busyId === viewing.userId} onClick={() => approve(viewing)}>
+                    {busyId === viewing.userId ? '…' : 'Approve'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="modal-backdrop show"></div>
+        </>
       )}
 
       {rejecting && (

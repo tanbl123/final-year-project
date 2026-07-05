@@ -6,9 +6,12 @@
 // actually review the application before approving or rejecting it.
 function handleListPendingSuppliers(PDO $pdo): void {
   $stmt = $pdo->query(
-    "SELECT u.userId, s.supplierId, s.companyName, s.companyAddress, s.operationalAddress,
+    "SELECT u.userId, s.supplierId, s.companyName, s.displayName,
+            s.companyAddress, s.companyLine1, s.companyPostcode, s.companyCity, s.companyState,
+            s.operationalAddress, s.operationalLine1, s.operationalPostcode, s.operationalCity, s.operationalState,
             s.businessRegNo, s.businessLicenseUrl, s.taxNumber,
-            u.username, u.email, u.phoneNumber, u.created_at
+            s.bankName, s.bankAccountName, s.bankAccountNumber,
+            u.username, u.email, u.phoneNumber, u.avatarUrl, u.created_at
        FROM `user` u
        JOIN supplier s ON s.userId = u.userId
       WHERE u.role = 'Supplier' AND u.status = 'Pending'
