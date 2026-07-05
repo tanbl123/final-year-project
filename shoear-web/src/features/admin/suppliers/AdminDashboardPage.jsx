@@ -208,11 +208,6 @@ function AdminDashboardPage() {
                       : <span className="text-muted">No document</span>}
                   </Field>
 
-                  <h6 className="text-uppercase text-muted small mt-3">Bank / payout</h6>
-                  <Field label="Bank">{viewing.bankName || <span className="text-muted">— (not provided)</span>}</Field>
-                  <Field label="Account name">{viewing.bankAccountName || '—'}</Field>
-                  <Field label="Account number">{viewing.bankAccountNumber || '—'}</Field>
-
                   <h6 className="text-uppercase text-muted small mt-3">Contact</h6>
                   <Field label="Email">{viewing.email}</Field>
                   <Field label="Phone">{viewing.phoneNumber || '—'}</Field>

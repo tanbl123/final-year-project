@@ -10,7 +10,6 @@ function handleListPendingSuppliers(PDO $pdo): void {
             s.companyAddress, s.companyLine1, s.companyPostcode, s.companyCity, s.companyState,
             s.operationalAddress, s.operationalLine1, s.operationalPostcode, s.operationalCity, s.operationalState,
             s.businessRegNo, s.businessLicenseUrl, s.taxNumber,
-            s.bankName, s.bankAccountName, s.bankAccountNumber,
             u.username, u.email, u.phoneNumber, u.avatarUrl, u.created_at
        FROM `user` u
        JOIN supplier s ON s.userId = u.userId
