@@ -189,10 +189,7 @@ function ResubmitApplicationPage() {
 
   return (
     <div className="container py-5" style={{ maxWidth: 560 }}>
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h1 className="mb-0">📝 Fix &amp; resubmit</h1>
-        <button className="btn btn-outline-secondary btn-sm" onClick={handleLogout}>Log out</button>
-      </div>
+      <h1 className="mb-3">📝 Fix &amp; resubmit</h1>
       <p className="text-muted">
         Hi {user?.fullName}. Your supplier registration was rejected — update the details
         below and resubmit for review. Your previous information has been kept, so you only
