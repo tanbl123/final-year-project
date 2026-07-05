@@ -48,7 +48,7 @@ class _RecommendationCarouselState extends State<RecommendationCarousel> {
               child: Text(widget.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ),
             SizedBox(
-              height: 230,
+              height: 240,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -83,23 +83,26 @@ class _RecCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SizedBox(
-                height: 120,
-                width: double.infinity,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    ProductImage(url: product.imageUrl),
-                    if (product.virtualTryOnEnable)
-                      Positioned(
-                        top: 6, left: 6,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                          decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(10)),
-                          child: const Text('AR', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+              // The image flexes to absorb any slack, so the card never overflows
+              // regardless of how tall the text block below gets (e.g. the rating line).
+              Expanded(
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ProductImage(url: product.imageUrl),
+                      if (product.virtualTryOnEnable)
+                        Positioned(
+                          top: 6, left: 6,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                            decoration: BoxDecoration(color: Colors.black87, borderRadius: BorderRadius.circular(10)),
+                            child: const Text('AR', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                          ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               Padding(
