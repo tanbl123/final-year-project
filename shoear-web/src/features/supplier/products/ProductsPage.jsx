@@ -7,7 +7,7 @@ import Toast from '../../../components/Toast';
 import Pagination from '../../../components/Pagination';
 import { usePagination } from '../../../hooks/usePagination';
 import { fetchProducts, deleteProduct } from './productService';
-import { getPayoutStatus } from '../payouts/payoutService';
+import { usePayoutBlocked } from '../usePayoutBlocked';
 
 const EMPTY_FILTERS = { name: '', brand: '', maxPrice: '', categoryId: '', status: '' };
 const PAGE_SIZE = 12;
@@ -21,14 +21,8 @@ function ProductsPage() {
   const [toast, setToast] = useState('');
 
   // Payout gate: suppliers must connect a Stripe payout account before listing
-  // products (so the platform never holds funds it can't pay out). Only blocks
-  // when Stripe is configured; in demo/no-Stripe setups listing stays open.
-  const [payoutBlocked, setPayoutBlocked] = useState(false);
-  useEffect(() => {
-    getPayoutStatus()
-      .then((s) => setPayoutBlocked(!!s.configured && !s.payoutsEnabled))
-      .catch(() => setPayoutBlocked(false));   // never block on a status error
-  }, []);
+  // products (so the platform never holds funds it can't pay out).
+  const payoutBlocked = usePayoutBlocked();
 
   // a redirect (e.g. after adding a product) may pass a toast message
   const location = useLocation();

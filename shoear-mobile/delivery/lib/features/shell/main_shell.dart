@@ -6,7 +6,6 @@ import 'package:delivery/features/auth/screens/login_screen.dart';
 import 'package:delivery/features/delivery/screens/assignments_screen.dart';
 import 'package:delivery/features/delivery/screens/history_screen.dart';
 import 'package:delivery/features/profile/screens/profile_screen.dart';
-import 'package:delivery/features/earnings/screens/payout_gate.dart';
 import 'package:delivery/features/auth/screens/resubmit_gate.dart';
 
 /// Top-level shell: shows the login screen until a courier signs in, then a
@@ -29,23 +28,23 @@ class _MainShellState extends State<MainShell> {
     // A rejected courier is gated to the fix-&-resubmit form (back to Pending).
     if (auth.user?.status == 'Rejected') return const ResubmitGate();
 
-    // A newly-approved courier must connect a payout (bank) account before the
-    // app becomes usable — they're paid per delivery, so it's required.
-    return PayoutGate(
-      child: Scaffold(
-        body: IndexedStack(
-          index: _index,
-          children: const [AssignmentsScreen(), HistoryScreen(), ProfileScreen()],
-        ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: (i) => setState(() => _index = i),
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.local_shipping_outlined), selectedIcon: Icon(Icons.local_shipping), label: 'Deliveries'),
-            NavigationDestination(icon: Icon(Icons.history), label: 'History'),
-            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
-          ],
-        ),
+    // A courier can browse the app freely, but must connect a payout (bank)
+    // account before they can go ONLINE and accept deliveries — the
+    // AvailabilityToggle enforces that (so the platform never owes an
+    // unpayable courier). No whole-app lock.
+    return Scaffold(
+      body: IndexedStack(
+        index: _index,
+        children: const [AssignmentsScreen(), HistoryScreen(), ProfileScreen()],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _index,
+        onDestinationSelected: (i) => setState(() => _index = i),
+        destinations: const [
+          NavigationDestination(icon: Icon(Icons.local_shipping_outlined), selectedIcon: Icon(Icons.local_shipping), label: 'Deliveries'),
+          NavigationDestination(icon: Icon(Icons.history), label: 'History'),
+          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
+        ],
       ),
     );
   }

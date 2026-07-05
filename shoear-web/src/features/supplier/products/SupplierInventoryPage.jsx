@@ -7,6 +7,7 @@ import Toast from '../../../components/Toast';
 import Pagination from '../../../components/Pagination';
 import SortableTh from '../../../components/SortableTh';
 import { usePagination } from '../../../hooks/usePagination';
+import { usePayoutBlocked } from '../usePayoutBlocked';
 
 const ROWS_PER_PAGE = 15;
 
@@ -21,6 +22,7 @@ const FILTERS = [
 ];
 
 function SupplierInventoryPage() {
+  const payoutBlocked = usePayoutBlocked();      // hide "add product" until payouts connected
   const [rows, setRows] = useState([]);          // server truth
   const [draft, setDraft] = useState({});        // variantId -> edited string value
   const [loading, setLoading] = useState(true);
@@ -243,7 +245,11 @@ function SupplierInventoryPage() {
         <p className="text-muted">Loading…</p>
       ) : rows.length === 0 ? (
         <div className="card card-body text-center text-muted">
-          No products yet. <Link to="/products/new">Add a product</Link> to manage its stock.
+          {payoutBlocked ? (
+            <>No products yet. <Link to="/payouts">Connect your payout account</Link> to start listing products.</>
+          ) : (
+            <>No products yet. <Link to="/products/new">Add a product</Link> to manage its stock.</>
+          )}
         </div>
       ) : visible.length === 0 ? (
         <div className="card card-body text-center text-muted">No sizes match these filters.</div>
