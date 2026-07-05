@@ -2,6 +2,7 @@
 # scikit-surprise needs numpy<2 and a C build toolchain — on Windows install
 # via a prebuilt wheel if pip build fails (see README).
 Flask==3.0.3
+waitress==3.0.0
 PyMySQL==1.1.1
 pandas==2.2.2
 numpy==1.26.4

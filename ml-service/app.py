@@ -67,4 +67,12 @@ except Exception as e:  # pragma: no cover
 
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=config.PORT, debug=False)
+    # Serve behind a real WSGI server (waitress) so there's no "development
+    # server" warning and it behaves like a production deployment. Falls back to
+    # Flask's built-in server if waitress isn't installed.
+    try:
+        from waitress import serve
+        print(f'[recommender] serving on http://127.0.0.1:{config.PORT} (waitress)')
+        serve(app, host='127.0.0.1', port=config.PORT)
+    except ImportError:
+        app.run(host='127.0.0.1', port=config.PORT, debug=False)
