@@ -41,66 +41,94 @@ foreach ($categoryNames as $name) {
 }
 echo 'Categories ready: ' . implode(', ', $categoryNames) . "\n";
 
-// ── 2. Two Active demo suppliers ──────────────────────────────────────────────
-// Each supplier owns products and has an operationalState (drives in-house vs
-// standard shipping). NOT-NULL business fields are filled with demo values.
-$supplierDefs = [
-  [
-    'username' => 'demo_supplier_kl', 'fullName' => 'KL Sports Trading Owner',
-    'company'  => 'KL Sports Trading Sdn Bhd', 'display' => 'KL Sports Hub',
-    'line1' => '12 Jalan Bukit Bintang', 'postcode' => '55100', 'city' => 'Kuala Lumpur', 'state' => 'Kuala Lumpur',
-    'regNo' => '201901000001',
-  ],
-  [
-    'username' => 'demo_supplier_png', 'fullName' => 'Penang Footwear Owner',
-    'company'  => 'Penang Footwear Enterprise', 'display' => 'Penang Kicks',
-    'line1' => '88 Lebuh Chulia', 'postcode' => '10200', 'city' => 'George Town', 'state' => 'Pulau Pinang',
-    'regNo' => '201901000002',
-  ],
-];
+// ── 2. Target suppliers ───────────────────────────────────────────────────────
+// Products are OWNED by a supplier. By default we assign the catalog to the
+// suppliers YOU registered (all Active ones), so you can demo the real
+// signup + admin-approval flow first. Options:
+//   php backend/scripts/seed_demo_catalog.php                → all Active suppliers
+//   php backend/scripts/seed_demo_catalog.php SUP0001 demo_x → only these (username or supplierId)
+//   php backend/scripts/seed_demo_catalog.php --demo         → auto-create 2 demo suppliers
+$args     = array_values(array_filter(array_slice($argv, 1), fn($a) => $a !== '--demo'));
+$demoMode = in_array('--demo', $argv, true);
 
-$supplierIds = []; // index => supplierId
-foreach ($supplierDefs as $i => $s) {
-  // user row
-  $email = $s['username'] . '@shoear.test';
-  $stmt = $pdo->prepare('SELECT userId FROM `user` WHERE username = :u OR email = :e LIMIT 1');
-  $stmt->execute(['u' => $s['username'], 'e' => $email]);
-  $userId = $stmt->fetchColumn();
-  if (!$userId) {
-    $userId = nextId($pdo, 'user', 'userId', 'USR');
-    $pdo->prepare(
-      "INSERT INTO `user` (userId, username, password, email, fullName, phoneNumber, role, status)
-       VALUES (:id, :u, :pw, :e, :fn, :ph, 'Supplier', 'Active')"
-    )->execute(['id' => $userId, 'u' => $s['username'], 'pw' => $hash, 'e' => $email,
-                'fn' => $s['fullName'], 'ph' => '0139000' . str_pad((string) $i, 3, '0', STR_PAD_LEFT)]);
+$supplierIds = [];
+
+if ($demoMode) {
+  // Auto-create 2 Active demo suppliers (KL + Penang → different states, so you
+  // can also demo in-house vs standard shipping). Idempotent by username.
+  $supplierDefs = [
+    ['username' => 'demo_supplier_kl', 'fullName' => 'KL Sports Trading Owner',
+     'company' => 'KL Sports Trading Sdn Bhd', 'display' => 'KL Sports Hub',
+     'line1' => '12 Jalan Bukit Bintang', 'postcode' => '55100', 'city' => 'Kuala Lumpur', 'state' => 'Kuala Lumpur',
+     'regNo' => '201901000001'],
+    ['username' => 'demo_supplier_png', 'fullName' => 'Penang Footwear Owner',
+     'company' => 'Penang Footwear Enterprise', 'display' => 'Penang Kicks',
+     'line1' => '88 Lebuh Chulia', 'postcode' => '10200', 'city' => 'George Town', 'state' => 'Pulau Pinang',
+     'regNo' => '201901000002'],
+  ];
+  foreach ($supplierDefs as $i => $s) {
+    $email = $s['username'] . '@shoear.test';
+    $stmt = $pdo->prepare('SELECT userId FROM `user` WHERE username = :u OR email = :e LIMIT 1');
+    $stmt->execute(['u' => $s['username'], 'e' => $email]);
+    $userId = $stmt->fetchColumn();
+    if (!$userId) {
+      $userId = nextId($pdo, 'user', 'userId', 'USR');
+      $pdo->prepare(
+        "INSERT INTO `user` (userId, username, password, email, fullName, phoneNumber, role, status)
+         VALUES (:id, :u, :pw, :e, :fn, :ph, 'Supplier', 'Active')"
+      )->execute(['id' => $userId, 'u' => $s['username'], 'pw' => $hash, 'e' => $email,
+                  'fn' => $s['fullName'], 'ph' => '0139000' . str_pad((string) $i, 3, '0', STR_PAD_LEFT)]);
+    }
+    $stmt = $pdo->prepare('SELECT supplierId FROM supplier WHERE userId = :uid');
+    $stmt->execute(['uid' => $userId]);
+    $supplierId = $stmt->fetchColumn();
+    if (!$supplierId) {
+      $supplierId = nextId($pdo, 'supplier', 'supplierId', 'SUP');
+      $addr = $s['line1'] . ', ' . $s['postcode'] . ' ' . $s['city'] . ', ' . $s['state'];
+      $pdo->prepare(
+        "INSERT INTO supplier
+           (supplierId, userId, companyName, displayName,
+            companyAddress, companyLine1, companyPostcode, companyCity, companyState,
+            operationalAddress, operationalLine1, operationalPostcode, operationalCity, operationalState,
+            businessRegNo, businessLicenseUrl)
+         VALUES
+           (:sid, :uid, :co, :disp, :addr, :l1, :pc, :city, :st, :addr, :l1, :pc, :city, :st, :reg, :lic)"
+      )->execute([
+        'sid' => $supplierId, 'uid' => $userId, 'co' => $s['company'], 'disp' => $s['display'],
+        'addr' => $addr, 'l1' => $s['line1'], 'pc' => $s['postcode'], 'city' => $s['city'], 'st' => $s['state'],
+        'reg' => $s['regNo'], 'lic' => 'demo/business_license_placeholder.pdf',
+      ]);
+    }
+    $supplierIds[] = $supplierId;
   }
-  // supplier row
-  $stmt = $pdo->prepare('SELECT supplierId FROM supplier WHERE userId = :uid');
-  $stmt->execute(['uid' => $userId]);
-  $supplierId = $stmt->fetchColumn();
-  if (!$supplierId) {
-    $supplierId = nextId($pdo, 'supplier', 'supplierId', 'SUP');
-    $addr = $s['line1'] . ', ' . $s['postcode'] . ' ' . $s['city'] . ', ' . $s['state'];
-    $pdo->prepare(
-      "INSERT INTO supplier
-         (supplierId, userId, companyName, displayName,
-          companyAddress, companyLine1, companyPostcode, companyCity, companyState,
-          operationalAddress, operationalLine1, operationalPostcode, operationalCity, operationalState,
-          businessRegNo, businessLicenseUrl)
-       VALUES
-         (:sid, :uid, :co, :disp,
-          :addr, :l1, :pc, :city, :st,
-          :addr, :l1, :pc, :city, :st,
-          :reg, :lic)"
-    )->execute([
-      'sid' => $supplierId, 'uid' => $userId, 'co' => $s['company'], 'disp' => $s['display'],
-      'addr' => $addr, 'l1' => $s['line1'], 'pc' => $s['postcode'], 'city' => $s['city'], 'st' => $s['state'],
-      'reg' => $s['regNo'], 'lic' => 'demo/business_license_placeholder.pdf',
-    ]);
+} elseif ($args) {
+  // Specific suppliers by username or supplierId.
+  $lookup = $pdo->prepare(
+    'SELECT s.supplierId, u.username FROM supplier s JOIN `user` u ON u.userId = s.userId
+      WHERE s.supplierId = :k OR u.username = :k LIMIT 1'
+  );
+  foreach ($args as $key) {
+    $lookup->execute(['k' => $key]);
+    $row = $lookup->fetch(PDO::FETCH_ASSOC);
+    if ($row) { $supplierIds[] = $row['supplierId']; echo "  ✓ {$row['username']} ({$row['supplierId']})\n"; }
+    else      { echo "  ! No supplier matches '$key' — skipped.\n"; }
   }
-  $supplierIds[$i] = $supplierId;
+} else {
+  // Default: every Active supplier you've registered + approved.
+  $rows = $pdo->query(
+    "SELECT s.supplierId, u.username FROM supplier s JOIN `user` u ON u.userId = s.userId
+      WHERE u.status = 'Active' ORDER BY s.supplierId"
+  )->fetchAll(PDO::FETCH_ASSOC);
+  foreach ($rows as $r) { $supplierIds[] = $r['supplierId']; echo "  ✓ {$r['username']} ({$r['supplierId']})\n"; }
 }
-echo 'Suppliers ready: ' . implode(', ', array_column($supplierDefs, 'company')) . "\n";
+
+if (!$supplierIds) {
+  echo "\nNo target suppliers found.\n";
+  echo "Register + approve at least one supplier in the app first, then re-run this script.\n";
+  echo "(Or auto-create demo suppliers:  php backend/scripts/seed_demo_catalog.php --demo)\n";
+  exit(1);
+}
+echo 'Assigning products across ' . count($supplierIds) . " supplier(s).\n";
 
 // ── 3. Product catalog (curated sport shoes, 4 per category) ──────────────────
 // [name, brand, category, price, description]
@@ -192,8 +220,11 @@ $total = (int) $pdo->query("SELECT COUNT(*) FROM product WHERE productStatus = '
 echo "\nProducts inserted: $prodInserted, skipped (already existed): $prodSkipped.\n";
 echo "Variants inserted: $varInserted.\n";
 echo "Total approved products now: $total.\n";
-echo "\nDemo suppliers (login password: " . SUPPLIER_PASSWORD . "):\n";
-foreach ($supplierDefs as $s) { echo "  - {$s['username']}  ({$s['company']})\n"; }
+if ($demoMode) {
+  echo "\nDemo suppliers created (login password: " . SUPPLIER_PASSWORD . "):\n";
+  echo "  - demo_supplier_kl   (KL Sports Trading Sdn Bhd)\n";
+  echo "  - demo_supplier_png  (Penang Footwear Enterprise)\n";
+}
 echo "\n✅ Done. Next:\n";
 echo "   1. php backend/scripts/seed_demo_reviews.php   (adds ratings so CF works)\n";
 echo "   2. Place a few test orders in the app so 'Trending' has sales data\n";
