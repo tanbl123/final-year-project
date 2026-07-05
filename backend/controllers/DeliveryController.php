@@ -133,9 +133,23 @@ function handleGetCourierAvailability(PDO $pdo, array $auth): void {
 // PATCH /delivery/availability — body { available: bool }. The courier flips
 // themselves online (on-duty) or offline. Dispatch only auto-assigns to online
 // couriers, so this is how a courier controls their own working hours.
-function handleSetCourierAvailability(PDO $pdo, array $auth): void {
+function handleSetCourierAvailability(PDO $pdo, array $auth, array $config = []): void {
   $body      = getJsonBody();
   $available = (($body['available'] ?? false) === true) ? 1 : 0;
+
+  // Payout gate: a courier can only go ONLINE (accept deliveries) once their
+  // Stripe payout account is connected + verified — so the platform never owes
+  // delivery fees to a courier it can't pay (no escrow needed). Going offline
+  // is always allowed. Only enforced when Stripe is configured.
+  if ($available === 1 && !empty($config['stripe_secret'])) {
+    $st = $pdo->prepare('SELECT payoutsEnabled FROM delivery_personnel WHERE userId = :id');
+    $st->execute(['id' => $auth['userId']]);
+    if ((int) $st->fetchColumn() !== 1) {
+      sendJson(403, false, null, ['code' => 'PAYOUT_REQUIRED',
+        'message' => 'Connect your payout account (Payouts → Connect with Stripe) before going online.']);
+    }
+  }
+
   $stmt = $pdo->prepare('UPDATE delivery_personnel SET isAvailable = :a WHERE userId = :id');
   $stmt->execute(['a' => $available, 'id' => $auth['userId']]);
   if ($stmt->rowCount() < 1) {

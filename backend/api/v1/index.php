@@ -288,7 +288,7 @@ if ($method === 'GET' && $path === '/delivery/availability') {
 if ($method === 'PATCH' && $path === '/delivery/availability') {
   $auth = requireAuth($secret);
   $pdo  = getPDO();
-  handleSetCourierAvailability($pdo, $auth);
+  handleSetCourierAvailability($pdo, $auth, $config);
 }
 
 if ($method === 'GET' && preg_match('#^/deliveries/([^/]+)$#', $path, $m)) {
