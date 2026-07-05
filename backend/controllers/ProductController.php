@@ -36,8 +36,23 @@ function handleListProducts(PDO $pdo, array $auth): void {
 // POST /products  — create a new product (with description, images, a 3D model
 // and per-size stock) for this supplier. Everything is written in one
 // transaction so a half-created product can never be left behind.
-function handleCreateProduct(PDO $pdo, array $auth): void {
+function handleCreateProduct(PDO $pdo, array $auth, array $config = []): void {
   $supplierId  = requireSupplierId($pdo, $auth);
+
+  // Payout gate: a supplier must have a connected + verified Stripe payout
+  // account before listing products. This guarantees every seller with live
+  // products can actually receive their sales income, so the platform never
+  // holds orphaned funds for an unconnected seller — i.e. no escrow needed.
+  // Only enforced when Stripe is configured (skipped in demo/no-Stripe setups).
+  if (!empty($config['stripe_secret'])) {
+    $st = $pdo->prepare('SELECT payoutsEnabled FROM supplier WHERE supplierId = :id');
+    $st->execute(['id' => $supplierId]);
+    if ((int) $st->fetchColumn() !== 1) {
+      sendJson(403, false, null, ['code' => 'PAYOUT_REQUIRED',
+        'message' => 'Connect your payout account (Payouts → Connect with Stripe) before listing products.']);
+    }
+  }
+
   $body        = getJsonBody();
   $name        = trim($body['name'] ?? '');
   $brand       = trim($body['brand'] ?? '');

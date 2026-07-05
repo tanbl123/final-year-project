@@ -1054,7 +1054,7 @@ if ($path === '/products') {
   $auth = requireAuth($secret);
   $pdo  = getPDO();
   if ($method === 'GET')  handleListProducts($pdo, $auth);
-  if ($method === 'POST') handleCreateProduct($pdo, $auth);
+  if ($method === 'POST') handleCreateProduct($pdo, $auth, $config);
   sendJson(405, false, null, ['code' => 'METHOD', 'message' => 'Method not allowed.']);
 }
 

@@ -7,6 +7,7 @@ import Toast from '../../../components/Toast';
 import Pagination from '../../../components/Pagination';
 import { usePagination } from '../../../hooks/usePagination';
 import { fetchProducts, deleteProduct } from './productService';
+import { getPayoutStatus } from '../payouts/payoutService';
 
 const EMPTY_FILTERS = { name: '', brand: '', maxPrice: '', categoryId: '', status: '' };
 const PAGE_SIZE = 12;
@@ -19,11 +20,22 @@ function ProductsPage() {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [toast, setToast] = useState('');
 
+  // Payout gate: suppliers must connect a Stripe payout account before listing
+  // products (so the platform never holds funds it can't pay out). Only blocks
+  // when Stripe is configured; in demo/no-Stripe setups listing stays open.
+  const [payoutBlocked, setPayoutBlocked] = useState(false);
+  useEffect(() => {
+    getPayoutStatus()
+      .then((s) => setPayoutBlocked(!!s.configured && !s.payoutsEnabled))
+      .catch(() => setPayoutBlocked(false));   // never block on a status error
+  }, []);
+
   // a redirect (e.g. after adding a product) may pass a toast message
   const location = useLocation();
   const navigate = useNavigate();
   useEffect(() => {
     if (location.state?.toast) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setToast(location.state.toast);
       navigate(location.pathname, { replace: true });   // clear it so it won't reappear
     }
@@ -91,7 +103,6 @@ function ProductsPage() {
   const { page, setPage, totalPages, pageItems } = usePagination(visible, PAGE_SIZE);
   // jump back to page 1 whenever the filters change
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1);
   }, [filters, setPage]);
 
@@ -102,8 +113,24 @@ function ProductsPage() {
           <h1 className="mb-1">👟 Supplier Products</h1>
           <p className="text-muted mb-0">Manage your catalogue — add, edit and track stock.</p>
         </div>
-        <Link to="/products/new" className="btn btn-primary">+ Add product</Link>
+        {payoutBlocked ? (
+          <button className="btn btn-primary" disabled title="Connect your payout account first">
+            + Add product
+          </button>
+        ) : (
+          <Link to="/products/new" className="btn btn-primary">+ Add product</Link>
+        )}
       </div>
+
+      {payoutBlocked && (
+        <div className="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <span>
+            💳 <strong>Connect your payout account to start listing products.</strong> You'll
+            receive your sales income through Stripe — set it up first.
+          </span>
+          <Link to="/payouts" className="btn btn-sm btn-warning text-nowrap">Go to Payouts</Link>
+        </div>
+      )}
 
       {error && <div className="alert alert-danger">{error}</div>}
 
