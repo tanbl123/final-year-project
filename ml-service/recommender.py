@@ -150,12 +150,13 @@ class HybridRecommender:
             return self.trending(k)  # cold-start: no history yet
 
         rated = set(user['productId'])
-        # candidate pool: content-neighbours of everything they've rated
-        candidates = set()
-        for pid in rated:
-            for rec in self.similar(pid, 50):
-                candidates.add(rec['productId'])
-        candidates -= rated
+        all_pids = [p['productId'] for p in self.products]
+        # Prefer to surface products the user hasn't rated yet (a real store
+        # wouldn't re-recommend what you've already reviewed/bought). But in a
+        # small catalogue where the user has rated everything, fall back to
+        # ranking the WHOLE catalogue by the hybrid score, so "Recommended for
+        # you" is still personalised rather than degrading to generic trending.
+        candidates = [pid for pid in all_pids if pid not in rated] or all_pids
 
         scored = []
         for pid in candidates:
