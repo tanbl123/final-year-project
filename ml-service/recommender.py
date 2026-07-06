@@ -33,9 +33,14 @@ except Exception:  # pragma: no cover - import-time environment guard
 
 
 def _precision_recall_at_k(predictions, k, threshold):
-    """Average Precision@K and Recall@K over users (standard Surprise recipe).
-    An item is 'relevant' if its true rating ≥ threshold, and 'recommended' if
-    its predicted rating ≥ threshold (looking only at each user's top-K)."""
+    """Average Precision@K and Recall@K over users, using the top-N ranking
+    definition: we rank each user's items by predicted rating, take the top K as
+    the "recommendations", and count how many are actually relevant (true rating
+    ≥ threshold). This is robust when the model systematically under-predicts
+    (common on sparse data), unlike the "predicted ≥ threshold" variant.
+      Precision@K = relevant items in the top-K  /  size of the top-K
+      Recall@K    = relevant items in the top-K  /  all of the user's relevant items
+    Users with no relevant items are excluded from recall (undefined for them)."""
     from collections import defaultdict
     by_user = defaultdict(list)
     for uid, _iid, true_r, est, _ in predictions:
@@ -45,10 +50,11 @@ def _precision_recall_at_k(predictions, k, threshold):
         ratings.sort(key=lambda x: x[0], reverse=True)
         n_rel        = sum(true_r >= threshold for (_, true_r) in ratings)
         top_k        = ratings[:k]
-        n_rec_k      = sum(est >= threshold for (est, _) in top_k)
-        n_rel_rec_k  = sum((est >= threshold and true_r >= threshold) for (est, true_r) in top_k)
-        precisions.append(n_rel_rec_k / n_rec_k if n_rec_k else 0.0)
-        recalls.append(n_rel_rec_k / n_rel if n_rel else 0.0)
+        n_rel_in_top = sum(true_r >= threshold for (_, true_r) in top_k)
+        if top_k:
+            precisions.append(n_rel_in_top / len(top_k))
+        if n_rel:
+            recalls.append(n_rel_in_top / n_rel)
     prec = sum(precisions) / len(precisions) if precisions else 0.0
     rec  = sum(recalls) / len(recalls) if recalls else 0.0
     return prec, rec
