@@ -16,19 +16,16 @@ function validateForm(form) {
   return errors;
 }
 
+// Generic failure message. Used for BOTH wrong credentials and a valid login on
+// the wrong portal — so an attacker can't tell "these creds are valid but it's
+// an admin account" apart from "wrong password" (no account/role enumeration).
+const GENERIC_LOGIN_ERROR = 'Invalid email/username or password.';
+
 // Per-variant config so one component serves both the supplier and admin
 // login pages (same form, different branding + which role may sign in here).
 const VARIANTS = {
-  supplier: {
-    title: '👟 Supplier Login',
-    allowedRole: 'Supplier',
-    wrongRole: 'This is the supplier login. Please use the admin login page.',
-  },
-  admin: {
-    title: '🛡️ Admin Login',
-    allowedRole: 'Admin',
-    wrongRole: 'This is the admin login. Please use the supplier login page.',
-  },
+  supplier: { title: '👟 Supplier Login', allowedRole: 'Supplier' },
+  admin:    { title: '🛡️ Admin Login',   allowedRole: 'Admin' },
 };
 
 function LoginPage({ variant = 'supplier' }) {
@@ -92,19 +89,22 @@ function LoginPage({ variant = 'supplier' }) {
     try {
       const result = await login(form.identifier.trim(), form.password);
 
-      // each login page only accepts its own role — bounce the wrong one
+      // each login page only accepts its own role — but bounce the wrong role
+      // with the SAME generic error as a bad password, so we never reveal that
+      // the credentials were valid or what role the account is.
       if (result.user.role !== config.allowedRole) {
         logout();   // undo the session login() just established
-        setFormError(config.wrongRole);
+        setCredsInvalid(true);
+        setFormError(GENERIC_LOGIN_ERROR);
         return;
       }
 
       navigate(homePathFor(result.user));   // success → admin or supplier home
     } catch (err) {
-      // wrong email/password — show the message AND red-border both fields
+      // wrong email/password — show a generic message AND red-border both fields
       // (mirrors the mobile app), since we can't tell which one was wrong.
       setCredsInvalid(true);
-      setFormError(err.message || 'Could not log in. Please try again.');
+      setFormError(err.message || GENERIC_LOGIN_ERROR);
     } finally {
       setIsSubmitting(false);
     }
