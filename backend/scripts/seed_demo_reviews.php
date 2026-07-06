@@ -24,11 +24,9 @@ require __DIR__ . '/../lib/ids.php';
 
 const DEMO_PASSWORD = 'Demo@1234';   // every demo customer logs in with this
 
-// Comment sentinels stamped on every seeded review, so the unseed script can
-// find and remove ONLY seeded reviews (leaving any genuine ones). Keep these in
-// sync with unseed_customer_reviews.php.
-const SEED_COMMENT_LIKE = 'Love this — exactly my style.';
-const SEED_COMMENT_MEH  = 'Not really my type.';
+// Varied review comments (so seeded reviews look natural, not identical). The
+// pool is shared with the unseed script so those reviews can be cleaned up.
+require __DIR__ . '/seed_comments.php';
 
 // Optional args:
 //   php seed_demo_reviews.php [customerEmail] ["Cat1,Cat2,..."]
@@ -111,7 +109,7 @@ $insReview  = $pdo->prepare(
   "INSERT INTO review (reviewId, customerId, productId, ratingScore, reviewComment, reviewStatus)
    VALUES (:id, :c, :p, :r, :cm, 'Published')"
 );
-$updReview  = $pdo->prepare('UPDATE review SET ratingScore = :r WHERE reviewId = :id');
+$updReview  = $pdo->prepare('UPDATE review SET ratingScore = :r, reviewComment = :cm WHERE reviewId = :id');
 
 $inserted = 0; $updated = 0;
 foreach ($fans as $cat => $fan) {
@@ -119,12 +117,12 @@ foreach ($fans as $cat => $fan) {
     $isPreferred = ($p['categoryName'] === $cat);
     // preferred: 4–5, others: 2–3 (a little variance, never uniformly 5)
     $rating  = $isPreferred ? (4 + mt_rand(0, 1)) : (2 + mt_rand(0, 1));
-    $comment = $isPreferred ? SEED_COMMENT_LIKE : SEED_COMMENT_MEH;
+    $comment = pickSeedComment($isPreferred);
 
     $findReview->execute(['c' => $fan['customerId'], 'p' => $p['productId']]);
     $existingId = $findReview->fetchColumn();
     if ($existingId) {
-      $updReview->execute(['r' => $rating, 'id' => $existingId]);
+      $updReview->execute(['r' => $rating, 'cm' => $comment, 'id' => $existingId]);
       $updated++;
     } else {
       $rid = nextId($pdo, 'review', 'reviewId', 'REV');
@@ -163,10 +161,10 @@ if ($targetEmail !== '') {
     foreach ($products as $p) {
       $isPreferred = in_array($p['categoryName'], $preferred, true);
       $rating  = $isPreferred ? (4 + mt_rand(0, 1)) : (2 + mt_rand(0, 1));
-      $comment = $isPreferred ? SEED_COMMENT_LIKE : SEED_COMMENT_MEH;
+      $comment = pickSeedComment($isPreferred);
       $findReview->execute(['c' => $targetCid, 'p' => $p['productId']]);
       $existingId = $findReview->fetchColumn();
-      if ($existingId) { $updReview->execute(['r' => $rating, 'id' => $existingId]); $tu++; }
+      if ($existingId) { $updReview->execute(['r' => $rating, 'cm' => $comment, 'id' => $existingId]); $tu++; }
       else {
         $rid = nextId($pdo, 'review', 'reviewId', 'REV');
         $insReview->execute(['id' => $rid, 'c' => $targetCid, 'p' => $p['productId'],

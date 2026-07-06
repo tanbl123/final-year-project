@@ -11,10 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────
 
 require __DIR__ . '/../lib/db.php';
-
-// Must match the sentinels stamped by seed_demo_reviews.php.
-const SEED_COMMENT_LIKE = 'Love this — exactly my style.';
-const SEED_COMMENT_MEH  = 'Not really my type.';
+require __DIR__ . '/seed_comments.php';   // shared pool of seeded comment phrases
 
 $email = trim($argv[1] ?? '');
 if ($email === '') {
@@ -35,10 +32,14 @@ if (!$customerId) {
   exit(1);
 }
 
+// Delete reviews whose comment is one of the seeded phrases (leaving genuine
+// reviews the customer wrote themselves).
+$comments = allSeedComments();
+$ph = implode(',', array_fill(0, count($comments), '?'));
 $del = $pdo->prepare(
-  'DELETE FROM review WHERE customerId = :c AND reviewComment IN (:a, :b)'
+  "DELETE FROM review WHERE customerId = ? AND reviewComment IN ($ph)"
 );
-$del->execute(['c' => $customerId, 'a' => SEED_COMMENT_LIKE, 'b' => SEED_COMMENT_MEH]);
+$del->execute(array_merge([$customerId], $comments));
 
 echo "Deleted {$del->rowCount()} seeded review(s) for {$email} (customer {$customerId}).\n";
 echo "Now reload the ML service so 'Recommended for you' updates:\n";
