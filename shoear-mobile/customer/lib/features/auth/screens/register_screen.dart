@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import 'package:customer/core/utils/snackbar.dart';
 import 'package:customer/features/auth/services/account_service.dart';
 import 'package:customer/features/auth/state/auth_provider.dart';
 import 'package:customer/features/auth/screens/login_screen.dart';
@@ -176,9 +177,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
             password:         _password.text,
             verificationCode: code,
           );
-      // account created — log straight in
+      // account created — log straight in, confirm it, and return to the app
+      // (past the login screen underneath) so the customer isn't left staring
+      // at the login page wondering whether it worked.
       await context.read<AuthProvider>().login(_email.text.trim(), _password.text);
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) {
+        context.showSnack("Account created — you're now signed in! 🎉");
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
     } catch (e) {
       final msg   = e.toString();
       final lower = msg.toLowerCase();
