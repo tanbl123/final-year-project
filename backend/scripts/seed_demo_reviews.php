@@ -31,11 +31,14 @@ const SEED_COMMENT_LIKE = 'Love this — exactly my style.';
 const SEED_COMMENT_MEH  = 'Not really my type.';
 
 // Optional args:
-//   php seed_demo_reviews.php [customerEmail] [PreferredCategory]
+//   php seed_demo_reviews.php [customerEmail] ["Cat1,Cat2,..."]
 // If a customer email is given, that specific customer (e.g. your Google-login
-// account) is ALSO seeded with a clear single-category preference, so their
-// "Recommended for you" is visibly personalized. Remove later with
-// unseed_customer_reviews.php.
+// account) is ALSO seeded with a realistic taste profile so their "Recommended
+// for you" is personalized. Pass ONE OR MORE preferred categories (comma-
+// separated) — a real shopper likes a few types, not just one, so the recs come
+// back as a believable MIX of those categories. Remove later with
+// unseed_customer_reviews.php.  Example:
+//   php seed_demo_reviews.php you@gmail.com "Running,Lifestyle" --no-fans
 // Pass --no-fans to skip the synthetic demo-fan customers and seed ONLY the
 // target customer(s) — handy when you use two REAL accounts to activate CF and
 // don't want fake accounts in the admin Users list. (Run once per real email.)
@@ -136,22 +139,29 @@ foreach ($fans as $cat => $fan) {
 //     with a clear single-category preference, so their recommendations are
 //     visibly personalized during the demo. -----------------------------------
 if ($targetEmail !== '') {
-  $preferred = $preferredArg !== '' ? $preferredArg : ($categories[0] ?? '');
+  // Parse one or more preferred categories (comma-separated). A real shopper
+  // likes a few types, so recommendations come back as a mix of these.
+  $preferred = $preferredArg !== ''
+    ? array_values(array_filter(array_map('trim', explode(',', $preferredArg))))
+    : [$categories[0] ?? ''];
+
   $stmt = $pdo->prepare(
     'SELECT c.customerId FROM customer c JOIN `user` u ON u.userId = c.userId WHERE u.email = :e'
   );
   $stmt->execute(['e' => $targetEmail]);
   $targetCid = $stmt->fetchColumn();
 
+  $unknown = array_diff($preferred, $categories);
   if (!$targetCid) {
     echo "\n⚠ No customer found with email {$targetEmail}.\n";
     echo "  Log in via Google as that customer first, THEN re-run with the email.\n";
-  } elseif (!in_array($preferred, $categories, true)) {
-    echo "\n⚠ '{$preferred}' isn't a known category. Choose one of: " . implode(', ', $categories) . "\n";
+  } elseif ($unknown) {
+    echo "\n⚠ Unknown categor" . (count($unknown) > 1 ? 'ies' : 'y') . ": " . implode(', ', $unknown) . ".\n";
+    echo "  Choose from: " . implode(', ', $categories) . "\n";
   } else {
     $ti = 0; $tu = 0;
     foreach ($products as $p) {
-      $isPreferred = ($p['categoryName'] === $preferred);
+      $isPreferred = in_array($p['categoryName'], $preferred, true);
       $rating  = $isPreferred ? (4 + mt_rand(0, 1)) : (2 + mt_rand(0, 1));
       $comment = $isPreferred ? SEED_COMMENT_LIKE : SEED_COMMENT_MEH;
       $findReview->execute(['c' => $targetCid, 'p' => $p['productId']]);
@@ -164,7 +174,7 @@ if ($targetEmail !== '') {
         $ti++;
       }
     }
-    echo "\n🎯 Seeded customer {$targetEmail} (prefers {$preferred}): inserted $ti, updated $tu.\n";
+    echo "\n🎯 Seeded customer {$targetEmail} (likes " . implode(' + ', $preferred) . "): inserted $ti, updated $tu.\n";
     echo "   Remove these later with:\n";
     echo "     php backend/scripts/unseed_customer_reviews.php {$targetEmail}\n";
   }
