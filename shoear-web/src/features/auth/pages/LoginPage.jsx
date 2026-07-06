@@ -36,6 +36,7 @@ function LoginPage({ variant = 'supplier' }) {
   const [form, setForm] = useState({ identifier: '', password: '' });
   const [errors, setErrors] = useState({});       // per-field messages
   const [formError, setFormError] = useState(''); // server/auth error (not field-specific)
+  const [credsInvalid, setCredsInvalid] = useState(false); // wrong email/password → red-border both fields
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPw, setShowPw] = useState(false);
 
@@ -52,6 +53,7 @@ function LoginPage({ variant = 'supplier' }) {
     const nextForm = { ...form, [name]: value };
     setForm(nextForm);
     setFormError('');
+    setCredsInvalid(false);   // clear the wrong-credentials highlight as they retype
     setErrors((prev) => {
       if (!(name in prev)) return prev;
       const next = { ...prev };
@@ -77,6 +79,7 @@ function LoginPage({ variant = 'supplier' }) {
   async function handleSubmit(event) {
     event.preventDefault();   // AJAX submit — no page reload
     setFormError('');
+    setCredsInvalid(false);
 
     const found = validateForm(form);
     if (Object.keys(found).length > 0) {
@@ -98,7 +101,9 @@ function LoginPage({ variant = 'supplier' }) {
 
       navigate(homePathFor(result.user));   // success → admin or supplier home
     } catch (err) {
-      // auth failures aren't tied to one field — show a general message
+      // wrong email/password — show the message AND red-border both fields
+      // (mirrors the mobile app), since we can't tell which one was wrong.
+      setCredsInvalid(true);
       setFormError(err.message || 'Could not log in. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -132,11 +137,11 @@ function LoginPage({ variant = 'supplier' }) {
             type="text"
             name="identifier"
             autoComplete="username"
-            className={errors.identifier ? 'is-invalid' : ''}
+            className={errors.identifier || credsInvalid ? 'is-invalid' : ''}
             value={form.identifier}
             onChange={handleChange}
             onBlur={handleBlur}
-            onClear={() => { setForm((f) => ({ ...f, identifier: '' })); setErrors((p) => { const n = { ...p }; delete n.identifier; return n; }); setFormError(''); }}
+            onClear={() => { setForm((f) => ({ ...f, identifier: '' })); setErrors((p) => { const n = { ...p }; delete n.identifier; return n; }); setFormError(''); setCredsInvalid(false); }}
           />
           {errors.identifier && <div className="invalid-feedback d-block">{errors.identifier}</div>}
         </div>
@@ -147,7 +152,7 @@ function LoginPage({ variant = 'supplier' }) {
             <input
               type={showPw ? 'text' : 'password'}
               name="password"
-              className={`form-control ${errors.password ? 'is-invalid' : ''}`}
+              className={`form-control ${errors.password || credsInvalid ? 'is-invalid' : ''}`}
               value={form.password}
               onChange={handleChange}
               onBlur={handleBlur}
