@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:customer/core/widgets/product_image.dart';
 import 'package:provider/provider.dart';
 
+import 'package:customer/core/utils/refresh_bus.dart';
 import 'package:customer/features/catalog/models/category.dart';
 import 'package:customer/features/catalog/models/product.dart';
 import 'package:customer/features/catalog/services/catalog_service.dart';
@@ -48,12 +49,17 @@ class _CatalogScreenState extends State<CatalogScreen> {
   double? _maxPrice;
   String? _sort;   // price_asc | price_desc | newest
 
+  String? _lastUserId;   // remember who's signed in, to detect account switches
+  int _recSeed = 0;      // bump to force the recommendation rails to reload
+
   bool get _filtersActive => _categoryId != null || _minPrice != null || _maxPrice != null || _sort != null;
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_onScroll);
+    _lastUserId = context.read<AuthProvider>().user?.userId;
+    appRefreshTick.addListener(_onExternalRefresh);
     _fetchFirstPage();
     // categories for the filter dropdown (best-effort)
     context.read<CatalogService>().listCategories().then((cats) {
@@ -63,10 +69,20 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   @override
   void dispose() {
+    appRefreshTick.removeListener(_onExternalRefresh);
     _debounce?.cancel();
     _scroll.dispose();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  // A global "something changed" tick (app resumed, order paid, etc.) — quietly
+  // reload the catalog + recommendation rails so the home page stays current
+  // without the customer pulling to refresh.
+  void _onExternalRefresh() {
+    if (!mounted) return;
+    setState(() => _recSeed++);
+    _fetchFirstPage();
   }
 
   Future<CatalogPage> _load(int page) => context.read<CatalogService>().listProducts(
@@ -142,6 +158,18 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Auto-refresh on account switch: if the signed-in user changed (login,
+    // logout, or switching accounts), reload products + recommendation rails so
+    // the home page never shows the previous account's data.
+    final userId = context.watch<AuthProvider>().user?.userId;
+    if (userId != _lastUserId) {
+      _lastUserId = userId;
+      _recSeed++;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _fetchFirstPage();
+      });
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('👟 ShoeAR'),
@@ -199,10 +227,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 children: [
                   if (context.watch<AuthProvider>().isLoggedIn)
                     RecommendationCarousel(
+                      key: ValueKey('foryou-$_recSeed'),
                       title: 'Recommended for you',
                       loader: () => context.read<RecommendationService>().forYou(),
                     ),
                   RecommendationCarousel(
+                    key: ValueKey('trending-$_recSeed'),
                     title: 'Trending now',
                     loader: () => context.read<RecommendationService>().trending(),
                   ),
