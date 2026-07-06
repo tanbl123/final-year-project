@@ -36,8 +36,13 @@ const SEED_COMMENT_MEH  = 'Not really my type.';
 // account) is ALSO seeded with a clear single-category preference, so their
 // "Recommended for you" is visibly personalized. Remove later with
 // unseed_customer_reviews.php.
-$targetEmail  = trim($argv[1] ?? '');
-$preferredArg = trim($argv[2] ?? '');
+// Pass --no-fans to skip the synthetic demo-fan customers and seed ONLY the
+// target customer(s) — handy when you use two REAL accounts to activate CF and
+// don't want fake accounts in the admin Users list. (Run once per real email.)
+$noFans       = in_array('--no-fans', $argv, true);
+$positional   = array_values(array_filter(array_slice($argv, 1), fn($a) => $a !== '--no-fans'));
+$targetEmail  = trim($positional[0] ?? '');
+$preferredArg = trim($positional[1] ?? '');
 
 $pdo = getPDO();
 
@@ -63,9 +68,9 @@ echo "Products: " . count($products) . " | Categories: " . implode(', ', $catego
 $hash = password_hash(DEMO_PASSWORD, PASSWORD_BCRYPT);
 mt_srand(42); // reproducible variance
 
-// 2. One demo "fan" customer per category -------------------------------------
+// 2. One demo "fan" customer per category (skipped with --no-fans) ------------
 $fans = []; // categoryName => customerId
-foreach ($categories as $i => $cat) {
+foreach (($noFans ? [] : $categories) as $i => $cat) {
   $slug     = strtolower(preg_replace('/[^a-z0-9]+/i', '', $cat)) ?: ('cat' . $i);
   $username = 'demo_' . $slug;
   $email    = $username . '@shoear.test';
@@ -166,10 +171,17 @@ if ($targetEmail !== '') {
 }
 
 // 4. Summary ------------------------------------------------------------------
-$total = (int) $pdo->query("SELECT COUNT(*) FROM review WHERE reviewStatus = 'Published'")->fetchColumn();
-echo "\nDemo customers (login password: " . DEMO_PASSWORD . "):\n";
-foreach ($fans as $cat => $fan) { echo "  - {$fan['username']}  → prefers {$cat}\n"; }
+$total   = (int) $pdo->query("SELECT COUNT(*) FROM review WHERE reviewStatus = 'Published'")->fetchColumn();
+$raters  = (int) $pdo->query("SELECT COUNT(DISTINCT customerId) FROM review WHERE reviewStatus = 'Published'")->fetchColumn();
+if ($fans) {
+  echo "\nDemo customers (login password: " . DEMO_PASSWORD . "):\n";
+  foreach ($fans as $cat => $fan) { echo "  - {$fan['username']}  → prefers {$cat}\n"; }
+}
 echo "\nReviews inserted: $inserted, updated: $updated. Total published reviews now: $total.\n";
+echo "Distinct customers with reviews: $raters.\n";
+if ($raters < 2) {
+  echo "⚠ CF needs ≥2 customers with reviews — seed a second customer to activate it.\n";
+}
 echo "\n✅ Done. Now refresh the model:  POST http://127.0.0.1:5001/reload\n";
 echo "   Then /health should show cfAvailable: true, and 'Recommended for you'\n";
 echo "   will differ per customer (log in as a demo_* user to see it).\n";
