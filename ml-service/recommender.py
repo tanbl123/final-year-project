@@ -32,6 +32,28 @@ except Exception:  # pragma: no cover - import-time environment guard
     SURPRISE_AVAILABLE = False
 
 
+def _precision_recall_at_k(predictions, k, threshold):
+    """Average Precision@K and Recall@K over users (standard Surprise recipe).
+    An item is 'relevant' if its true rating ≥ threshold, and 'recommended' if
+    its predicted rating ≥ threshold (looking only at each user's top-K)."""
+    from collections import defaultdict
+    by_user = defaultdict(list)
+    for uid, _iid, true_r, est, _ in predictions:
+        by_user[uid].append((est, true_r))
+    precisions, recalls = [], []
+    for uid, ratings in by_user.items():
+        ratings.sort(key=lambda x: x[0], reverse=True)
+        n_rel        = sum(true_r >= threshold for (_, true_r) in ratings)
+        top_k        = ratings[:k]
+        n_rec_k      = sum(est >= threshold for (est, _) in top_k)
+        n_rel_rec_k  = sum((est >= threshold and true_r >= threshold) for (est, true_r) in top_k)
+        precisions.append(n_rel_rec_k / n_rec_k if n_rec_k else 0.0)
+        recalls.append(n_rel_rec_k / n_rel if n_rel else 0.0)
+    prec = sum(precisions) / len(precisions) if precisions else 0.0
+    rec  = sum(recalls) / len(recalls) if recalls else 0.0
+    return prec, rec
+
+
 class HybridRecommender:
     def __init__(self):
         self.trained = False
@@ -67,6 +89,51 @@ class HybridRecommender:
             'alpha': config.ALPHA,
             'globalMean': round(float(self.global_mean), 3),
         }
+
+    # ── evaluation (accuracy + ranking quality) ──────────────────────────────
+    def evaluate(self, k=10, threshold=3.5, test_size=0.25):
+        """Hold-out evaluation of the CF model on the live review data:
+          * RMSE / MAE  — rating-prediction error (lower is better)
+          * Precision@K / Recall@K / F1  — top-N ranking quality (higher is better)
+        Trains SVD on a train split and scores the held-out test split. Degrades
+        gracefully (returns available=False + a reason) on too-little data."""
+        if not SURPRISE_AVAILABLE:
+            return {'available': False, 'reason': 'scikit-surprise is not installed'}
+        df = self.reviews_df
+        if df is None or df.empty:
+            return {'available': False, 'reason': 'no reviews to evaluate yet'}
+        n = len(df)
+        n_users = int(df['customerId'].nunique())
+        if n < 10 or n_users < 2:
+            return {'available': False,
+                    'reason': f'not enough data (need ≥10 ratings & ≥2 users; have {n} ratings, {n_users} users)',
+                    'nRatings': n, 'nUsers': n_users}
+        try:
+            from surprise import SVD, Reader, Dataset, accuracy
+            from surprise.model_selection import train_test_split as surprise_split
+            reader   = Reader(rating_scale=(1, 5))
+            data     = Dataset.load_from_df(df[['customerId', 'productId', 'rating']], reader)
+            trainset, testset = surprise_split(data, test_size=test_size, random_state=config.RANDOM_SEED)
+            algo = SVD(n_factors=config.SVD_FACTORS, n_epochs=config.SVD_EPOCHS,
+                       lr_all=config.SVD_LR, reg_all=config.SVD_REG, random_state=config.RANDOM_SEED)
+            algo.fit(trainset)
+            preds = algo.test(testset)
+            if not preds:
+                return {'available': False, 'reason': 'test split was empty — add more reviews'}
+            rmse = accuracy.rmse(preds, verbose=False)
+            mae  = accuracy.mae(preds, verbose=False)
+            prec, rec = _precision_recall_at_k(preds, k, threshold)
+            f1 = (2 * prec * rec / (prec + rec)) if (prec + rec) > 0 else 0.0
+            return {
+                'available': True,
+                'rmse': round(float(rmse), 4), 'mae': round(float(mae), 4),
+                'precisionAtK': round(float(prec), 4), 'recallAtK': round(float(rec), 4),
+                'f1': round(float(f1), 4),
+                'k': k, 'threshold': threshold, 'testSize': test_size,
+                'nRatings': n, 'nUsers': n_users, 'nItems': int(df['productId'].nunique()),
+            }
+        except Exception as e:  # pragma: no cover
+            return {'available': False, 'reason': str(e)}
 
     def _blob(self, p):
         parts = [p.get('name'), p.get('brand'), p.get('category'), p.get('description')]

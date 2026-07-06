@@ -57,6 +57,71 @@ def reload_model():
     return jsonify({'status': 'reloaded', **rec.train()})
 
 
+@app.get('/metrics')
+def metrics():
+    """Evaluation scores as JSON (RMSE, MAE, Precision@K, Recall@K, F1)."""
+    return jsonify(rec.evaluate(_k()))
+
+
+@app.get('/metrics/view')
+def metrics_view():
+    """A simple developer dashboard rendering the evaluation scores."""
+    return _render_metrics_html(rec.evaluate(_k()), rec.stats() if rec.trained else {})
+
+
+_METRIC_CARDS = [
+    ('RMSE',          'rmse',         'Root-mean-square error of predicted vs actual ratings. Lower is better.'),
+    ('MAE',           'mae',          'Mean absolute error of predicted vs actual ratings. Lower is better.'),
+    ('Precision@K',   'precisionAtK', 'Of the top-K recommended items, the fraction that are relevant. Higher is better.'),
+    ('Recall@K',      'recallAtK',    'Of all relevant items, the fraction captured in the top-K. Higher is better.'),
+    ('F1 Score',      'f1',           'Harmonic mean of precision and recall. Higher is better.'),
+]
+
+
+def _render_metrics_html(m, s):
+    if not m.get('available'):
+        body = (f'<div class="warn"><strong>Not enough data to evaluate yet.</strong>'
+                f'<p>{m.get("reason", "unknown")}</p>'
+                f'<p class="hint">Seed some reviews (≥2 customers, ≥10 ratings) and reload, then refresh this page.</p></div>')
+    else:
+        cards = ''.join(
+            f'<div class="card"><div class="label">{name}</div>'
+            f'<div class="value">{m.get(key, 0):.4f}</div><div class="desc">{desc}</div></div>'
+            for name, key, desc in _METRIC_CARDS
+        )
+        meta = (f'Evaluated on <b>{m["nRatings"]}</b> ratings from <b>{m["nUsers"]}</b> customers over '
+                f'<b>{m["nItems"]}</b> products &middot; K={m["k"]}, relevance threshold ≥{m["threshold"]}, '
+                f'test split {int(m["testSize"] * 100)}%')
+        body = f'<div class="grid">{cards}</div><p class="meta">{meta}</p>'
+
+    cf = 'yes' if s.get('cfAvailable') else 'no (content-based only until more ratings)'
+    return f"""<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ShoeAR Recommender — Metrics</title>
+<style>
+  body {{ font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #f7f7fb; color: #1f2430; }}
+  .wrap {{ max-width: 1100px; margin: 0 auto; padding: 32px 24px; }}
+  h1 {{ font-size: 22px; margin: 0 0 4px; }}
+  .sub {{ color: #6b7280; margin: 0 0 24px; font-size: 14px; }}
+  .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; }}
+  .card {{ background: #fff; border: 1px solid #eceef3; border-radius: 12px; padding: 18px 20px; }}
+  .label {{ font-size: 13px; color: #6b7280; margin-bottom: 6px; }}
+  .value {{ font-size: 34px; font-weight: 700; letter-spacing: -0.5px; }}
+  .desc {{ font-size: 12px; color: #9096a2; margin-top: 8px; line-height: 1.4; }}
+  .meta {{ color: #6b7280; font-size: 13px; margin-top: 20px; }}
+  .warn {{ background: #fff8e6; border: 1px solid #f5e2ad; border-radius: 12px; padding: 20px; }}
+  .hint {{ color: #6b7280; font-size: 13px; }}
+  .foot {{ color: #9096a2; font-size: 12px; margin-top: 28px; border-top: 1px solid #eceef3; padding-top: 14px; }}
+  code {{ background: #eef0f5; padding: 1px 5px; border-radius: 4px; }}
+</style></head><body><div class="wrap">
+  <h1>👟 ShoeAR Recommender — Evaluation</h1>
+  <p class="sub">Hold-out metrics computed live from the platform's own review data.</p>
+  {body}
+  <div class="foot">Collaborative filtering active: <b>{cf}</b> &middot;
+    Raw JSON at <code>/metrics</code> &middot; change K via <code>/metrics/view?k=5</code></div>
+</div></body></html>"""
+
+
 # Train once at startup so the first request is fast. Best-effort: if the DB
 # isn't reachable yet, the service still boots and /reload can retrain later.
 try:
