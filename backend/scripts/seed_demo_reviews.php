@@ -190,6 +190,20 @@ echo "Distinct customers with reviews: $raters.\n";
 if ($raters < 2) {
   echo "⚠ CF needs ≥2 customers with reviews — seed a second customer to activate it.\n";
 }
-echo "\n✅ Done. Now refresh the model:  POST http://127.0.0.1:5001/reload\n";
-echo "   Then /health should show cfAvailable: true, and 'Recommended for you'\n";
-echo "   will differ per customer (log in as a demo_* user to see it).\n";
+// 5. Reload the recommender automatically so the new reviews take effect right
+//    away — no manual restart / POST needed. Best-effort: no-op if the ML
+//    service isn't configured or isn't running.
+$config = require __DIR__ . '/../config.php';
+require_once __DIR__ . '/../lib/sweeps.php';
+echo "\n";
+if (trim($config['ml_service_url'] ?? '') === '') {
+  echo "ℹ Set 'ml_service_url' in config.local.php to auto-reload the recommender after seeding.\n";
+  echo "  (For now, restart the ML service or POST /reload manually.)\n";
+} elseif (sweepReloadRecommender($config)) {
+  echo "♻ Recommender reloaded — recommendations are already up to date.\n";
+  echo "  /health should now show cfAvailable: true; 'Recommended for you' differs per customer.\n";
+} else {
+  echo "⚠ Couldn't reach the ML service to reload (is it running?).\n";
+  echo "  Start it, or POST http://127.0.0.1:5001/reload, to apply the new reviews.\n";
+}
+echo "\n✅ Done.\n";

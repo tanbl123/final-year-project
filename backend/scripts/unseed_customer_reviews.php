@@ -42,5 +42,14 @@ $del = $pdo->prepare(
 $del->execute(array_merge([$customerId], $comments));
 
 echo "Deleted {$del->rowCount()} seeded review(s) for {$email} (customer {$customerId}).\n";
-echo "Now reload the ML service so 'Recommended for you' updates:\n";
-echo "  POST http://127.0.0.1:5001/reload  (or restart the service)\n";
+
+// Reload the recommender so the removal takes effect immediately. Best-effort.
+$config = require __DIR__ . '/../config.php';
+require_once __DIR__ . '/../lib/sweeps.php';
+if (trim($config['ml_service_url'] ?? '') === '') {
+  echo "ℹ Restart the ML service (or POST /reload) so 'Recommended for you' updates.\n";
+} elseif (sweepReloadRecommender($config)) {
+  echo "♻ Recommender reloaded — recommendations updated.\n";
+} else {
+  echo "⚠ Couldn't reach the ML service to reload (is it running?). POST /reload to apply.\n";
+}
