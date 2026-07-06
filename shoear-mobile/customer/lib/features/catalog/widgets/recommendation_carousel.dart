@@ -5,61 +5,86 @@ import 'package:customer/features/catalog/models/product.dart';
 import 'package:customer/features/catalog/screens/product_detail_screen.dart';
 
 /// A titled horizontal carousel of recommended products. Self-loading: it runs
-/// [loader] once and quietly renders nothing while loading, on error, or when
-/// there are no results — so a screen can drop it in without extra state.
+/// [loader] and quietly renders nothing while loading, on error, or when there
+/// are no results — so a screen can drop it in without extra state.
+///
+/// Bump [reloadTick] to refresh SILENTLY: it keeps the current products on
+/// screen and swaps them only once the fresh ones arrive (no spinner flash),
+/// which lets the home page auto-refresh on a timer without visual jank.
 class RecommendationCarousel extends StatefulWidget {
   final String title;
   final Future<List<ProductSummary>> Function() loader;
+  final int reloadTick;
 
-  const RecommendationCarousel({super.key, required this.title, required this.loader});
+  const RecommendationCarousel({
+    super.key,
+    required this.title,
+    required this.loader,
+    this.reloadTick = 0,
+  });
 
   @override
   State<RecommendationCarousel> createState() => _RecommendationCarouselState();
 }
 
 class _RecommendationCarouselState extends State<RecommendationCarousel> {
-  late Future<List<ProductSummary>> _future;
+  List<ProductSummary>? _items;   // null = still loading for the first time
+  bool _failed = false;
 
   @override
   void initState() {
     super.initState();
-    _future = widget.loader();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(RecommendationCarousel old) {
+    super.didUpdateWidget(old);
+    if (widget.reloadTick != old.reloadTick) _load(silent: true);
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent) setState(() { _items = null; _failed = false; });
+    try {
+      final items = await widget.loader();
+      if (mounted) setState(() { _items = items; _failed = false; });
+    } catch (_) {
+      // Silent refresh keeps whatever is already on screen; a failed first load
+      // hides the rail.
+      if (mounted && !silent) setState(() { _failed = true; _items = null; });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<ProductSummary>>(
-      future: _future,
-      builder: (context, snap) {
-        if (snap.connectionState == ConnectionState.waiting) {
-          return const SizedBox(
-            height: 60,
-            child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))),
-          );
-        }
-        final items = snap.data ?? const [];
-        if (snap.hasError || items.isEmpty) return const SizedBox.shrink(); // hide when nothing to show
+    final items = _items;
+    if (items == null) {
+      if (_failed) return const SizedBox.shrink();
+      return const SizedBox(
+        height: 60,
+        child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2))),
+      );
+    }
+    if (items.isEmpty) return const SizedBox.shrink(); // hide when nothing to show
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: Text(widget.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ),
-            SizedBox(
-              height: 240,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                itemCount: items.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (_, i) => _RecCard(product: items[i]),
-              ),
-            ),
-          ],
-        );
-      },
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Text(widget.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        ),
+        SizedBox(
+          height: 240,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            itemCount: items.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) => _RecCard(product: items[i]),
+          ),
+        ),
+      ],
     );
   }
 }

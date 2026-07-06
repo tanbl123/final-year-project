@@ -29,7 +29,11 @@ class CatalogScreen extends StatefulWidget {
   State<CatalogScreen> createState() => _CatalogScreenState();
 }
 
-class _CatalogScreenState extends State<CatalogScreen> {
+// How often the home quietly refreshes its recommendation rails (for a near
+// real-time feel). Silent — it swaps in fresh data without a spinner.
+const Duration _kAutoRefreshEvery = Duration(seconds: 60);
+
+class _CatalogScreenState extends State<CatalogScreen> with WidgetsBindingObserver {
   final _searchCtrl = TextEditingController();
   final _scroll = ScrollController();
   final List<ProductSummary> _items = [];
@@ -51,15 +55,19 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   String? _lastUserId;   // remember who's signed in, to detect account switches
   int _recSeed = 0;      // bump to force the recommendation rails to reload
+  Timer? _autoRefresh;   // periodic silent refresh of the rails
+  bool _foreground = true;
 
   bool get _filtersActive => _categoryId != null || _minPrice != null || _maxPrice != null || _sort != null;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _scroll.addListener(_onScroll);
     _lastUserId = context.read<AuthProvider>().user?.userId;
     appRefreshTick.addListener(_onExternalRefresh);
+    _autoRefresh = Timer.periodic(_kAutoRefreshEvery, (_) => _tickAutoRefresh());
     _fetchFirstPage();
     // categories for the filter dropdown (best-effort)
     context.read<CatalogService>().listCategories().then((cats) {
@@ -69,11 +77,18 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _autoRefresh?.cancel();
     appRefreshTick.removeListener(_onExternalRefresh);
     _debounce?.cancel();
     _scroll.dispose();
     _searchCtrl.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _foreground = state == AppLifecycleState.resumed;
   }
 
   // A global "something changed" tick (app resumed, order paid, etc.) — quietly
@@ -83,6 +98,16 @@ class _CatalogScreenState extends State<CatalogScreen> {
     if (!mounted) return;
     setState(() => _recSeed++);
     _fetchFirstPage();
+  }
+
+  // Periodic silent refresh of the recommendation rails, for a near real-time
+  // feel. Skips when backgrounded (save battery/data) or while searching/
+  // filtering (the rails aren't shown then anyway). The product grid is left
+  // alone so the customer's scroll position is never disturbed.
+  void _tickAutoRefresh() {
+    if (!mounted || !_foreground) return;
+    if (_search.isNotEmpty || _filtersActive) return;
+    setState(() => _recSeed++);
   }
 
   Future<CatalogPage> _load(int page) => context.read<CatalogService>().listProducts(
@@ -227,13 +252,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 children: [
                   if (context.watch<AuthProvider>().isLoggedIn)
                     RecommendationCarousel(
-                      key: ValueKey('foryou-$_recSeed'),
                       title: 'Recommended for you',
+                      reloadTick: _recSeed,
                       loader: () => context.read<RecommendationService>().forYou(),
                     ),
                   RecommendationCarousel(
-                    key: ValueKey('trending-$_recSeed'),
                     title: 'Trending now',
+                    reloadTick: _recSeed,
                     loader: () => context.read<RecommendationService>().trending(),
                   ),
                 ],
