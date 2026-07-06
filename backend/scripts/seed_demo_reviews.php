@@ -24,6 +24,21 @@ require __DIR__ . '/../lib/ids.php';
 
 const DEMO_PASSWORD = 'Demo@1234';   // every demo customer logs in with this
 
+// Comment sentinels stamped on every seeded review, so the unseed script can
+// find and remove ONLY seeded reviews (leaving any genuine ones). Keep these in
+// sync with unseed_customer_reviews.php.
+const SEED_COMMENT_LIKE = 'Love this — exactly my style.';
+const SEED_COMMENT_MEH  = 'Not really my type.';
+
+// Optional args:
+//   php seed_demo_reviews.php [customerEmail] [PreferredCategory]
+// If a customer email is given, that specific customer (e.g. your Google-login
+// account) is ALSO seeded with a clear single-category preference, so their
+// "Recommended for you" is visibly personalized. Remove later with
+// unseed_customer_reviews.php.
+$targetEmail  = trim($argv[1] ?? '');
+$preferredArg = trim($argv[2] ?? '');
+
 $pdo = getPDO();
 
 // 1. Approved products grouped by category ------------------------------------
@@ -96,7 +111,7 @@ foreach ($fans as $cat => $fan) {
     $isPreferred = ($p['categoryName'] === $cat);
     // preferred: 4–5, others: 2–3 (a little variance, never uniformly 5)
     $rating  = $isPreferred ? (4 + mt_rand(0, 1)) : (2 + mt_rand(0, 1));
-    $comment = $isPreferred ? 'Love this — exactly my style.' : 'Not really my type.';
+    $comment = $isPreferred ? SEED_COMMENT_LIKE : SEED_COMMENT_MEH;
 
     $findReview->execute(['c' => $fan['customerId'], 'p' => $p['productId']]);
     $existingId = $findReview->fetchColumn();
@@ -109,6 +124,44 @@ foreach ($fans as $cat => $fan) {
                            'r' => $rating, 'cm' => $comment]);
       $inserted++;
     }
+  }
+}
+
+// 3b. Optionally seed a specific real customer (e.g. your Google-login account)
+//     with a clear single-category preference, so their recommendations are
+//     visibly personalized during the demo. -----------------------------------
+if ($targetEmail !== '') {
+  $preferred = $preferredArg !== '' ? $preferredArg : ($categories[0] ?? '');
+  $stmt = $pdo->prepare(
+    'SELECT c.customerId FROM customer c JOIN `user` u ON u.userId = c.userId WHERE u.email = :e'
+  );
+  $stmt->execute(['e' => $targetEmail]);
+  $targetCid = $stmt->fetchColumn();
+
+  if (!$targetCid) {
+    echo "\n⚠ No customer found with email {$targetEmail}.\n";
+    echo "  Log in via Google as that customer first, THEN re-run with the email.\n";
+  } elseif (!in_array($preferred, $categories, true)) {
+    echo "\n⚠ '{$preferred}' isn't a known category. Choose one of: " . implode(', ', $categories) . "\n";
+  } else {
+    $ti = 0; $tu = 0;
+    foreach ($products as $p) {
+      $isPreferred = ($p['categoryName'] === $preferred);
+      $rating  = $isPreferred ? (4 + mt_rand(0, 1)) : (2 + mt_rand(0, 1));
+      $comment = $isPreferred ? SEED_COMMENT_LIKE : SEED_COMMENT_MEH;
+      $findReview->execute(['c' => $targetCid, 'p' => $p['productId']]);
+      $existingId = $findReview->fetchColumn();
+      if ($existingId) { $updReview->execute(['r' => $rating, 'id' => $existingId]); $tu++; }
+      else {
+        $rid = nextId($pdo, 'review', 'reviewId', 'REV');
+        $insReview->execute(['id' => $rid, 'c' => $targetCid, 'p' => $p['productId'],
+                             'r' => $rating, 'cm' => $comment]);
+        $ti++;
+      }
+    }
+    echo "\n🎯 Seeded customer {$targetEmail} (prefers {$preferred}): inserted $ti, updated $tu.\n";
+    echo "   Remove these later with:\n";
+    echo "     php backend/scripts/unseed_customer_reviews.php {$targetEmail}\n";
   }
 }
 
