@@ -160,9 +160,9 @@ body {
   color: #fff;
 }
 .sidebar-link.active {
-  background: rgba(13, 110, 253, 0.18);
+  background: rgba(79, 70, 229, 0.18);
   color: #fff;
-  border-left: 3px solid #0d6efd;
+  border-left: 3px solid #4f46e5;
   padding-left: calc(1rem - 3px);
 }
 .sidebar-icon {
@@ -230,4 +230,87 @@ code {
   line-height: 135%;
   padding: 4px 8px;
   background: var(--code-bg);
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   ShoeAR brand color — unify Bootstrap "primary" with the mobile apps.
+   Brand: indigo #4F46E5 (matches the customer & delivery Flutter themes).
+   ───────────────────────────────────────────────────────────────────── */
+:root {
+  --bs-primary: #4f46e5;
+  --bs-primary-rgb: 79, 70, 229;
+  --bs-link-color: #4f46e5;
+  --bs-link-color-rgb: 79, 70, 229;
+  --bs-link-hover-color: #4338ca;
+  --bs-link-hover-color-rgb: 67, 56, 202;
+}
+.btn-primary {
+  --bs-btn-bg: #4f46e5;
+  --bs-btn-border-color: #4f46e5;
+  --bs-btn-hover-bg: #4338ca;
+  --bs-btn-hover-border-color: #4338ca;
+  --bs-btn-active-bg: #3730a3;
+  --bs-btn-active-border-color: #3730a3;
+  --bs-btn-disabled-bg: #4f46e5;
+  --bs-btn-disabled-border-color: #4f46e5;
+}
+.btn-outline-primary {
+  --bs-btn-color: #4f46e5;
+  --bs-btn-border-color: #4f46e5;
+  --bs-btn-hover-bg: #4f46e5;
+  --bs-btn-hover-border-color: #4f46e5;
+  --bs-btn-active-bg: #4f46e5;
+  --bs-btn-active-border-color: #4f46e5;
+}
+.nav-pills {
+  --bs-nav-pills-link-active-bg: #4f46e5;
+}
+.text-primary { color: #4f46e5 !important; }
+.form-control:focus,
+.form-select:focus {
+  border-color: #a5b4fc;
+  box-shadow: 0 0 0 0.25rem rgba(79, 70, 229, 0.25);
+}
+.form-check-input:checked {
+  background-color: #4f46e5;
+  border-color: #4f46e5;
+}
+
+/* ─── Login page (supplier / admin) — cleaner e-commerce look ─── */
+.login-shell {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(1100px 500px at 50% -10%, rgba(79, 70, 229, 0.10), transparent 60%),
+    #f6f7fb;
+}
+.login-box { width: 100%; max-width: 400px; }
+.login-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.login-badge {
+  width: 60px;
+  height: 60px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  background: linear-gradient(135deg, #4f46e5, #7c73f0);
+  box-shadow: 0 8px 20px -6px rgba(79, 70, 229, 0.55);
+  margin-bottom: 12px;
+}
+.login-title { font-size: 22px; font-weight: 700; color: #111827; margin: 0; }
+.login-sub { color: #6b7280; font-size: 14px; margin: 2px 0 0; }
+.login-card {
+  border: 1px solid #ececf3 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 12px 30px -12px rgba(17, 24, 39, 0.15) !important;
+  padding: 24px !important;
 }

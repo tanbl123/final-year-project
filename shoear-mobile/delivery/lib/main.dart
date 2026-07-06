@@ -54,7 +54,7 @@ class CourierApp extends StatelessWidget {
         title: 'ShoeAR Express',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0F766E)),
+          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4F46E5)),
           useMaterial3: true,
         ),
         home: const MainShell(),

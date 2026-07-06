@@ -52,7 +52,7 @@ class _RequirePayoutScreenState extends State<RequirePayoutScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.account_balance_outlined, size: 64, color: Color(0xFF0F766E)),
+              const Icon(Icons.account_balance_outlined, size: 64, color: Color(0xFF4F46E5)),
               const SizedBox(height: 16),
               Text('Add your bank account', style: Theme.of(context).textTheme.headlineSmall,
                   textAlign: TextAlign.center),

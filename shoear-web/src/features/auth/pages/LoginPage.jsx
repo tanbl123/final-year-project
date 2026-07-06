@@ -24,8 +24,8 @@ const GENERIC_LOGIN_ERROR = 'Invalid email/username or password.';
 // Per-variant config so one component serves both the supplier and admin
 // login pages (same form, different branding + which role may sign in here).
 const VARIANTS = {
-  supplier: { title: '👟 Supplier Login', allowedRole: 'Supplier' },
-  admin:    { title: '🛡️ Admin Login',   allowedRole: 'Admin' },
+  supplier: { badge: '👟', subtitle: 'Supplier Portal', allowedRole: 'Supplier' },
+  admin:    { badge: '🛡️', subtitle: 'Admin Portal',    allowedRole: 'Admin' },
 };
 
 function LoginPage({ variant = 'supplier' }) {
@@ -111,9 +111,15 @@ function LoginPage({ variant = 'supplier' }) {
   }
 
   return (
-    <div className="container py-5" style={{ maxWidth: '420px' }}>
+    <div className="login-shell">
       <Toast message={toast} onClose={() => setToast('')} />
-      <h1 className="mb-4 text-center">{config.title}</h1>
+      <div className="login-box">
+        {/* brand lockup */}
+        <div className="login-brand">
+          <div className="login-badge">{config.badge}</div>
+          <h1 className="login-title">ShoeAR</h1>
+          <p className="login-sub">{config.subtitle}</p>
+        </div>
 
       {/* portal switch as a tab bar above the card — anchored here so the card's
           differing height (the supplier sign-up block) never shifts it */}
@@ -130,7 +136,7 @@ function LoginPage({ variant = 'supplier' }) {
         </li>
       </ul>
 
-      <form onSubmit={handleSubmit} className="card card-body shadow-sm text-start" noValidate>
+      <form onSubmit={handleSubmit} className="card card-body login-card text-start" noValidate>
         <div className="mb-3">
           <label className="form-label">Email or username</label>
           <ClearableInput
@@ -192,6 +198,7 @@ function LoginPage({ variant = 'supplier' }) {
           </>
         )}
       </form>
+      </div>
     </div>
   );
 }
