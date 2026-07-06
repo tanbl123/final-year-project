@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:provider/provider.dart';
 
 import 'package:customer/features/auth/services/account_service.dart';
@@ -22,7 +21,7 @@ enum _Step { form, verify }
 /// Customer self-service sign-up.
 /// Step 1 collects the form; step 2 verifies the email with a 6-digit code.
 /// On success the account is created and we log the customer straight in.
-/// Alternatively, tap "Continue with Google" to skip the form entirely.
+/// (Google sign-in lives on the login screen — it creates an account too.)
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -57,7 +56,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _passwordError;
   String? _confirmError;
   String? _codeError;
-  String? _googleError;
 
   int    _resendIn = 0;
   Timer? _resendTimer;
@@ -143,7 +141,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _emailError    = _validateEmail(_email.text);
       _passwordError = _validatePassword(_password.text);
       _confirmError  = _validateConfirm();
-      _googleError   = null;
     });
     if (_usernameError != null || _emailError != null ||
         _passwordError != null || _confirmError != null) return;
@@ -219,32 +216,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  Future<void> _signInWithGoogle() async {
-    setState(() { _googleError = null; _loading = true; });
-    try {
-      final googleUser = await GoogleSignIn(
-        serverClientId: '348666062587-5egqu1595ghp3pt64ip0qq30fo30p332.apps.googleusercontent.com',
-      ).signIn();
-      if (googleUser == null) {
-        if (mounted) setState(() => _loading = false);
-        return;
-      }
-      final auth = await googleUser.authentication;
-      final idToken = auth.idToken;
-      if (idToken == null) {
-        if (mounted) setState(() {
-          _googleError = 'Google did not return an ID token. Please try again.';
-          _loading = false;
-        });
-        return;
-      }
-      await context.read<AuthProvider>().loginWithGoogle(idToken);
-      if (mounted) Navigator.of(context).pop();
-    } catch (e) {
-      if (mounted) setState(() { _googleError = e.toString(); _loading = false; });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -262,31 +233,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }
 
   Widget _formStep() {
-    final theme = Theme.of(context);
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        // ── Google Sign-In as an alternative to the form ──
-        _GoogleButton(
-          onPressed: _loading ? null : _signInWithGoogle,
-          label: 'Continue with Google',
-        ),
-        if (_googleError != null) ...[
-          const SizedBox(height: 8),
-          Text(_googleError!,
-              style: TextStyle(color: theme.colorScheme.error, fontSize: 13)),
-        ],
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 16),
-          child: Row(children: [
-            Expanded(child: Divider()),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 12),
-              child: Text('or sign up with email'),
-            ),
-            Expanded(child: Divider()),
-          ]),
-        ),
         // ── form fields ──
         _field(
           controller: _email,
@@ -464,46 +413,4 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
       );
-}
-
-/// Reusable Google-branded sign-in button.
-class _GoogleButton extends StatelessWidget {
-  final VoidCallback? onPressed;
-  final String label;
-  const _GoogleButton({required this.onPressed, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return OutlinedButton(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        backgroundColor: Colors.white,
-        side: const BorderSide(color: Color(0xFFDDDDDD)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 22,
-              height: 22,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: Color(0xFF4285F4),
-              ),
-              child: const Center(
-                child: Text('G',
-                    style: TextStyle(
-                        color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(label, style: const TextStyle(color: Colors.black87, fontSize: 15)),
-          ],
-        ),
-      ),
-    );
-  }
 }
