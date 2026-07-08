@@ -116,8 +116,10 @@ function LoginPage({ variant = 'supplier' }) {
       <div className="login-box">
         {/* brand lockup */}
         <div className="login-brand">
-          <div className="login-badge">{config.badge}</div>
-          <h1 className="login-title">ShoeAR</h1>
+          <div className="login-badge">
+            <img src="/shoear-mark-white.svg" alt="ShoeAR" width="38" height="38" />
+          </div>
+          <h1 className="login-title">Shoe<span style={{ color: '#4f46e5' }}>AR</span></h1>
           <p className="login-sub">{config.subtitle}</p>
         </div>
 
