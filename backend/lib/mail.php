@@ -152,72 +152,96 @@ function sendVerificationCodeEmail(array $config, string $toEmail, string $code,
 }
 
 // Tell a courier applicant the admin's decision on their application.
+// Wrap a decision letter's body paragraphs in a formal letterhead layout:
+// brand letterhead, "Dear <name>," salutation, the body, a "Yours sincerely"
+// signature, and an automated-message footer.
+function formalLetterHtml(string $name, string $bodyHtml, string $brand): string {
+  return '<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:auto;color:#1f2430;line-height:1.6;font-size:15px">'
+       . '<div style="border-bottom:2px solid #4f46e5;padding-bottom:12px;margin-bottom:22px">'
+       .   '<span style="font-size:20px;font-weight:bold;color:#4f46e5">' . $brand . '</span>'
+       . '</div>'
+       . '<p>Dear ' . htmlspecialchars($name, ENT_QUOTES) . ',</p>'
+       . $bodyHtml
+       . '<p style="margin-top:26px">Yours sincerely,<br><strong>The ShoeAR Team</strong></p>'
+       . '<hr style="border:none;border-top:1px solid #eceef3;margin:24px 0 12px">'
+       . '<p style="font-size:12px;color:#9096a2">This is an automated message from ShoeAR. Please do not reply to this email.</p>'
+       . '</div>';
+}
+
 // $status is 'Active' (approved), 'Rejected' (fixable) or 'Banned' (final).
 function sendCourierDecisionEmail(array $config, string $toEmail, string $fullName, string $status, ?string $reason): void {
-  $name      = $fullName !== '' ? $fullName : 'there';
+  $name      = $fullName !== '' ? $fullName : 'Applicant';
   $reasonTxt = ($reason !== null && $reason !== '') ? $reason : '';
 
   if ($status === 'Active') {
-    $subject = 'Your ShoeAR courier application is approved 🎉';
-    $text = "Hi $name,\n\nGreat news — your ShoeAR courier application has been approved!\n\n"
-          . "Open the ShoeAR Express app and sign in to set up your payout (bank) account, then you can start accepting deliveries.\n\n— ShoeAR";
-    $body = '<p>Great news — your ShoeAR courier application has been <strong>approved</strong>!</p>'
-          . '<p>Open the ShoeAR Express app and sign in to set up your payout account, then you can start accepting deliveries.</p>';
+    $subject  = 'ShoeAR Courier Application — Approved';
+    $textBody = "We are pleased to inform you that your application to become a delivery partner with ShoeAR has been reviewed and approved.\n\n"
+              . "Please open the ShoeAR Express app and sign in to complete your payout (bank) account setup, after which you may begin accepting deliveries.\n\n"
+              . "Should you have any questions, please contact our support team.";
+    $bodyHtml = '<p>We are pleased to inform you that your application to become a delivery partner with ShoeAR has been reviewed and <strong>approved</strong>.</p>'
+              . '<p>Please open the ShoeAR Express app and sign in to complete your payout (bank) account setup, after which you may begin accepting deliveries.</p>'
+              . '<p>Should you have any questions, please contact our support team.</p>';
   } elseif ($status === 'Rejected') {
-    $subject = 'Your ShoeAR courier application needs changes';
-    $text = "Hi $name,\n\nThanks for applying to be a ShoeAR courier. We need a few changes before we can approve your application.\n\n"
-          . ($reasonTxt !== '' ? "Reason: $reasonTxt\n\n" : '')
-          . "Please sign in to the ShoeAR Express app, fix the details, and resubmit your application for review.\n\n— ShoeAR";
-    $body = '<p>Thanks for applying to be a ShoeAR courier. We need a few changes before we can approve your application.</p>'
-          . ($reasonTxt !== '' ? '<p><strong>Reason:</strong> ' . htmlspecialchars($reasonTxt, ENT_QUOTES) . '</p>' : '')
-          . '<p>Please sign in to the ShoeAR Express app, fix the details, and <strong>resubmit</strong> your application for review.</p>';
+    $subject  = 'ShoeAR Courier Application — Action Required';
+    $textBody = "Thank you for your application to become a delivery partner with ShoeAR. After reviewing your submission, we are unable to approve it in its current form.\n\n"
+              . ($reasonTxt !== '' ? "Reason: $reasonTxt\n\n" : '')
+              . "Please sign in to the ShoeAR Express app to update the required details and resubmit your application for review.\n\n"
+              . "We appreciate your interest and look forward to receiving your updated application.";
+    $bodyHtml = '<p>Thank you for your application to become a delivery partner with ShoeAR. After reviewing your submission, we are unable to approve it in its current form.</p>'
+              . ($reasonTxt !== '' ? '<p><strong>Reason:</strong> ' . htmlspecialchars($reasonTxt, ENT_QUOTES) . '</p>' : '')
+              . '<p>Please sign in to the ShoeAR Express app to update the required details and <strong>resubmit</strong> your application for review.</p>'
+              . '<p>We appreciate your interest and look forward to receiving your updated application.</p>';
   } else { // Banned
-    $subject = 'Your ShoeAR courier application was declined';
-    $text = "Hi $name,\n\nThank you for your interest in becoming a ShoeAR courier. Unfortunately your application has been declined and cannot be resubmitted.\n\n"
-          . ($reasonTxt !== '' ? "Reason: $reasonTxt\n\n" : '')
-          . "— ShoeAR";
-    $body = '<p>Thank you for your interest in becoming a ShoeAR courier. Unfortunately your application has been <strong>declined</strong> and cannot be resubmitted.</p>'
-          . ($reasonTxt !== '' ? '<p><strong>Reason:</strong> ' . htmlspecialchars($reasonTxt, ENT_QUOTES) . '</p>' : '');
+    $subject  = 'ShoeAR Courier Application — Decision';
+    $textBody = "Thank you for your interest in becoming a delivery partner with ShoeAR. After careful review, we regret to inform you that your application has not been successful and cannot be resubmitted.\n\n"
+              . ($reasonTxt !== '' ? "Reason: $reasonTxt\n\n" : '')
+              . "We appreciate the time you took to apply.";
+    $bodyHtml = '<p>Thank you for your interest in becoming a delivery partner with ShoeAR. After careful review, we regret to inform you that your application has <strong>not been successful</strong> and cannot be resubmitted.</p>'
+              . ($reasonTxt !== '' ? '<p><strong>Reason:</strong> ' . htmlspecialchars($reasonTxt, ENT_QUOTES) . '</p>' : '')
+              . '<p>We appreciate the time you took to apply.</p>';
   }
 
-  $html = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:auto">'
-        . '<h2 style="margin:0 0 12px">🛵 ShoeAR Express</h2>'
-        . "<p>Hi " . htmlspecialchars($name, ENT_QUOTES) . ",</p>" . $body . '</div>';
+  $text = "Dear $name,\n\n$textBody\n\nYours sincerely,\nThe ShoeAR Team";
+  $html = formalLetterHtml($name, $bodyHtml, '🛵 ShoeAR Express');
   sendMail($config, $toEmail, $fullName, $subject, $text, $html);
 }
 
 // Tell a supplier applicant the admin's decision on their application.
 // $status is 'Active' (approved), 'Rejected' (fixable) or 'Banned' (final).
 function sendSupplierDecisionEmail(array $config, string $toEmail, string $companyName, string $status, ?string $reason): void {
-  $name      = $companyName !== '' ? $companyName : 'there';
+  $name      = $companyName !== '' ? $companyName : 'Applicant';
   $reasonTxt = ($reason !== null && $reason !== '') ? $reason : '';
 
   if ($status === 'Active') {
-    $subject = 'Your ShoeAR supplier account is approved 🎉';
-    $text = "Hi $name,\n\nGreat news — your ShoeAR supplier account has been approved!\n\n"
-          . "Sign in to the ShoeAR supplier portal to list your products and start selling.\n\n— ShoeAR";
-    $body = '<p>Great news — your ShoeAR supplier account has been <strong>approved</strong>!</p>'
-          . '<p>Sign in to the ShoeAR supplier portal to list your products and start selling.</p>';
+    $subject  = 'ShoeAR Supplier Application — Approved';
+    $textBody = "We are pleased to inform you that your application to become a supplier on the ShoeAR platform has been reviewed and approved.\n\n"
+              . "You may now sign in to the ShoeAR Supplier Portal to complete your payout setup, list your products, and begin selling.\n\n"
+              . "Should you have any questions, please contact our support team.";
+    $bodyHtml = '<p>We are pleased to inform you that your application to become a supplier on the ShoeAR platform has been reviewed and <strong>approved</strong>.</p>'
+              . '<p>You may now sign in to the ShoeAR Supplier Portal to complete your payout setup, list your products, and begin selling.</p>'
+              . '<p>Should you have any questions, please contact our support team.</p>';
   } elseif ($status === 'Rejected') {
-    $subject = 'Your ShoeAR supplier application needs changes';
-    $text = "Hi $name,\n\nThanks for applying to sell on ShoeAR. We need a few changes before we can approve your application.\n\n"
-          . ($reasonTxt !== '' ? "Reason: $reasonTxt\n\n" : '')
-          . "Please sign in to the ShoeAR supplier portal, fix the details, and resubmit your application for review.\n\n— ShoeAR";
-    $body = '<p>Thanks for applying to sell on ShoeAR. We need a few changes before we can approve your application.</p>'
-          . ($reasonTxt !== '' ? '<p><strong>Reason:</strong> ' . htmlspecialchars($reasonTxt, ENT_QUOTES) . '</p>' : '')
-          . '<p>Please sign in to the ShoeAR supplier portal, fix the details, and <strong>resubmit</strong> your application for review.</p>';
+    $subject  = 'ShoeAR Supplier Application — Action Required';
+    $textBody = "Thank you for your application to become a supplier on the ShoeAR platform. After reviewing your submission, we are unable to approve it in its current form.\n\n"
+              . ($reasonTxt !== '' ? "Reason: $reasonTxt\n\n" : '')
+              . "Please sign in to the ShoeAR Supplier Portal to update the required details and resubmit your application for review.\n\n"
+              . "We appreciate your interest and look forward to receiving your updated application.";
+    $bodyHtml = '<p>Thank you for your application to become a supplier on the ShoeAR platform. After reviewing your submission, we are unable to approve it in its current form.</p>'
+              . ($reasonTxt !== '' ? '<p><strong>Reason:</strong> ' . htmlspecialchars($reasonTxt, ENT_QUOTES) . '</p>' : '')
+              . '<p>Please sign in to the ShoeAR Supplier Portal to update the required details and <strong>resubmit</strong> your application for review.</p>'
+              . '<p>We appreciate your interest and look forward to receiving your updated application.</p>';
   } else { // Banned
-    $subject = 'Your ShoeAR supplier application was declined';
-    $text = "Hi $name,\n\nThank you for your interest in selling on ShoeAR. Unfortunately your application has been declined and cannot be resubmitted.\n\n"
-          . ($reasonTxt !== '' ? "Reason: $reasonTxt\n\n" : '')
-          . "— ShoeAR";
-    $body = '<p>Thank you for your interest in selling on ShoeAR. Unfortunately your application has been <strong>declined</strong> and cannot be resubmitted.</p>'
-          . ($reasonTxt !== '' ? '<p><strong>Reason:</strong> ' . htmlspecialchars($reasonTxt, ENT_QUOTES) . '</p>' : '');
+    $subject  = 'ShoeAR Supplier Application — Decision';
+    $textBody = "Thank you for your interest in becoming a supplier on the ShoeAR platform. After careful review, we regret to inform you that your application has not been successful and cannot be resubmitted.\n\n"
+              . ($reasonTxt !== '' ? "Reason: $reasonTxt\n\n" : '')
+              . "We appreciate the time you took to apply.";
+    $bodyHtml = '<p>Thank you for your interest in becoming a supplier on the ShoeAR platform. After careful review, we regret to inform you that your application has <strong>not been successful</strong> and cannot be resubmitted.</p>'
+              . ($reasonTxt !== '' ? '<p><strong>Reason:</strong> ' . htmlspecialchars($reasonTxt, ENT_QUOTES) . '</p>' : '')
+              . '<p>We appreciate the time you took to apply.</p>';
   }
 
-  $html = '<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:auto">'
-        . '<h2 style="margin:0 0 12px">👟 ShoeAR</h2>'
-        . '<p>Hi ' . htmlspecialchars($name, ENT_QUOTES) . ',</p>' . $body . '</div>';
+  $text = "Dear $name,\n\n$textBody\n\nYours sincerely,\nThe ShoeAR Team";
+  $html = formalLetterHtml($name, $bodyHtml, '👟 ShoeAR');
   sendMail($config, $toEmail, $companyName, $subject, $text, $html);
 }
 
