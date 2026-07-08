@@ -6,21 +6,23 @@
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="115" fill="url(#bg)"/>
-  <!-- motion / express speed lines behind the shoe -->
+  <!-- motion / speed lines behind the truck -->
   <g fill="#ffffff" opacity="0.5">
-    <rect x="40" y="212" width="150" height="14" rx="7"/>
-    <rect x="24" y="250" width="185" height="14" rx="7"/>
-    <rect x="40" y="288" width="150" height="14" rx="7"/>
+    <rect x="40" y="212" width="110" height="13" rx="6"/>
+    <rect x="24" y="250" width="132" height="13" rx="6"/>
+    <rect x="40" y="288" width="110" height="13" rx="6"/>
   </g>
-  <g transform="translate(84.3 94.5) scale(3.4)">
-    <g fill="#ffffff">
-      <path d="M12 60 L12 50 Q12 44 19 42 L30 40 Q36 39 38.5 34 L41 29.5 Q42.5 27 45 28 Q47 29 46.5 32 L45.6 42 Q45.4 46 49 46.8 L73 50 Q85 52 90 58.5 Q92 60.5 88.5 60.5 Z"/>
-      <path d="M8 65.5 Q6 61.5 12.5 61.5 L88 61.5 Q95 61.5 92 65.5 Q90.5 68 83 68 L15 68 Q8.5 68 8 65.5 Z"/>
-    </g>
-    <g stroke="#4338ca" stroke-width="1.4" stroke-linecap="round" fill="none">
-      <path d="M38.5 34.5 L45.6 36"/>
-      <path d="M38 38.5 L45.2 40"/>
-      <path d="M38 42.5 L45 43.8"/>
-    </g>
+  <!-- delivery truck (side view, moving right) -->
+  <g transform="translate(83.2 72.4) scale(3.6)">
+    <!-- cargo box -->
+    <rect x="14" y="33" width="40" height="27" rx="3" fill="#ffffff"/>
+    <!-- cab with slanted windshield -->
+    <path d="M54 60 L54 44 L66 44 L82 53 L82 60 Z" fill="#ffffff"/>
+    <path d="M68 47 L78 47 L82 52.5 L68 52.5 Z" fill="#4338ca"/>
+    <!-- wheels -->
+    <circle cx="30" cy="62" r="7" fill="#ffffff"/>
+    <circle cx="30" cy="62" r="3" fill="#4338ca"/>
+    <circle cx="72" cy="62" r="7" fill="#ffffff"/>
+    <circle cx="72" cy="62" r="3" fill="#4338ca"/>
   </g>
 </svg>

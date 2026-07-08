@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 120" width="440" height="120" role="img" aria-label="ShoeAR logo">
   <!-- mark: indigo shoe (for light backgrounds / the report) -->
-  <g transform="translate(6 26) scale(0.95)">
+  <g transform="translate(6 22) scale(0.95)">
     <g fill="#4f46e5">
-      <path d="M12 60 L12 50 Q12 44 19 42 L30 40 Q36 39 38.5 34 L41 29.5 Q42.5 27 45 28 Q47 29 46.5 32 L45.6 42 Q45.4 46 49 46.8 L73 50 Q85 52 90 58.5 Q92 60.5 88.5 60.5 Z"/>
-      <path d="M8 65.5 Q6 61.5 12.5 61.5 L88 61.5 Q95 61.5 92 65.5 Q90.5 68 83 68 L15 68 Q8.5 68 8 65.5 Z"/>
+      <path d="M16 58 L16 45 Q16 40 22 39 L28 38 Q33 37.5 35 43 Q37 48 42 46.5 L45 36 Q46.5 32 50 33.5 Q53 35 51.5 39 L50 47 Q49.5 51 54 52 L73 50.5 Q84 52.5 89 60 Q90.5 62.5 87 62.5 L18 62.5 Q16 62.5 16 58 Z"/>
+      <path d="M11 62 Q7 62 7 65.5 Q7 70 14 70 L83 70 Q91 70 92 64.5 Q92.5 61.5 88 61.5 L15 61.5 Q11 61.5 11 62 Z"/>
     </g>
-    <g stroke="#ffffff" stroke-width="1.4" stroke-linecap="round" fill="none">
-      <path d="M38.5 34.5 L45.6 36"/>
-      <path d="M38 38.5 L45.2 40"/>
-      <path d="M38 42.5 L45 43.8"/>
+    <g stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" fill="none">
+      <path d="M42 40 L50.5 41"/>
+      <path d="M41.5 43 L50.5 44"/>
+      <path d="M42 46 L50 47"/>
     </g>
   </g>
   <!-- wordmark: "Shoe" slate + "AR" indigo -->
