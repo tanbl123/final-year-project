@@ -114,8 +114,7 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('👟 ShoeAR',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                Image.asset('assets/branding/logo.png', height: 150, fit: BoxFit.contain),
                 const SizedBox(height: 20),
                 Card(
                   elevation: 1.5,
