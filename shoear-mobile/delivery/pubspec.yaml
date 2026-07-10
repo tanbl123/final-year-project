@@ -22,6 +22,19 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1   # generates the launcher icons from a PNG
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/branding/
+
+# App launcher icon. Put a 1024x1024 PNG (the delivery truck on the indigo tile)
+# at assets/branding/app_icon.png, then run from this folder:
+#   flutter pub get
+#   dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: true
+  ios: true
+  remove_alpha_ios: true
+  image_path: "assets/branding/app_icon.png"
