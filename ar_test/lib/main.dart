@@ -19,9 +19,17 @@ import 'package:permission_handler/permission_handler.dart';
 const String kDemoEffectUrl =
     'https://demo.deepar.ai/flutter/shoe/nike-airforce1.deepar';
 
-// OUR custom shoe effect on Firebase (verified valid DeepAR "DA01" binary).
+// OUR custom shoe effect (verified valid DeepAR "DA01" binary).
+//
+// IMPORTANT: the plugin loads `https://try.deepar.ai/flutter/shoe?e=<thisUrl>`
+// WITHOUT url-encoding it. A Firebase download URL carries its own
+// `?alt=media&token=` query string, which collides with the `?e=` param and
+// strips the token → 403 → "couldn't find this effect". So we MUST use a CLEAN
+// url with no `?`/`&`. The direct GCS object url is clean; make the object public
+// once (see README):
+//   gsutil acl ch -u AllUsers:R gs://shoear-65edb.firebasestorage.app/model.deepar
 const String kCustomEffectUrl =
-    'https://firebasestorage.googleapis.com/v0/b/shoear-65edb.firebasestorage.app/o/model.deepar?alt=media&token=8708d0cd-b3e3-4b38-ab54-bc84a7e4de3d';
+    'https://storage.googleapis.com/shoear-65edb.firebasestorage.app/model.deepar';
 
 void main() => runApp(const MaterialApp(home: SpikeScreen()));
 

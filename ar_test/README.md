@@ -21,34 +21,48 @@ the foot. So we're back on it, and the only remaining job is getting our **own**
 
 ---
 
-## Step CORS — let DeepAR's web player fetch our effect (do this first)
+## THE REAL ROOT CAUSE (why the custom effect said "couldn't find this effect")
 
-Our custom effect on Firebase gave *"Oops couldn't find this effect"* because the
-plugin's web player fetches the `.deepar` file **cross-origin**, and the Firebase
-bucket sends **no CORS headers**, so the browser blocks it. Fix it once:
+The plugin builds the webview URL like this (from its source):
 
-Easiest — **Google Cloud Shell** (nothing to install):
+```dart
+static const String kBaseUrl = "https://try.deepar.ai/flutter/shoe";
+controller.loadRequest(Uri.parse('$kBaseUrl?e=$link'));   // link NOT url-encoded
+```
 
-1. Open <https://console.cloud.google.com>, pick project **shoear-65edb**.
-2. Click the **Activate Cloud Shell** icon (`>_`, top-right).
-3. Upload `cors.json` (⋮ menu → Upload) **or** paste this to create it:
-   ```bash
-   cat > cors.json <<'EOF'
-   [{"origin":["*"],"method":["GET","HEAD"],"responseHeader":["Content-Type","Access-Control-Allow-Origin"],"maxAgeSeconds":3600}]
-   EOF
-   ```
-4. Apply it to the bucket:
-   ```bash
-   gsutil cors set cors.json gs://shoear-65edb.firebasestorage.app
-   ```
-5. Confirm:
-   ```bash
-   gsutil cors get gs://shoear-65edb.firebasestorage.app
-   ```
-   You should see the policy printed back.
+So it loads `https://try.deepar.ai/flutter/shoe?e=<effectUrl>`. Because `<effectUrl>`
+is pasted in **raw**, a Firebase *download* URL breaks it: that URL has its own
+query string `...model.deepar?alt=media&token=XXXX`. The player splits on `&`, so
+`token=XXXX` is torn off as a separate param and the effect URL loses its token →
+Firebase returns **403** → the player shows *"couldn't find this effect"*.
 
-> If gsutil says the bucket doesn't exist, try `gs://shoear-65edb.appspot.com`
-> (older Firebase projects use that name). Run `gsutil ls` to list your buckets.
+The demo URL works only because it has **no `?`/`&`** to collide.
+
+**Fix: host the effect at a CLEAN url (no `?`, no `&`).** The direct Google Cloud
+Storage object URL is clean — it just needs the object made public.
+
+### Make the effect object public (one command, in Cloud Shell)
+
+```bash
+gsutil acl ch -u AllUsers:R gs://shoear-65edb.firebasestorage.app/model.deepar
+```
+If that errors with *"uniform bucket-level access"*, use IAM instead:
+```bash
+gsutil iam ch allUsers:objectViewer gs://shoear-65edb.firebasestorage.app
+```
+Then the clean URL (already set as `kCustomEffectUrl` in `lib/main.dart`) is:
+```
+https://storage.googleapis.com/shoear-65edb.firebasestorage.app/model.deepar
+```
+
+### CORS (already done, keep it)
+
+We also set the bucket CORS earlier so the cross-origin fetch is allowed:
+```bash
+gsutil cors set cors.json gs://shoear-65edb.firebasestorage.app
+gsutil cors get gs://shoear-65edb.firebasestorage.app   # verify
+```
+`cors.json` is in this folder. This stays required — leave it in place.
 
 ---
 
