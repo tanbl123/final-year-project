@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getAdminReviews, setReviewStatus } from '../reviewService';
+import ProductReviewModal from '../products/ProductReviewModal';
 import StarRating from '../../../components/StarRating';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Toast from '../../../components/Toast';
@@ -18,6 +19,7 @@ function AdminReviewsPage() {
   const [toast, setToast] = useState('');
   const [busyId, setBusyId] = useState('');
   const [removing, setRemoving] = useState(null);     // review pending remove confirm
+  const [viewProductId, setViewProductId] = useState(''); // product whose details modal is open
 
   const [filters, setFilters] = useState({ status: '', rating: '', search: '' });
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -130,7 +132,12 @@ function AdminReviewsPage() {
               {pageItems.map((r) => (
                 <tr key={r.reviewId} className={r.reviewStatus === 'Removed' ? 'table-secondary' : undefined}>
                   <td>
-                    <div className="fw-semibold">{r.productName}</div>
+                    <button type="button"
+                      className="btn btn-link p-0 fw-semibold text-start text-decoration-none"
+                      onClick={() => setViewProductId(r.productId)}
+                      title="View product & supplier details">
+                      {r.productName}
+                    </button>
                     <div className="text-muted small">{r.supplierName}</div>
                   </td>
                   <td><StarRating score={r.ratingScore} /></td>
@@ -177,6 +184,13 @@ function AdminReviewsPage() {
         confirmColor="danger"
         onCancel={() => setRemoving(null)}
         onConfirm={() => { const r = removing; setRemoving(null); moderate(r, 'Removed'); }}
+      />
+
+      {/* read-only product + supplier detail (which product this review is under) */}
+      <ProductReviewModal
+        productId={viewProductId}
+        title="Product details"
+        onClose={() => setViewProductId('')}
       />
 
       <Toast message={toast} onClose={() => setToast('')} />

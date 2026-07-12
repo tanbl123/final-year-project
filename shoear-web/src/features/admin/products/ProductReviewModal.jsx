@@ -6,7 +6,7 @@ const rm = (n) => 'RM ' + Number(n || 0).toLocaleString('en-MY', { minimumFracti
 // Full-product preview the admin opens from the approval queue, so they can SEE
 // the product (images, description, sizes/stock, 3D model) before deciding.
 // Approve / Reject live in the footer and call back to the parent.
-function ProductReviewModal({ productId, onClose, onApprove, onReject, busy }) {
+function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, title = 'Review product' }) {
   const [product, setProduct] = useState(null);
   const [error, setError] = useState('');
   const [activeImage, setActiveImage] = useState('');
@@ -36,7 +36,7 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy }) {
         <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable" role="document">
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title">Review product</h5>
+              <h5 className="modal-title">{title}</h5>
               <button type="button" className="btn-close" onClick={onClose}></button>
             </div>
 
