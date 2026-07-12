@@ -298,14 +298,21 @@ code {
   width: 60px;
   height: 60px;
   border-radius: 18px;
-  overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: linear-gradient(135deg, #4f46e5, #7c73f0);
   box-shadow: 0 8px 20px -6px rgba(79, 70, 229, 0.55);
   margin-bottom: 12px;
 }
-.login-badge img { width: 100%; height: 100%; object-fit: cover; }
+/* shoe sits on the indigo tile with a soft light glow so the dark sole
+   doesn't disappear into the indigo background */
+.login-badge img {
+  width: 76%;
+  height: 76%;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.6));
+}
 .login-title { font-size: 22px; font-weight: 700; color: #111827; margin: 0; }
 .login-sub { color: #6b7280; font-size: 14px; margin: 2px 0 0; }
 .login-card {
