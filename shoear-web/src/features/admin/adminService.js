@@ -205,11 +205,18 @@ export function resolveDeliveryIssue(issueId) {
 
 // ── reports ──────────────────────────────────────────────────────────
 // Platform commission across all suppliers (paid orders only).
-// Optional { from, to } (YYYY-MM-DD) scopes it to a reporting period.
-function reportQs({ from, to } = {}) {
+// Optional { from, to } (YYYY-MM-DD) scopes it to a period, and { supplierId }
+// scopes it to a single company (omit/empty for all companies).
+function reportQs({ from, to, supplierId } = {}) {
   const qs = new URLSearchParams();
   if (from && to) { qs.set('from', from); qs.set('to', to); }
+  if (supplierId) { qs.set('supplierId', supplierId); }
   return qs.toString() ? `?${qs}` : '';
+}
+
+// Active suppliers for the report "Company" filter dropdown.
+export function getReportCompanies() {
+  return apiGet('/admin/reports/companies', getToken());
 }
 
 export function getCommissionReport(range = {}) {

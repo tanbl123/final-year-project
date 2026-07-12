@@ -6,7 +6,8 @@ import ReportPreviewModal from '../../../components/ReportPreviewModal';
 import { ALL_TIME, rm, StatCard } from './reportUtils';
 
 // Supplier leaderboard: gross, units, active products, average rating.
-function SupplierPerformanceReport() {
+// `onDrill(supplierId, companyName)` jumps to that company's Platform Sales report.
+function SupplierPerformanceReport({ onDrill }) {
   const { user } = useAuth();
   const [range, setRange] = useState(ALL_TIME);
   const [data, setData] = useState(null);
@@ -84,6 +85,7 @@ function SupplierPerformanceReport() {
                   <th className="text-end" style={{ width: 150 }}>Gross sales</th>
                   <th className="text-end" style={{ width: 100 }}>Products</th>
                   <th className="text-end" style={{ width: 120 }}>Avg rating</th>
+                  {onDrill && <th style={{ width: 110 }} />}
                 </tr>
               </thead>
               <tbody>
@@ -95,6 +97,17 @@ function SupplierPerformanceReport() {
                     <td className="text-end">{rm(s.gross)}</td>
                     <td className="text-end">{s.products}</td>
                     <td className="text-end text-warning">{star(s.avgRating)}{s.reviews ? <span className="text-muted small"> ({s.reviews})</span> : null}</td>
+                    {onDrill && (
+                      <td className="text-end">
+                        <button
+                          className="btn btn-sm btn-outline-primary text-nowrap"
+                          onClick={() => onDrill(s.supplierId, s.companyName)}
+                          title={`View ${s.companyName}'s sales report`}
+                        >
+                          📊 Report
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

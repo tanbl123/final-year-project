@@ -16,7 +16,17 @@ const TABS = [
 
 function AdminReportsPage() {
   const [tab, setTab] = useState('sales');
+  // the "Company" filter, shared across the money/ops tabs (Sales, Orders,
+  // Refunds) so picking a company once carries between them. '' = all companies.
+  const [company, setCompany] = useState({ id: '', name: '' });
   const Active = TABS.find((t) => t.key === tab)?.Component ?? PlatformSalesReport;
+
+  // drill-down: "View report" on a supplier row → jump to Platform Sales with
+  // that company pre-selected.
+  function drillTo(supplierId, companyName) {
+    setCompany({ id: supplierId, name: companyName });
+    setTab('sales');
+  }
 
   return (
     <div className="container py-4 text-start">
@@ -36,7 +46,7 @@ function AdminReportsPage() {
         ))}
       </ul>
 
-      <Active />
+      <Active company={company} setCompany={setCompany} onDrill={drillTo} />
     </div>
   );
 }

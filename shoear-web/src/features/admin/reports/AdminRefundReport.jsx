@@ -3,10 +3,11 @@ import { getAdminRefundReport } from '../adminService';
 import { useAuth } from '../../auth/AuthContext';
 import ReportPeriodBar from '../../../components/ReportPeriodBar';
 import ReportPreviewModal from '../../../components/ReportPreviewModal';
-import { ALL_TIME, rm, StatCard } from './reportUtils';
+import { ALL_TIME, rm, StatCard, CompanyFilter } from './reportUtils';
 
-// Platform-wide refunds by status + refund rate.
-function AdminRefundReport() {
+// Platform-wide refunds by status + refund rate. `company` scopes it to refunds
+// on one supplier's orders ('' id = all companies).
+function AdminRefundReport({ company = { id: '', name: '' }, setCompany }) {
   const { user } = useAuth();
   const [range, setRange] = useState(ALL_TIME);
   const [data, setData] = useState(null);
@@ -18,19 +19,19 @@ function AdminRefundReport() {
     let active = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
-    getAdminRefundReport({ from: range.from, to: range.to })
+    getAdminRefundReport({ from: range.from, to: range.to, supplierId: company.id })
       .then((d) => { if (active) setData(d); })
       .catch((err) => { if (active) setError(err.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [range.from, range.to]);
+  }, [range.from, range.to, company.id]);
 
   const has = !!data && data.summary.refunds > 0;
   const rateStr = data?.summary?.refundRate != null ? `${data.summary.refundRate}%` : '—';
 
   function buildReportOpts() {
     return {
-      title: 'Refund Report (Platform)',
+      title: company.id ? `Refund Report — ${company.name}` : 'Refund Report (Platform)',
       generatedBy: user?.fullName,
       period: range.label,
       referencePrefix: 'ARF',
@@ -50,8 +51,11 @@ function AdminRefundReport() {
   return (
     <div>
       <div className="d-flex justify-content-between align-items-end flex-wrap gap-2 mb-3">
-        <p className="text-muted mb-0">Refunds across the whole marketplace, and the platform refund rate.</p>
+        <p className="text-muted mb-0">
+          {company.id ? `Refunds on ${company.name}'s orders, and their refund rate.` : 'Refunds across the whole marketplace, and the platform refund rate.'}
+        </p>
         <div className="d-flex align-items-end gap-2 flex-wrap">
+          {setCompany && <CompanyFilter value={company.id} onChange={(id, name) => setCompany({ id, name })} />}
           <ReportPeriodBar onChange={setRange} />
           <button className="btn btn-outline-primary" onClick={() => setPreview(true)} disabled={!has}>
             👁 Preview &amp; export
@@ -66,7 +70,7 @@ function AdminRefundReport() {
       {loading ? (
         <p className="text-muted">Loading…</p>
       ) : !data ? null : data.summary.refunds === 0 ? (
-        <div className="card card-body text-center text-muted">🎉 No refunds across the platform in this period.</div>
+        <div className="card card-body text-center text-muted">🎉 {company.id ? `No refunds for ${company.name} in this period.` : 'No refunds across the platform in this period.'}</div>
       ) : (
         <>
           <div className="row g-3 mb-4">

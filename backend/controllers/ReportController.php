@@ -28,6 +28,13 @@ function reportRange(): array {
   return [$from . ' 00:00:00', $to . ' 23:59:59'];
 }
 
+// Optional ?supplierId=... filter for the admin reports (scope a platform report
+// to one company). Returns the trimmed id, or null for "all companies".
+function reportSupplierId(): ?string {
+  $sid = trim($_GET['supplierId'] ?? '');
+  return $sid === '' ? null : $sid;
+}
+
 // The equal-length window immediately before [$fromDt, $toDt], used for the
 // "vs previous period" comparison.
 function previousRange(string $fromDt, string $toDt): array {
@@ -449,11 +456,28 @@ function handleAdminSupplierPerformanceReport(PDO $pdo): void {
 // delivery rate across all couriers. Scoped by order date.
 function handleAdminOrderReport(PDO $pdo): void {
   [$fromDt, $toDt] = reportRange();
+  $supplierId = reportSupplierId();   // null → all companies
 
-  $sql = "SELECT orderStatus, COUNT(*) AS n, COALESCE(SUM(orderTotalAmount),0) AS amt FROM `order`";
-  $params = [];
-  if ($fromDt !== null) { $sql .= ' WHERE orderDate BETWEEN :from AND :to'; $params['from'] = $fromDt; $params['to'] = $toDt; }
-  $sql .= ' GROUP BY orderStatus';
+  if ($supplierId !== null) {
+    // scope to orders that contain this supplier's products; the value shown is
+    // this supplier's merchandise subtotal (not the whole multi-supplier order).
+    $sql = "SELECT o.orderStatus,
+                   COUNT(DISTINCT o.orderId) AS n,
+                   COALESCE(SUM(oi.orderSubtotal), 0) AS amt
+              FROM `order` o
+              JOIN order_item oi ON oi.orderId = o.orderId
+              JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+              JOIN product p ON p.productId = pv.productId
+             WHERE p.supplierId = :sid";
+    $params = ['sid' => $supplierId];
+    if ($fromDt !== null) { $sql .= ' AND o.orderDate BETWEEN :from AND :to'; $params['from'] = $fromDt; $params['to'] = $toDt; }
+    $sql .= ' GROUP BY o.orderStatus';
+  } else {
+    $sql = "SELECT orderStatus, COUNT(*) AS n, COALESCE(SUM(orderTotalAmount),0) AS amt FROM `order`";
+    $params = [];
+    if ($fromDt !== null) { $sql .= ' WHERE orderDate BETWEEN :from AND :to'; $params['from'] = $fromDt; $params['to'] = $toDt; }
+    $sql .= ' GROUP BY orderStatus';
+  }
   $st = $pdo->prepare($sql); $st->execute($params);
 
   $byStatus = ['Placed'=>0,'Paid'=>0,'Processing'=>0,'Shipped'=>0,'OutForDelivery'=>0,'Delivered'=>0,'Completed'=>0,'Cancelled'=>0];
@@ -463,11 +487,13 @@ function handleAdminOrderReport(PDO $pdo): void {
     $totalOrders += (int) $r['n']; $totalValue += (float) $r['amt'];
   }
 
-  // platform on-time delivery across all parcels
+  // on-time delivery — platform-wide, or this supplier's own parcels
   $dSql = "SELECT d.deliveryStatus, d.deliveryDate, d.estimatedDeliveryTime
              FROM delivery d JOIN `order` o ON o.orderId = d.orderId";
-  $dParams = [];
-  if ($fromDt !== null) { $dSql .= ' WHERE o.orderDate BETWEEN :from AND :to'; $dParams['from'] = $fromDt; $dParams['to'] = $toDt; }
+  $dWhere = []; $dParams = [];
+  if ($supplierId !== null) { $dWhere[] = 'd.supplierId = :sid'; $dParams['sid'] = $supplierId; }
+  if ($fromDt !== null)     { $dWhere[] = 'o.orderDate BETWEEN :from AND :to'; $dParams['from'] = $fromDt; $dParams['to'] = $toDt; }
+  if ($dWhere) { $dSql .= ' WHERE ' . implode(' AND ', $dWhere); }
   $dst = $pdo->prepare($dSql); $dst->execute($dParams);
   $delivered = 0; $onTime = 0; $rated = 0;
   foreach ($dst->fetchAll() as $r) {
@@ -500,26 +526,59 @@ function handleAdminOrderReport(PDO $pdo): void {
 // and the platform refund rate (refunds ÷ paid orders). Scoped by request date.
 function handleAdminRefundReport(PDO $pdo): void {
   [$fromDt, $toDt] = reportRange();
-
-  $sql = "SELECT refundStatus, COUNT(*) AS n, COALESCE(SUM(refundAmount),0) AS amt FROM refund";
-  $params = [];
-  if ($fromDt !== null) { $sql .= ' WHERE requestDate BETWEEN :from AND :to'; $params['from'] = $fromDt; $params['to'] = $toDt; }
-  $sql .= ' GROUP BY refundStatus';
-  $st = $pdo->prepare($sql); $st->execute($params);
+  $supplierId = reportSupplierId();   // null → all companies
 
   $byStatus = ['Pending'=>0,'Approved'=>0,'Rejected'=>0,'Completed'=>0];
   $totalRefunds = 0; $totalRefunded = 0.0;
-  foreach ($st->fetchAll() as $r) {
-    if (isset($byStatus[$r['refundStatus']])) { $byStatus[$r['refundStatus']] = (int) $r['n']; }
-    $totalRefunds += (int) $r['n'];
-    if ($r['refundStatus'] === 'Approved' || $r['refundStatus'] === 'Completed') { $totalRefunded += (float) $r['amt']; }
+
+  if ($supplierId !== null) {
+    // refunds on orders that contain this supplier's products. A refund is
+    // order-level, so fetch DISTINCT refunds then aggregate (the order_item join
+    // would otherwise multiply the amount per matching line).
+    $sql = "SELECT DISTINCT r.refundId, r.refundAmount, r.refundStatus
+              FROM refund r
+              JOIN order_item oi ON oi.orderId = r.orderId
+              JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+              JOIN product p ON p.productId = pv.productId
+             WHERE p.supplierId = :sid";
+    $params = ['sid' => $supplierId];
+    if ($fromDt !== null) { $sql .= ' AND r.requestDate BETWEEN :from AND :to'; $params['from'] = $fromDt; $params['to'] = $toDt; }
+    $st = $pdo->prepare($sql); $st->execute($params);
+    foreach ($st->fetchAll() as $r) {
+      $s = $r['refundStatus'];
+      if (isset($byStatus[$s])) { $byStatus[$s]++; }
+      $totalRefunds++;
+      if ($s === 'Approved' || $s === 'Completed') { $totalRefunded += (float) $r['refundAmount']; }
+    }
+  } else {
+    $sql = "SELECT refundStatus, COUNT(*) AS n, COALESCE(SUM(refundAmount),0) AS amt FROM refund";
+    $params = [];
+    if ($fromDt !== null) { $sql .= ' WHERE requestDate BETWEEN :from AND :to'; $params['from'] = $fromDt; $params['to'] = $toDt; }
+    $sql .= ' GROUP BY refundStatus';
+    $st = $pdo->prepare($sql); $st->execute($params);
+    foreach ($st->fetchAll() as $r) {
+      if (isset($byStatus[$r['refundStatus']])) { $byStatus[$r['refundStatus']] = (int) $r['n']; }
+      $totalRefunds += (int) $r['n'];
+      if ($r['refundStatus'] === 'Approved' || $r['refundStatus'] === 'Completed') { $totalRefunded += (float) $r['amt']; }
+    }
   }
 
-  // platform paid orders (for the rate)
-  $paidSql = "SELECT COUNT(DISTINCT o.orderId) FROM `order` o
-                JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus = 'Successful'";
-  $paidParams = [];
-  if ($fromDt !== null) { $paidSql .= ' WHERE pay.paymentDate BETWEEN :from AND :to'; $paidParams['from'] = $fromDt; $paidParams['to'] = $toDt; }
+  // paid orders (for the refund rate) — platform-wide, or this supplier's
+  if ($supplierId !== null) {
+    $paidSql = "SELECT COUNT(DISTINCT o.orderId) FROM `order` o
+                  JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus = 'Successful'
+                  JOIN order_item oi ON oi.orderId = o.orderId
+                  JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+                  JOIN product p ON p.productId = pv.productId
+                 WHERE p.supplierId = :sid";
+    $paidParams = ['sid' => $supplierId];
+    if ($fromDt !== null) { $paidSql .= ' AND pay.paymentDate BETWEEN :from AND :to'; $paidParams['from'] = $fromDt; $paidParams['to'] = $toDt; }
+  } else {
+    $paidSql = "SELECT COUNT(DISTINCT o.orderId) FROM `order` o
+                  JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus = 'Successful'";
+    $paidParams = [];
+    if ($fromDt !== null) { $paidSql .= ' WHERE pay.paymentDate BETWEEN :from AND :to'; $paidParams['from'] = $fromDt; $paidParams['to'] = $toDt; }
+  }
   $pst = $pdo->prepare($paidSql); $pst->execute($paidParams);
   $paidOrders = (int) $pst->fetchColumn();
 
@@ -571,11 +630,29 @@ function handleAdminGrowthReport(PDO $pdo): void {
   ]);
 }
 
+// GET /admin/reports/companies — active suppliers (id + company name) to populate
+// the "Company" filter dropdown on the platform reports. Ordered A→Z.
+function handleAdminReportCompanies(PDO $pdo): void {
+  $rows = $pdo->query(
+    "SELECT s.supplierId, s.companyName
+       FROM supplier s JOIN `user` u ON u.userId = s.userId
+      WHERE u.status = 'Active'
+      ORDER BY s.companyName ASC"
+  )->fetchAll(PDO::FETCH_ASSOC);
+  sendJson(200, true, [
+    'companies' => array_map(fn($r) => [
+      'supplierId'  => $r['supplierId'],
+      'companyName' => $r['companyName'],
+    ], $rows),
+  ]);
+}
+
 // GET /admin/reports/commission — platform commission across all suppliers
 // (paid orders only), broken down per supplier.
 function handleAdminCommissionReport(PDO $pdo): void {
   $rate = activeCommissionRate($pdo);
   [$fromDt, $toDt] = reportRange();
+  $supplierId = reportSupplierId();   // null → all companies
 
   $sql =
     "SELECT s.supplierId, s.companyName,
@@ -587,8 +664,10 @@ function handleAdminCommissionReport(PDO $pdo): void {
        JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
        JOIN product p      ON p.productId = pv.productId
        JOIN supplier s     ON s.supplierId = p.supplierId";
-  $params = [];
-  if ($fromDt !== null) { $sql .= ' WHERE pay.paymentDate BETWEEN :from AND :to'; $params['from'] = $fromDt; $params['to'] = $toDt; }
+  $where = []; $params = [];
+  if ($supplierId !== null) { $where[] = 'p.supplierId = :sid'; $params['sid'] = $supplierId; }
+  if ($fromDt !== null)     { $where[] = 'pay.paymentDate BETWEEN :from AND :to'; $params['from'] = $fromDt; $params['to'] = $toDt; }
+  if ($where) { $sql .= ' WHERE ' . implode(' AND ', $where); }
   $sql .= ' GROUP BY s.supplierId, s.companyName ORDER BY gross DESC';
 
   $stmt = $pdo->prepare($sql);
@@ -619,6 +698,6 @@ function handleAdminCommissionReport(PDO $pdo): void {
       'suppliers'       => count($bySupplier),
     ],
     'bySupplier' => $bySupplier,
-    'period' => periodBlock($pdo, null, $fromDt, $toDt, $totalGross),
+    'period' => periodBlock($pdo, $supplierId, $fromDt, $toDt, $totalGross),
   ]);
 }

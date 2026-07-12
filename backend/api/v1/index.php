@@ -643,6 +643,13 @@ if ($method === 'GET' && $path === '/supplier/dashboard') {
   handleSupplierDashboard($pdo, $auth);
 }
 
+if ($method === 'GET' && $path === '/admin/reports/companies') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleAdminReportCompanies($pdo);
+}
+
 if ($method === 'GET' && $path === '/admin/reports/commission') {
   $auth = requireAuth($secret);
   requireAdmin($auth);

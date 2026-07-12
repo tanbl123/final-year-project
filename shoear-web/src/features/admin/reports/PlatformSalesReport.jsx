@@ -3,10 +3,11 @@ import { getCommissionReport } from '../adminService';
 import { useAuth } from '../../auth/AuthContext';
 import ReportPeriodBar from '../../../components/ReportPeriodBar';
 import ReportPreviewModal from '../../../components/ReportPreviewModal';
-import { ALL_TIME, rm, StatCard } from './reportUtils';
+import { ALL_TIME, rm, StatCard, CompanyFilter } from './reportUtils';
 
-// Platform GMV + commission revenue, broken down by supplier.
-function PlatformSalesReport() {
+// Platform GMV + commission revenue, broken down by supplier. `company` scopes it
+// to a single supplier ('' id = all companies).
+function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
   const { user } = useAuth();
   const [range, setRange] = useState(ALL_TIME);
   const [data, setData] = useState(null);
@@ -18,12 +19,12 @@ function PlatformSalesReport() {
     let active = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
-    getCommissionReport({ from: range.from, to: range.to })
+    getCommissionReport({ from: range.from, to: range.to, supplierId: company.id })
       .then((d) => { if (active) setData(d); })
       .catch((err) => { if (active) setError(err.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [range.from, range.to]);
+  }, [range.from, range.to, company.id]);
 
   const has = !!data && data.summary.suppliers > 0;
   const rate = data?.commissionRate ?? 0;
@@ -31,7 +32,7 @@ function PlatformSalesReport() {
 
   function buildReportOpts() {
     return {
-      title: 'Platform Sales (GMV) Report',
+      title: company.id ? `Platform Sales (GMV) — ${company.name}` : 'Platform Sales (GMV) Report',
       generatedBy: user?.fullName,
       period: range.label,
       referencePrefix: 'GMV',
@@ -51,8 +52,11 @@ function PlatformSalesReport() {
   return (
     <div>
       <div className="d-flex justify-content-between align-items-end flex-wrap gap-2 mb-3">
-        <p className="text-muted mb-0">Total marketplace sales (GMV) and the platform&apos;s commission revenue.</p>
+        <p className="text-muted mb-0">
+          {company.id ? `Sales (GMV) and commission for ${company.name}.` : "Total marketplace sales (GMV) and the platform's commission revenue."}
+        </p>
         <div className="d-flex align-items-end gap-2 flex-wrap">
+          {setCompany && <CompanyFilter value={company.id} onChange={(id, name) => setCompany({ id, name })} />}
           <ReportPeriodBar onChange={setRange} />
           <button className="btn btn-outline-primary" onClick={() => setPreview(true)} disabled={!has}>
             👁 Preview &amp; export
@@ -67,7 +71,7 @@ function PlatformSalesReport() {
       {loading ? (
         <p className="text-muted">Loading…</p>
       ) : !data ? null : data.summary.suppliers === 0 ? (
-        <div className="card card-body text-center text-muted">No sales across the platform yet.</div>
+        <div className="card card-body text-center text-muted">{company.id ? `No sales for ${company.name} in this period.` : 'No sales across the platform yet.'}</div>
       ) : (
         <>
           <div className="row g-3 mb-4">
