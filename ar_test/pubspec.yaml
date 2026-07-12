@@ -9,7 +9,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  deepar_shoe_try_on_flutter: any   # run `flutter pub get`; pin later with `flutter pub add`
+  # Maintained community fork of DeepAR's (abandoned) official Flutter plugin.
+  deepar_flutter_plus: ^0.2.1
+  # to download the .deepar effect from a URL, then hand its local path to DeepAR
+  flutter_cache_manager: ^3.3.1
+  # camera + mic permission at runtime
+  permission_handler: ^11.0.0
 
 flutter:
   uses-material-design: true
