@@ -1,33 +1,59 @@
-# ar_test — DeepAR feasibility spike (using `deepar_flutter_plus`)
+# ar_test — DeepAR shoe try-on spike (webview plugin)
 
-Confirms DeepAR **foot-tracking** shoe try-on works on your phone (**ALI NX1**)
-before we build anything real. Throwaway — delete this folder when done.
+Throwaway spike to confirm DeepAR **foot-tracking** shoe try-on works with **our
+own custom effect** on your phone (**ALI NX1**). Delete this folder when done.
 
-> The official `deepar_shoe_try_on_flutter` plugin is an **abandoned 2022 beta**
-> and won't build. We use the maintained community fork **`deepar_flutter_plus`**
-> instead (it runs the real native DeepAR SDK). This fork **requires a DeepAR
-> license key**, so unlike before there's no free demo shortcut — you must create
-> a (free) DeepAR account first.
+## Why the webview plugin (not the native fork)
 
-## The two unknowns this spike answers
-1. Does the fork build + initialize on your device? (likely yes)
-2. **Does it actually FOOT-track a shoe effect?** (the real question — the fork is
-   face-effects–oriented; foot tracking depends on the native SDK version it ships)
+We tried the native fork `deepar_flutter_plus` (+ a downloaded `deepar.aar`). It
+initialised, applied the effect and ran the camera, but **never tracked a shoe** —
+not the demo, not our custom effect. The free native DeepAR SDK doesn't include
+foot tracking.
+
+The **official webview plugin `deepar_shoe_try_on_flutter`** uses DeepAR's *web*
+engine, which **does** have foot tracking — it already tracked the demo shoe on
+the foot. So we're back on it, and the only remaining job is getting our **own**
+`.deepar` effect (hosted on Firebase) to load in it.
+
+- No DeepAR license key needed.
+- No `.aar` needed (the plugin bundles its own web engine).
+- Only needs the **camera** permission and **minSdk ≥ 19**.
 
 ---
 
-## Step A — DeepAR account + Android license key + native SDK (.aar)
-1. Create a **free DeepAR account** → developer portal.
-2. Create a **project / app** with package id **`com.example.ar_test`**
-   (that's this spike's applicationId).
-3. Copy the **Android license key**.
-4. **Download the DeepAR Android SDK (`.aar`)** from the portal. (DeepAR's native
-   SDK is NOT bundled in the plugin — you must add it manually.) Follow the
-   `deepar_flutter_plus` README for the exact placement — typically drop the
-   `.aar` into `ar_test/android/app/libs/` and it's picked up by Gradle. Without
-   this, the Android build fails.
+## Step CORS — let DeepAR's web player fetch our effect (do this first)
 
-## Step B — Pull the updated spike + generate platform folders
+Our custom effect on Firebase gave *"Oops couldn't find this effect"* because the
+plugin's web player fetches the `.deepar` file **cross-origin**, and the Firebase
+bucket sends **no CORS headers**, so the browser blocks it. Fix it once:
+
+Easiest — **Google Cloud Shell** (nothing to install):
+
+1. Open <https://console.cloud.google.com>, pick project **shoear-65edb**.
+2. Click the **Activate Cloud Shell** icon (`>_`, top-right).
+3. Upload `cors.json` (⋮ menu → Upload) **or** paste this to create it:
+   ```bash
+   cat > cors.json <<'EOF'
+   [{"origin":["*"],"method":["GET","HEAD"],"responseHeader":["Content-Type","Access-Control-Allow-Origin"],"maxAgeSeconds":3600}]
+   EOF
+   ```
+4. Apply it to the bucket:
+   ```bash
+   gsutil cors set cors.json gs://shoear-65edb.firebasestorage.app
+   ```
+5. Confirm:
+   ```bash
+   gsutil cors get gs://shoear-65edb.firebasestorage.app
+   ```
+   You should see the policy printed back.
+
+> If gsutil says the bucket doesn't exist, try `gs://shoear-65edb.appspot.com`
+> (older Firebase projects use that name). Run `gsutil ls` to list your buckets.
+
+---
+
+## Step B — pull + build the spike
+
 ```bash
 git checkout ar-deepar-spike
 git pull
@@ -36,40 +62,35 @@ flutter create .        # keeps our pubspec.yaml + lib/main.dart
 flutter pub get
 ```
 
-## Step C — Android setup (exact, from the deepar_flutter_plus docs)
-- Place the SDK at **`android/app/libs/deepar.aar`** (filename must be `deepar.aar`).
-  DeepAR **Android SDK must be 5.6.20+** — v5.6.22 is fine. No manual gradle
-  dependency line is needed; the plugin references it internally.
-- `android/app/build.gradle.kts` → inside `android { }`:
-  - `compileSdk = 35`   (35+ required)
-  - inside `defaultConfig { }`: `minSdk = 23`   (23+ required)
+## Step C — Android setup
+
+- `android/app/build.gradle(.kts)` → `minSdk = 19` or higher (23 is fine).
 - `android/app/src/main/AndroidManifest.xml` — add ABOVE `<application ...>`:
   ```xml
   <uses-permission android:name="android.permission.CAMERA" />
-  <uses-permission android:name="android.permission.RECORD_AUDIO" />
   <uses-permission android:name="android.permission.INTERNET" />
   ```
-- (Release APKs only — not needed for `flutter run` — add to `proguard-rules.pro`:
-  `-keep class ai.deepar.ar.** { *; }`)
+- The `deepar.aar` from the native attempt is no longer needed — you can leave it
+  or delete `android/app/libs/deepar.aar`; it's ignored by this plugin.
 
-## Step D — Run on your phone WITH your license key
+## Step D — run
+
 ```bash
-flutter run -d AWCX6R4329002626 --dart-define=DEEPAR_ANDROID_KEY=PASTE_YOUR_KEY
+flutter run -d AWCX6R4329002626
 ```
-Tap **Start AR Try-On**, grant camera/mic, point at your feet. The on-screen
-status line shows progress/errors.
+Grant camera, point at your foot. The app **starts on the CUSTOM effect**; use the
+bottom button to flip between **CUSTOM** and **DEMO** to compare.
 
 ---
 
 ## What to report back
-- ✅ **Shoe appears on your foot and tracks it** → 🎉 DeepAR-Flutter works; we
-  integrate it into the real app.
-- ⚠️ **Face-only / shoe doesn't stick to foot** → the fork's SDK version may not
-  support foot tracking; tell me and we decide (newer effect, or fall back).
-- ⚠️ **An error on the status line or in the terminal** → paste it; likely an API
-  name tweak (check the `deepar_flutter_plus` pub.dev example) or the effect URL
-  needs replacing with one you export from DeepAR Studio.
+- ✅ **Custom shoe tracks your foot** → 🎉 done — we wire this into the customer app.
+- ⚠️ **"Couldn't find this effect" on CUSTOM but DEMO tracks** → CORS not applied
+  yet (redo Step CORS) or the bucket name is different.
+- ⚠️ **Neither tracks / build error** → paste the exact error; likely a
+  `webview_flutter` version pin on this old plugin.
 
-## If the demo effect URL fails
-Build a shoe effect in **DeepAR Studio** (foot-tracking template → export
-`.deepar`), host it (Firebase), and change `kEffectUrl` in `lib/main.dart`.
+## If a build error appears (`does not provide an inline implementation`)
+This plugin is an old (2022) beta and pins old webview packages. If `flutter pub
+get` / build fails, paste the FULL error — the fix is a `dependency_overrides`
+block in pubspec pinning `webview_flutter*` to versions the plugin expects.

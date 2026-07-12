@@ -9,11 +9,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # Maintained community fork of DeepAR's (abandoned) official Flutter plugin.
-  deepar_flutter_plus: ^0.2.1
-  # to download the .deepar effect from a URL, then hand its local path to DeepAR
-  flutter_cache_manager: ^3.3.1
-  # camera + mic permission at runtime
+  # Official DeepAR webview shoe try-on plugin. This is the one that actually
+  # FOOT-TRACKED the demo shoe on the device (DeepAR's web engine has foot
+  # tracking; the native free .aar does not). It renders DeepAR's web player in a
+  # WebView and takes a `.deepar` effect URL.
+  deepar_shoe_try_on_flutter: ^1.0.2-beta
+  # camera permission at runtime
   permission_handler: ^11.0.0
 
 flutter:
