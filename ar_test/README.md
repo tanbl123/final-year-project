@@ -16,11 +16,16 @@ before we build anything real. Throwaway — delete this folder when done.
 
 ---
 
-## Step A — DeepAR account + Android license key
+## Step A — DeepAR account + Android license key + native SDK (.aar)
 1. Create a **free DeepAR account** → developer portal.
 2. Create a **project / app** with package id **`com.example.ar_test`**
    (that's this spike's applicationId).
 3. Copy the **Android license key**.
+4. **Download the DeepAR Android SDK (`.aar`)** from the portal. (DeepAR's native
+   SDK is NOT bundled in the plugin — you must add it manually.) Follow the
+   `deepar_flutter_plus` README for the exact placement — typically drop the
+   `.aar` into `ar_test/android/app/libs/` and it's picked up by Gradle. Without
+   this, the Android build fails.
 
 ## Step B — Pull the updated spike + generate platform folders
 ```bash
