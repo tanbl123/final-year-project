@@ -612,6 +612,30 @@ if ($method === 'GET' && $path === '/reports/sales') {
   handleSupplierSalesReport($pdo, $auth);
 }
 
+if ($method === 'GET' && $path === '/reports/products') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleSupplierProductReport($pdo, $auth);
+}
+
+if ($method === 'GET' && $path === '/reports/inventory') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleSupplierInventoryReport($pdo, $auth);
+}
+
+if ($method === 'GET' && $path === '/reports/orders') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleSupplierFulfilmentReport($pdo, $auth);
+}
+
+if ($method === 'GET' && $path === '/reports/refunds') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleSupplierRefundReport($pdo, $auth);
+}
+
 // supplier overview dashboard (KPIs + needs-action + recent orders + trend)
 if ($method === 'GET' && $path === '/supplier/dashboard') {
   $auth = requireAuth($secret);
