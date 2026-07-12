@@ -42,3 +42,7 @@ flutter_launcher_icons:
   ios: true
   remove_alpha_ios: true
   image_path: "assets/branding/app_icon.png"
+  # Android adaptive icon: black fills the whole circle/squircle, the sneaker
+  # (on its black tile) sits on top and blends seamlessly into that black.
+  adaptive_icon_background: "#000000"
+  adaptive_icon_foreground: "assets/branding/app_icon.png"
