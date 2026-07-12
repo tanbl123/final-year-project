@@ -2,6 +2,9 @@
 // Product endpoints for the Supplier portal. A supplier only ever sees /
 // touches their OWN products (ownership enforced in every query).
 
+// Max product images per listing (kept in sync with the ProductForm cap).
+const MAX_PRODUCT_IMAGES = 8;
+
 // GET /products  — list this supplier's products (newest first).
 // Returns the fields the portal needs to render cards AND filter the list:
 // category, status, a primary image, and total stock (summed across sizes).
@@ -101,6 +104,10 @@ function handleCreateProduct(PDO $pdo, array $auth, array $config = []): void {
   foreach ($images as $url) {
     $url = trim($url);
     if ($url !== '') { $cleanImages[] = $url; }
+  }
+  if (count($cleanImages) > MAX_PRODUCT_IMAGES) {
+    sendJson(400, false, null, ['code' => 'VALIDATION',
+      'message' => 'A product can have at most ' . MAX_PRODUCT_IMAGES . ' images.']);
   }
 
   try {
@@ -348,6 +355,10 @@ function handleUpdateProduct(PDO $pdo, array $auth, string $id): void {
   foreach ($images as $url) {
     $url = trim($url);
     if ($url !== '') { $cleanImages[] = $url; }
+  }
+  if (count($cleanImages) > MAX_PRODUCT_IMAGES) {
+    sendJson(400, false, null, ['code' => 'VALIDATION',
+      'message' => 'A product can have at most ' . MAX_PRODUCT_IMAGES . ' images.']);
   }
 
   // Current images + model, so we can tell whether *content* really changed.

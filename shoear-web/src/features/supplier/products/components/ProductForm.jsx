@@ -6,6 +6,9 @@ import ClearableInput from '../../../../components/ClearableInput';
 // A blank size row. Suppliers add one row per size they sell.
 const emptyVariant = () => ({ size: '', stock: '' });
 
+// Max product images per listing (kept in sync with the backend cap).
+const MAX_IMAGES = 8;
+
 // Letters, numbers, spaces and a little punctuation — blocks junk like "??".
 const NAME_RE = /^[\p{L}\p{N} .,&'/+-]+$/u;
 
@@ -180,9 +183,20 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
     if (files.length === 0) return;
 
     setError('');
+    // enforce the image cap: only upload as many as still fit under MAX_IMAGES
+    const room = MAX_IMAGES - images.length;
+    if (room <= 0) {
+      setError(`You can upload up to ${MAX_IMAGES} images.`);
+      return;
+    }
+    const toUpload = files.slice(0, room);
+    if (files.length > room) {
+      setError(`Only ${room} more image${room === 1 ? '' : 's'} allowed (max ${MAX_IMAGES}). Extra files were skipped.`);
+    }
+
     setUploading(true);
     try {
-      for (const file of files) {
+      for (const file of toUpload) {
         const { url } = await uploadFile(file, 'image');
         setImages((prev) => [...prev, { url }]);
       }
@@ -415,11 +429,16 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
 
       {/* images */}
       <label className="form-label fw-semibold">Product images</label>
-      <p className="text-muted small">JPG, PNG or WebP, up to 5&nbsp;MB each.</p>
+      <p className="text-muted small">
+        JPG, PNG or WebP, up to 5&nbsp;MB each. Up to {MAX_IMAGES} images ({images.length}/{MAX_IMAGES} added).
+      </p>
       <input type="file" multiple accept="image/png,image/jpeg,image/webp"
         className={'form-control' + (imagesError ? ' is-invalid' : '')}
-        onChange={handleImageFiles} disabled={uploading} />
+        onChange={handleImageFiles} disabled={uploading || images.length >= MAX_IMAGES} />
       {imagesError && <div className="invalid-feedback">{imagesError}</div>}
+      {images.length >= MAX_IMAGES && (
+        <div className="form-text text-warning">Maximum of {MAX_IMAGES} images reached.</div>
+      )}
       {images.length > 0 && (
         <div className="d-flex flex-wrap gap-2 mt-3">
           {images.map((img) => (
