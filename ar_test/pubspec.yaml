@@ -9,11 +9,13 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # Official DeepAR webview shoe try-on plugin. This is the one that actually
-  # FOOT-TRACKED the demo shoe on the device (DeepAR's web engine has foot
-  # tracking; the native free .aar does not). It renders DeepAR's web player in a
-  # WebView and takes a `.deepar` effect URL.
-  deepar_shoe_try_on_flutter: ^1.0.2-beta
+  # We drive DeepAR's web shoe-player ourselves (same URL the official plugin
+  # uses: https://try.deepar.ai/flutter/shoe?e=<effectUrl>), so we can display the
+  # web engine's console + errors ON SCREEN to diagnose why the custom effect
+  # hangs at "Loading AR". Uses the current webview_flutter (avoids the old
+  # plugin's pinned-dependency build error).
+  webview_flutter: ^4.7.0
+  webview_flutter_android: ^3.16.0
   # camera permission at runtime
   permission_handler: ^11.0.0
 

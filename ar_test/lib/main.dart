@@ -1,33 +1,26 @@
-// Throwaway spike: prove DeepAR FOOT-TRACKING shoe try-on works on a real device
-// using the official webview plugin `deepar_shoe_try_on_flutter`. This is the one
-// that already tracked DeepAR's demo shoe on the foot — DeepAR's web engine does
-// the camera, foot tracking and shoe rendering. We just host its view and pass a
-// `.deepar` effect URL. Delete this whole folder afterwards.
+// Throwaway spike: diagnose why our CUSTOM DeepAR shoe effect hangs at "Loading
+// AR" on DeepAR's web engine while the demo effect works.
 //
-// Goal of this run: get OUR OWN custom effect (kCustomEffectUrl) to load + track,
-// not just the demo. If the custom URL says "couldn't find this effect", the
-// Firebase bucket still needs its CORS policy set (see README, Step CORS).
+// We reproduce EXACTLY what the official `deepar_shoe_try_on_flutter` plugin does
+// — load `https://try.deepar.ai/flutter/shoe?e=<effectUrl>` in a WebView with
+// camera permission — BUT we also capture the web player's console messages and
+// errors and show them LIVE ON SCREEN, so we can see the real failure without adb.
 //
-// No license key and no native .aar needed for this plugin — just camera
-// permission and minSdk >= 19.
+// Toggle between the DEMO effect (known-good) and our CUSTOM effect to compare.
 
 import 'package:flutter/material.dart';
-import 'package:deepar_shoe_try_on_flutter/deepar_shoe_try_on_flutter.dart';
+import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-// DeepAR's own demo effect — pre-licensed, known to track. Sanity check.
+// DeepAR's web shoe-player base (same as the plugin's kBaseUrl).
+const String kBaseUrl = 'https://try.deepar.ai/flutter/shoe';
+
+// Known-good demo effect (no query string).
 const String kDemoEffectUrl =
     'https://demo.deepar.ai/flutter/shoe/nike-airforce1.deepar';
 
-// OUR custom shoe effect (verified valid DeepAR "DA01" binary).
-//
-// IMPORTANT: the plugin loads `https://try.deepar.ai/flutter/shoe?e=<thisUrl>`
-// WITHOUT url-encoding it. A Firebase download URL carries its own
-// `?alt=media&token=` query string, which collides with the `?e=` param and
-// strips the token → 403 → "couldn't find this effect". So we MUST use a CLEAN
-// url with no `?`/`&`. The direct GCS object url is clean; make the object public
-// once (see README):
-//   gsutil acl ch -u AllUsers:R gs://shoear-65edb.firebasestorage.app/model.deepar
+// Our custom effect — clean public GCS url (no query string to break `?e=`).
 const String kCustomEffectUrl =
     'https://storage.googleapis.com/shoear-65edb.firebasestorage.app/model.deepar';
 
@@ -40,79 +33,128 @@ class SpikeScreen extends StatefulWidget {
 }
 
 class _SpikeScreenState extends State<SpikeScreen> {
-  bool _granted = false;
-  // Start on the CUSTOM effect (the real test). Tap the button to compare
-  // against the known-good DEMO effect if the custom one doesn't load.
-  String _effectUrl = kCustomEffectUrl;
+  WebViewController? _controller;
+  final List<String> _log = [];
   bool _showingCustom = true;
+  int _progress = 0;
 
   @override
   void initState() {
     super.initState();
-    _requestCamera();
+    _load(kCustomEffectUrl);
   }
 
-  Future<void> _requestCamera() async {
-    await Permission.camera.request();
-    if (mounted) setState(() => _granted = true);
-  }
-
-  void _toggleEffect() {
+  void _add(String line) {
+    // keep the last 60 lines
     setState(() {
-      _showingCustom = !_showingCustom;
-      _effectUrl = _showingCustom ? kCustomEffectUrl : kDemoEffectUrl;
+      _log.add(line);
+      if (_log.length > 60) _log.removeAt(0);
     });
+  }
+
+  Future<void> _load(String effectUrl) async {
+    await Permission.camera.request();
+    final url = '$kBaseUrl?e=$effectUrl';
+
+    final params = AndroidWebViewControllerCreationParams();
+    final controller = WebViewController.fromPlatformCreationParams(
+      params,
+      onPermissionRequest: (request) async {
+        _add('↳ permission requested: ${request.types.map((t) => t.name).join(",")}');
+        await request.grant();
+      },
+    );
+
+    controller
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0xFF000000))
+      ..setOnConsoleMessage((m) => _add('console[${m.level.name}]: ${m.message}'))
+      ..setNavigationDelegate(NavigationDelegate(
+        onProgress: (p) => setState(() => _progress = p),
+        onPageStarted: (u) => _add('▶ page started'),
+        onPageFinished: (u) => _add('■ page finished'),
+        onWebResourceError: (e) => _add(
+            '✖ RESOURCE ERROR: ${e.errorCode} ${e.description} (${e.url ?? ""})'),
+        onHttpError: (e) =>
+            _add('✖ HTTP ERROR: ${e.response?.statusCode} ${e.request?.uri}'),
+      ));
+
+    if (controller.platform is AndroidWebViewController) {
+      (controller.platform as AndroidWebViewController)
+          .setMediaPlaybackRequiresUserGesture(false);
+    }
+
+    _add('LOADING: $url');
+    await controller.loadRequest(Uri.parse(url));
+    setState(() => _controller = controller);
+  }
+
+  void _toggle() {
+    _showingCustom = !_showingCustom;
+    _log.clear();
+    _load(_showingCustom ? kCustomEffectUrl : kDemoEffectUrl);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      body: Stack(
-        children: [
-          if (_granted)
-            Positioned.fill(
-              // key forces the webview to rebuild when the effect URL changes
-              child: DeepARShoeTryOnPreview(
-                key: ValueKey(_effectUrl),
-                link: Uri.parse(_effectUrl),
-              ),
-            )
-          else
-            const Center(
-              child: Text('Grant camera permission to start',
-                  style: TextStyle(color: Colors.white)),
-            ),
-
-          // top bar: which effect is loaded
-          SafeArea(
-            child: Padding(
+      body: SafeArea(
+        child: Column(
+          children: [
+            // header
+            Container(
+              width: double.infinity,
+              color: Colors.black,
               padding: const EdgeInsets.all(8),
+              child: Text(
+                '${_showingCustom ? "CUSTOM" : "DEMO"} effect   ·   progress $_progress%',
+                style: const TextStyle(color: Colors.white, fontSize: 12),
+              ),
+            ),
+            // webview (top half)
+            Expanded(
+              flex: 3,
+              child: _controller == null
+                  ? const Center(
+                      child: Text('starting…',
+                          style: TextStyle(color: Colors.white)))
+                  : WebViewWidget(controller: _controller!),
+            ),
+            // console log (bottom half) — this is the diagnostic
+            Expanded(
+              flex: 2,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                color: Colors.black54,
-                child: Text(
-                  _showingCustom ? 'CUSTOM effect (Firebase)' : 'DEMO effect',
-                  style: const TextStyle(color: Colors.white),
+                width: double.infinity,
+                color: const Color(0xFF101418),
+                padding: const EdgeInsets.all(6),
+                child: ListView(
+                  reverse: false,
+                  children: _log
+                      .map((l) => Text(l,
+                          style: TextStyle(
+                            color: l.contains('✖') || l.toLowerCase().contains('error')
+                                ? Colors.redAccent
+                                : Colors.greenAccent,
+                            fontSize: 10,
+                            fontFamily: 'monospace',
+                          )))
+                      .toList(),
                 ),
               ),
             ),
-          ),
-
-          // bottom: switch between custom + demo to isolate any problem
-          Align(
-            alignment: Alignment.bottomCenter,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
+            // toggle
+            SizedBox(
+              width: double.infinity,
               child: ElevatedButton(
-                onPressed: _toggleEffect,
+                onPressed: _toggle,
                 child: Text(_showingCustom
                     ? 'Switch to DEMO effect'
                     : 'Switch to CUSTOM effect'),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
