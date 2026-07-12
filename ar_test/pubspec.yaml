@@ -1,0 +1,15 @@
+name: ar_test
+description: "Throwaway spike: verify DeepAR foot-tracking shoe try-on on a real device."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  deepar_shoe_try_on_flutter: any   # run `flutter pub get`; pin later with `flutter pub add`
+
+flutter:
+  uses-material-design: true
