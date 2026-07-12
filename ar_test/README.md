@@ -36,15 +36,21 @@ flutter create .        # keeps our pubspec.yaml + lib/main.dart
 flutter pub get
 ```
 
-## Step C — Android setup
+## Step C — Android setup (exact, from the deepar_flutter_plus docs)
+- Place the SDK at **`android/app/libs/deepar.aar`** (filename must be `deepar.aar`).
+  DeepAR **Android SDK must be 5.6.20+** — v5.6.22 is fine. No manual gradle
+  dependency line is needed; the plugin references it internally.
+- `android/app/build.gradle.kts` → inside `android { }`:
+  - `compileSdk = 35`   (35+ required)
+  - inside `defaultConfig { }`: `minSdk = 23`   (23+ required)
 - `android/app/src/main/AndroidManifest.xml` — add ABOVE `<application ...>`:
   ```xml
   <uses-permission android:name="android.permission.CAMERA" />
   <uses-permission android:name="android.permission.RECORD_AUDIO" />
   <uses-permission android:name="android.permission.INTERNET" />
   ```
-- `android/app/build.gradle` (or `build.gradle.kts`): set **`minSdkVersion 23`**
-  (the fork needs Android SDK 23+).
+- (Release APKs only — not needed for `flutter run` — add to `proguard-rules.pro`:
+  `-keep class ai.deepar.ar.** { *; }`)
 
 ## Step D — Run on your phone WITH your license key
 ```bash
