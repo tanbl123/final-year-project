@@ -52,12 +52,15 @@ function ProductCard(props) {
           </div>
         )}
 
-        {/* actions pinned to the bottom so every card lines up */}
+        {/* actions pinned to the bottom so every card lines up. `backTo` (the
+            list URL incl. its ?page=) rides along so View/Edit can return the
+            supplier to the exact page they left from. */}
         <div className="mt-auto d-flex gap-2">
-          <Link to={'/products/' + props.id} className="btn btn-outline-primary btn-sm flex-fill">
+          <Link to={'/products/' + props.id} state={{ from: props.backTo || '/products' }}
+            className="btn btn-outline-primary btn-sm flex-fill">
             View
           </Link>
-          <Link to={'/products/' + props.id + '/edit'} state={{ from: '/products' }}
+          <Link to={'/products/' + props.id + '/edit'} state={{ from: props.backTo || '/products' }}
             className="btn btn-outline-secondary btn-sm flex-fill">
             Edit
           </Link>

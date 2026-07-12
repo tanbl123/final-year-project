@@ -1,11 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import ProductCard from './components/ProductCard';
 import ProductFilterBar from './components/ProductFilterBar';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Toast from '../../../components/Toast';
 import Pagination from '../../../components/Pagination';
-import { usePagination } from '../../../hooks/usePagination';
 import { fetchProducts, deleteProduct } from './productService';
 import { usePayoutBlocked } from '../usePayoutBlocked';
 
@@ -31,7 +30,9 @@ function ProductsPage() {
     if (location.state?.toast) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setToast(location.state.toast);
-      navigate(location.pathname, { replace: true });   // clear it so it won't reappear
+      // clear the toast state but KEEP the query (?page=) so an edit-save
+      // redirect doesn't bounce the supplier back to page 1
+      navigate(location.pathname + location.search, { replace: true });
     }
   }, [location, navigate]);
 
@@ -94,11 +95,39 @@ function ProductsPage() {
     });
   }, [products, filters]);
 
-  const { page, setPage, totalPages, pageItems } = usePagination(visible, PAGE_SIZE);
-  // jump back to page 1 whenever the filters change
+  // Pagination lives in the URL (?page=N) so it survives leaving for a product's
+  // detail page and coming back — the supplier returns to the page they were on
+  // instead of being bounced to page 1.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const page = Math.min(Math.max(1, Number(searchParams.get('page')) || 1), totalPages);
+  const pageItems = useMemo(
+    () => visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [visible, page]);
+
+  // update the ?page= param. `replace` avoids stacking a history entry per click
+  // (and per filter-reset), so the browser Back button jumps straight to the
+  // detail page's referrer rather than cycling through page numbers.
+  function setPage(p, replace = true) {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (p <= 1) next.delete('page'); else next.set('page', String(p));
+      return next;
+    }, { replace });
+  }
+
+  // jump back to page 1 whenever the filters change — but NOT on first mount,
+  // so a restored ?page= (returning from a detail page) isn't wiped out.
+  const firstRun = useRef(true);
   useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
     setPage(1);
-  }, [filters, setPage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters]);
+
+  // the current list URL (with page/query) — handed to each card so its
+  // View/Edit links can bring the supplier back to exactly this spot.
+  const listUrl = `/products${searchParams.toString() ? `?${searchParams}` : ''}`;
 
   return (
     <div className="container py-4 text-start">
@@ -189,6 +218,7 @@ function ProductsPage() {
                       status={shoe.status}
                       imageUrl={shoe.imageUrl}
                       totalStock={shoe.totalStock}
+                      backTo={listUrl}
                       onDelete={askDelete}
                     />
                   </div>

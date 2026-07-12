@@ -66,6 +66,9 @@ function ProductDetailPage() {
   // an edit redirect lands here with a toast message to show
   const location = useLocation();
   const navigate = useNavigate();
+  // where "Back" returns to — the referring list URL (incl. its ?page=) if we
+  // were opened from the products list, else the plain list.
+  const backTo = location.state?.from || '/products';
   useEffect(() => {
     if (location.state?.toast) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -97,7 +100,7 @@ function ProductDetailPage() {
   if (error) {
     return (
       <div className="container py-4 text-start">
-        <BackButton to="/products" />
+        <BackButton to={backTo} />
         <div className="alert alert-danger mt-3">{error}</div>
       </div>
     );
@@ -111,7 +114,7 @@ function ProductDetailPage() {
 
   return (
     <div className="container py-4 text-start">
-      <BackButton to="/products" />
+      <BackButton to={backTo} />
 
       {/* ── header: title + status on the left, primary action on the right ── */}
       <div className="d-flex flex-wrap justify-content-between align-items-start gap-3 mt-2 mb-4">
