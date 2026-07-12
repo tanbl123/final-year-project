@@ -12,6 +12,10 @@ import StoreNameCard from './StoreNameCard';
 const EMPTY_PW = { currentPassword: '', newPassword: '', confirmPassword: '' };
 const EMPTY_BANK = { bankName: '', bankAccountName: '', bankAccountNumber: '' };
 
+// Malaysian phone format the backend enforces (0xxxxxxxxx or +60xxxxxxxxx).
+const MY_PHONE = /^(0\d{8,10}|\+?60\d{8,10})$/;
+const PHONE_ERROR = 'Enter a valid Malaysian phone number, e.g. 0123456789.';
+
 // Show only the last 4 digits of an account number, e.g. ••••5678.
 function maskAccount(no) {
   if (!no) return '';
@@ -84,10 +88,10 @@ function ProfilePage() {
       const n = { ...fe };
       if (name === 'fullName') {
         if (!value.trim()) n.fullName = 'Full name is required.'; else delete n.fullName;
-      } else if (name === 'phoneNumber') {
-        if (!value.trim()) n.phoneNumber = 'Phone number is required.'; else delete n.phoneNumber;
       } else {
-        delete n[name];   // e.g. clear a server-side username error as they retype
+        // phone format + username format are checked live via derived values
+        // below; here we just clear any prior/server error as they retype.
+        delete n[name];
       }
       return n;
     });
@@ -105,12 +109,18 @@ function ProfilePage() {
     && !/^[A-Za-z0-9_]{3,20}$/.test(form.username.trim())
     ? 'Username must be 3–20 letters, numbers or underscores.' : null;
 
+  // live phone format check (matches the backend's Malaysian-number rule)
+  const phoneError = editing && form.phoneNumber.trim() !== ''
+    && !MY_PHONE.test(form.phoneNumber.trim())
+    ? PHONE_ERROR : null;
+
   async function save(e) {
     e.preventDefault();
     // validate inline, under each field (consistent with the register form)
     const fe = {};
     if (!form.fullName.trim()) fe.fullName = 'Full name is required.';
     if (!form.phoneNumber.trim()) fe.phoneNumber = 'Phone number is required.';
+    else if (phoneError) fe.phoneNumber = phoneError;      // invalid format
     if (!form.username.trim()) fe.username = 'Username is required.';
     else if (usernameError) fe.username = usernameError;   // invalid format
     if (Object.keys(fe).length) { setFieldErrors(fe); return; }
@@ -294,7 +304,7 @@ function ProfilePage() {
           </div>
 
           {editing ? (
-            <form onSubmit={save}>
+            <form onSubmit={save} noValidate>
               {/* Suppliers have no personal "Full name": their customer-facing name
                   is the Store name (below), and their legal name is in Business
                   details. Everyone else edits their full name here. */}
@@ -322,15 +332,17 @@ function ProfilePage() {
               </div>
               <div className="mb-3">
                 <label className="form-label">Phone number</label>
-                <ClearableInput type="text" maxLength="30" required
-                  className={fieldErrors.phoneNumber ? 'is-invalid' : ''}
+                <ClearableInput type="text" inputMode="tel" maxLength="30" required
+                  className={(phoneError || fieldErrors.phoneNumber) ? 'is-invalid' : ''}
                   value={form.phoneNumber}
                   onChange={(e) => setField('phoneNumber', e.target.value)}
                   onClear={() => setField('phoneNumber', '')} />
-                {fieldErrors.phoneNumber && <div className="invalid-feedback d-block">{fieldErrors.phoneNumber}</div>}
+                {(phoneError || fieldErrors.phoneNumber)
+                  ? <div className="invalid-feedback d-block">{phoneError || fieldErrors.phoneNumber}</div>
+                  : <div className="form-text">Malaysian number, e.g. 0123456789.</div>}
               </div>
               <div className="d-flex gap-2">
-                <button type="submit" className="btn btn-primary" disabled={saving || !dirty || !!usernameError}>
+                <button type="submit" className="btn btn-primary" disabled={saving || !dirty || !!usernameError || !!phoneError}>
                   {saving ? 'Saving…' : 'Save changes'}
                 </button>
                 <button type="button" className="btn btn-outline-secondary"
@@ -403,7 +415,7 @@ function ProfilePage() {
             </div>
 
             {bankEditing ? (
-              <form className="mt-3" onSubmit={saveBank}>
+              <form className="mt-3" onSubmit={saveBank} noValidate>
                 <div className="mb-3">
                   <label className="form-label">Bank name</label>
                   <ClearableInput type="text" maxLength="100" required autoFocus
@@ -472,7 +484,7 @@ function ProfilePage() {
           </div>
 
           {pwOpen && (
-            <form className="mt-3" onSubmit={savePassword}>
+            <form className="mt-3" onSubmit={savePassword} noValidate>
               <div className="mb-3">
                 <label className="form-label">Current password</label>
                 <div className="input-group has-validation">
