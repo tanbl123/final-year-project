@@ -650,6 +650,34 @@ if ($method === 'GET' && $path === '/admin/reports/commission') {
   handleAdminCommissionReport($pdo);
 }
 
+if ($method === 'GET' && $path === '/admin/reports/suppliers') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleAdminSupplierPerformanceReport($pdo);
+}
+
+if ($method === 'GET' && $path === '/admin/reports/orders') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleAdminOrderReport($pdo);
+}
+
+if ($method === 'GET' && $path === '/admin/reports/refunds') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleAdminRefundReport($pdo);
+}
+
+if ($method === 'GET' && $path === '/admin/reports/growth') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleAdminGrowthReport($pdo);
+}
+
 // ── admin commission rate configuration ──
 if ($path === '/admin/commission') {
   $auth = requireAuth($secret);

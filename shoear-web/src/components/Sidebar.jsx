@@ -30,6 +30,7 @@ const ADMIN_NAV = [
     { to: '/admin/refunds', label: 'Refunds', icon: '💸', badge: 'refunds' },
   ] },
   { group: 'Finance', items: [
+    { to: '/admin/reports', label: 'Reports', icon: '📈' },
     { to: '/admin/commission', label: 'Commission', icon: '💰' },
     { to: '/admin/courier-payouts', label: 'Courier Pay', icon: '💸', badge: 'courierPayouts' },
   ] },

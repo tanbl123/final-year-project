@@ -206,11 +206,34 @@ export function resolveDeliveryIssue(issueId) {
 // ── reports ──────────────────────────────────────────────────────────
 // Platform commission across all suppliers (paid orders only).
 // Optional { from, to } (YYYY-MM-DD) scopes it to a reporting period.
-export function getCommissionReport({ from, to } = {}) {
+function reportQs({ from, to } = {}) {
   const qs = new URLSearchParams();
   if (from && to) { qs.set('from', from); qs.set('to', to); }
-  const suffix = qs.toString() ? `?${qs}` : '';
-  return apiGet(`/admin/reports/commission${suffix}`, getToken());
+  return qs.toString() ? `?${qs}` : '';
+}
+
+export function getCommissionReport(range = {}) {
+  return apiGet(`/admin/reports/commission${reportQs(range)}`, getToken());
+}
+
+// Supplier performance leaderboard (gross, units, products, avg rating).
+export function getAdminSupplierReport(range = {}) {
+  return apiGet(`/admin/reports/suppliers${reportQs(range)}`, getToken());
+}
+
+// Platform-wide orders by status + on-time delivery rate.
+export function getAdminOrderReport(range = {}) {
+  return apiGet(`/admin/reports/orders${reportQs(range)}`, getToken());
+}
+
+// Platform-wide refunds by status + refund rate.
+export function getAdminRefundReport(range = {}) {
+  return apiGet(`/admin/reports/refunds${reportQs(range)}`, getToken());
+}
+
+// New sign-ups by role over a period.
+export function getAdminGrowthReport(range = {}) {
+  return apiGet(`/admin/reports/growth${reportQs(range)}`, getToken());
 }
 
 // ── order oversight ──────────────────────────────────────────────────

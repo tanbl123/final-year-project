@@ -374,6 +374,203 @@ function handleSupplierRefundReport(PDO $pdo, array $auth): void {
   ]);
 }
 
+// GET /admin/reports/suppliers — supplier performance leaderboard: every active
+// supplier with gross sales + units (paid, over the period), active approved
+// product count, and average product rating. Ranked by gross sales.
+function handleAdminSupplierPerformanceReport(PDO $pdo): void {
+  [$fromDt, $toDt] = reportRange();
+
+  // base: all active suppliers
+  $suppliers = $pdo->query(
+    "SELECT s.supplierId, s.companyName
+       FROM supplier s JOIN `user` u ON u.userId = s.userId
+      WHERE u.status = 'Active'"
+  )->fetchAll(PDO::FETCH_ASSOC);
+
+  // sales (paid) per supplier over the period
+  $salesSql =
+    "SELECT p.supplierId AS sid, SUM(oi.orderQuantity) AS units, SUM(oi.orderSubtotal) AS gross
+       FROM order_item oi
+       JOIN `order` o   ON o.orderId = oi.orderId
+       JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus = 'Successful'
+       JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+       JOIN product p   ON p.productId = pv.productId";
+  $params = [];
+  if ($fromDt !== null) { $salesSql .= ' WHERE pay.paymentDate BETWEEN :from AND :to'; $params['from'] = $fromDt; $params['to'] = $toDt; }
+  $salesSql .= ' GROUP BY p.supplierId';
+  $st = $pdo->prepare($salesSql); $st->execute($params);
+  $sales = [];
+  foreach ($st->fetchAll() as $r) { $sales[$r['sid']] = ['units' => (int) $r['units'], 'gross' => (float) $r['gross']]; }
+
+  // active product count per supplier
+  $prod = [];
+  foreach ($pdo->query("SELECT supplierId, COUNT(*) AS c FROM product WHERE productStatus = 'Approved' GROUP BY supplierId")->fetchAll() as $r) {
+    $prod[$r['supplierId']] = (int) $r['c'];
+  }
+  // average rating per supplier (published reviews on their products)
+  $rate = [];
+  foreach ($pdo->query(
+    "SELECT p.supplierId AS sid, AVG(r.ratingScore) AS avg, COUNT(*) AS n
+       FROM review r JOIN product p ON p.productId = r.productId
+      WHERE r.reviewStatus = 'Published'
+      GROUP BY p.supplierId")->fetchAll() as $r) {
+    $rate[$r['sid']] = ['avg' => round((float) $r['avg'], 2), 'n' => (int) $r['n']];
+  }
+
+  $bySupplier = []; $totalGross = 0.0; $totalUnits = 0;
+  foreach ($suppliers as $s) {
+    $sid = $s['supplierId'];
+    $g = $sales[$sid]['gross'] ?? 0.0; $u = $sales[$sid]['units'] ?? 0;
+    $totalGross += $g; $totalUnits += $u;
+    $bySupplier[] = [
+      'supplierId'  => $sid,
+      'companyName' => $s['companyName'],
+      'units'       => $u,
+      'gross'       => round($g, 2),
+      'products'    => $prod[$sid] ?? 0,
+      'avgRating'   => $rate[$sid]['avg'] ?? null,
+      'reviews'     => $rate[$sid]['n'] ?? 0,
+    ];
+  }
+  usort($bySupplier, fn($a, $b) => $b['gross'] <=> $a['gross']);
+
+  sendJson(200, true, [
+    'summary' => [
+      'suppliers'  => count($bySupplier),
+      'grossSales' => round($totalGross, 2),
+      'unitsSold'  => $totalUnits,
+    ],
+    'bySupplier' => $bySupplier,
+    'period' => periodBlock($pdo, null, $fromDt, $toDt, $totalGross),
+  ]);
+}
+
+// GET /admin/reports/orders — platform-wide orders by status + overall on-time
+// delivery rate across all couriers. Scoped by order date.
+function handleAdminOrderReport(PDO $pdo): void {
+  [$fromDt, $toDt] = reportRange();
+
+  $sql = "SELECT orderStatus, COUNT(*) AS n, COALESCE(SUM(orderTotalAmount),0) AS amt FROM `order`";
+  $params = [];
+  if ($fromDt !== null) { $sql .= ' WHERE orderDate BETWEEN :from AND :to'; $params['from'] = $fromDt; $params['to'] = $toDt; }
+  $sql .= ' GROUP BY orderStatus';
+  $st = $pdo->prepare($sql); $st->execute($params);
+
+  $byStatus = ['Placed'=>0,'Paid'=>0,'Processing'=>0,'Shipped'=>0,'OutForDelivery'=>0,'Delivered'=>0,'Completed'=>0,'Cancelled'=>0];
+  $totalOrders = 0; $totalValue = 0.0;
+  foreach ($st->fetchAll() as $r) {
+    if (isset($byStatus[$r['orderStatus']])) { $byStatus[$r['orderStatus']] = (int) $r['n']; }
+    $totalOrders += (int) $r['n']; $totalValue += (float) $r['amt'];
+  }
+
+  // platform on-time delivery across all parcels
+  $dSql = "SELECT d.deliveryStatus, d.deliveryDate, d.estimatedDeliveryTime
+             FROM delivery d JOIN `order` o ON o.orderId = d.orderId";
+  $dParams = [];
+  if ($fromDt !== null) { $dSql .= ' WHERE o.orderDate BETWEEN :from AND :to'; $dParams['from'] = $fromDt; $dParams['to'] = $toDt; }
+  $dst = $pdo->prepare($dSql); $dst->execute($dParams);
+  $delivered = 0; $onTime = 0; $rated = 0;
+  foreach ($dst->fetchAll() as $r) {
+    if ($r['deliveryStatus'] === 'Delivered') {
+      $delivered++;
+      if (!empty($r['deliveryDate']) && !empty($r['estimatedDeliveryTime'])) {
+        $rated++;
+        if (strtotime($r['deliveryDate']) <= strtotime($r['estimatedDeliveryTime'])) { $onTime++; }
+      }
+    }
+  }
+
+  sendJson(200, true, [
+    'summary' => [
+      'totalOrders' => $totalOrders,
+      'totalValue'  => round($totalValue, 2),
+      'cancelled'   => $byStatus['Cancelled'],
+      'delivered'   => $delivered,
+      'onTimeRate'  => $rated > 0 ? round($onTime / $rated * 100, 1) : null,
+    ],
+    'byStatus' => $byStatus,
+    'period' => [
+      'from' => $fromDt !== null ? substr($fromDt, 0, 10) : null,
+      'to'   => $toDt   !== null ? substr($toDt, 0, 10)   : null,
+    ],
+  ]);
+}
+
+// GET /admin/reports/refunds — platform-wide refunds: counts + amount by status,
+// and the platform refund rate (refunds ÷ paid orders). Scoped by request date.
+function handleAdminRefundReport(PDO $pdo): void {
+  [$fromDt, $toDt] = reportRange();
+
+  $sql = "SELECT refundStatus, COUNT(*) AS n, COALESCE(SUM(refundAmount),0) AS amt FROM refund";
+  $params = [];
+  if ($fromDt !== null) { $sql .= ' WHERE requestDate BETWEEN :from AND :to'; $params['from'] = $fromDt; $params['to'] = $toDt; }
+  $sql .= ' GROUP BY refundStatus';
+  $st = $pdo->prepare($sql); $st->execute($params);
+
+  $byStatus = ['Pending'=>0,'Approved'=>0,'Rejected'=>0,'Completed'=>0];
+  $totalRefunds = 0; $totalRefunded = 0.0;
+  foreach ($st->fetchAll() as $r) {
+    if (isset($byStatus[$r['refundStatus']])) { $byStatus[$r['refundStatus']] = (int) $r['n']; }
+    $totalRefunds += (int) $r['n'];
+    if ($r['refundStatus'] === 'Approved' || $r['refundStatus'] === 'Completed') { $totalRefunded += (float) $r['amt']; }
+  }
+
+  // platform paid orders (for the rate)
+  $paidSql = "SELECT COUNT(DISTINCT o.orderId) FROM `order` o
+                JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus = 'Successful'";
+  $paidParams = [];
+  if ($fromDt !== null) { $paidSql .= ' WHERE pay.paymentDate BETWEEN :from AND :to'; $paidParams['from'] = $fromDt; $paidParams['to'] = $toDt; }
+  $pst = $pdo->prepare($paidSql); $pst->execute($paidParams);
+  $paidOrders = (int) $pst->fetchColumn();
+
+  sendJson(200, true, [
+    'summary' => [
+      'refunds'       => $totalRefunds,
+      'totalRefunded' => round($totalRefunded, 2),
+      'paidOrders'    => $paidOrders,
+      'refundRate'    => $paidOrders > 0 ? round($totalRefunds / $paidOrders * 100, 1) : null,
+    ],
+    'byStatus' => $byStatus,
+    'period' => [
+      'from' => $fromDt !== null ? substr($fromDt, 0, 10) : null,
+      'to'   => $toDt   !== null ? substr($toDt, 0, 10)   : null,
+    ],
+  ]);
+}
+
+// GET /admin/reports/growth — new sign-ups by role over the period (customers,
+// suppliers, couriers), based on the user's created_at.
+function handleAdminGrowthReport(PDO $pdo): void {
+  [$fromDt, $toDt] = reportRange();
+
+  $sql = "SELECT role, COUNT(*) AS n FROM `user`";
+  $params = [];
+  if ($fromDt !== null) { $sql .= ' WHERE created_at BETWEEN :from AND :to'; $params['from'] = $fromDt; $params['to'] = $toDt; }
+  $sql .= ' GROUP BY role';
+  $st = $pdo->prepare($sql); $st->execute($params);
+
+  $byRole = ['Customer'=>0,'Supplier'=>0,'DeliveryPersonnel'=>0,'Admin'=>0];
+  $total = 0;
+  foreach ($st->fetchAll() as $r) {
+    if (isset($byRole[$r['role']])) { $byRole[$r['role']] = (int) $r['n']; }
+    $total += (int) $r['n'];
+  }
+
+  sendJson(200, true, [
+    'summary' => [
+      'newUsers'     => $total,
+      'newCustomers' => $byRole['Customer'],
+      'newSuppliers' => $byRole['Supplier'],
+      'newCouriers'  => $byRole['DeliveryPersonnel'],
+    ],
+    'byRole' => $byRole,
+    'period' => [
+      'from' => $fromDt !== null ? substr($fromDt, 0, 10) : null,
+      'to'   => $toDt   !== null ? substr($toDt, 0, 10)   : null,
+    ],
+  ]);
+}
+
 // GET /admin/reports/commission — platform commission across all suppliers
 // (paid orders only), broken down per supplier.
 function handleAdminCommissionReport(PDO $pdo): void {
