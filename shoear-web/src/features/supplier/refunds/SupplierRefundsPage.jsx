@@ -27,7 +27,9 @@ function SupplierRefundsPage() {
     },
   });
 
-  const { page, setPage, totalPages, pageItems } = usePagination(sort.sorted, PAGE_SIZE);
+  // page lives in the URL (survives opening an order and coming back); resets to
+  // 1 when the status tab changes
+  const { page, setPage, totalPages, pageItems } = usePagination(sort.sorted, PAGE_SIZE, tab);
 
   function load() {
     setLoading(true);
@@ -39,7 +41,6 @@ function SupplierRefundsPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
-    setPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
 

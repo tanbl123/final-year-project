@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import { getAdminOrder } from '../adminService';
 import BackButton from '../../../components/BackButton';
 
@@ -15,6 +15,8 @@ const money = (n) => `RM ${Number(n).toFixed(2)}`;
 
 function AdminOrderDetailPage() {
   const { orderId } = useParams();
+  const location = useLocation();
+  const backTo = location.state?.from || '/admin/orders';   // return to the list page we came from
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -32,7 +34,7 @@ function AdminOrderDetailPage() {
   if (error) {
     return (
       <div className="container py-4 text-start">
-        <BackButton to="/admin/orders" />
+        <BackButton to={backTo} />
         <div className="alert alert-danger mt-3">{error}</div>
       </div>
     );
@@ -40,7 +42,7 @@ function AdminOrderDetailPage() {
 
   return (
     <div className="container py-4 text-start">
-      <BackButton to="/admin/orders" />
+      <BackButton to={backTo} />
 
       <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mt-2 mb-4">
         <div>

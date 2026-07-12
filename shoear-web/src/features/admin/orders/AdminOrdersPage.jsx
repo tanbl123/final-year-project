@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { getAdminOrders } from '../adminService';
 import Pagination from '../../../components/Pagination';
 import ClearableInput from '../../../components/ClearableInput';
@@ -35,7 +35,10 @@ function AdminOrdersPage() {
     },
   });
 
-  const { page, setPage, totalPages, pageItems } = usePagination(sort.sorted, PAGE_SIZE);
+  // page lives in the URL and resets to 1 when the filters change (resetKey)
+  const location = useLocation();
+  const { page, setPage, totalPages, pageItems } = usePagination(
+    sort.sorted, PAGE_SIZE, JSON.stringify([filters.status, debouncedSearch]));
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(filters.search), 300);
@@ -49,8 +52,6 @@ function AdminOrdersPage() {
       .then((data) => setOrders(data.orders))
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-    setPage(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.status, debouncedSearch]);
 
   return (
@@ -122,7 +123,8 @@ function AdminOrdersPage() {
                       : <span className="text-muted">—</span>}
                   </td>
                   <td className="text-center">
-                    <Link to={`/admin/orders/${o.orderId}`} className="btn btn-outline-primary btn-sm">View</Link>
+                    <Link to={`/admin/orders/${o.orderId}`} state={{ from: `/admin/orders${location.search}` }}
+                      className="btn btn-outline-primary btn-sm">View</Link>
                   </td>
                 </tr>
               ))}

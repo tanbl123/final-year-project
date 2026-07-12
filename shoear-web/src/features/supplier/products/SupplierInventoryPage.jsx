@@ -128,11 +128,10 @@ function SupplierInventoryPage() {
     return groups.flatMap((g) => g.rows);
   }, [visible, sortKey, sortDir]);
 
-  const { page, setPage, totalPages, pageItems } = usePagination(sortedVisible, ROWS_PER_PAGE);
-  // back to page 1 when the search/filter changes
-  useEffect(() => {
-    setPage(1);
-  }, [search, filter, setPage]);
+  // page lives in the URL (survives opening a product and coming back); resets
+  // to 1 when the search/filter changes
+  const { page, setPage, totalPages, pageItems } = usePagination(
+    sortedVisible, ROWS_PER_PAGE, `${search}|${filter}`);
 
   function setQty(variantId, value) {
     setDraft((d) => ({ ...d, [variantId]: value }));

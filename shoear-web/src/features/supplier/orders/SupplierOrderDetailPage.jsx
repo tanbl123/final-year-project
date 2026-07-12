@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import { getSupplierOrder, shipStandardParcel, bookStandardParcel, markStandardDelivered, STANDARD_CARRIERS } from './orderService';
 import { refreshBadges } from '../products/productService';
 import BackButton from '../../../components/BackButton';
@@ -20,6 +20,8 @@ const money = (n) => `RM ${Number(n).toFixed(2)}`;
 
 function SupplierOrderDetailPage() {
   const { orderId } = useParams();
+  const location = useLocation();
+  const backTo = location.state?.from || '/orders';   // return to the list page we came from
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -101,7 +103,7 @@ function SupplierOrderDetailPage() {
   if (error) {
     return (
       <div className="container py-4 text-start">
-        <BackButton to="/orders" />
+        <BackButton to={backTo} />
         <div className="alert alert-danger mt-3">{error}</div>
       </div>
     );
@@ -109,7 +111,7 @@ function SupplierOrderDetailPage() {
 
   return (
     <div className="container py-4 text-start">
-      <BackButton to="/orders" />
+      <BackButton to={backTo} />
 
       {/* header */}
       <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mt-2 mb-4">

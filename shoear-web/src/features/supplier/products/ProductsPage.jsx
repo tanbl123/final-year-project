@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import ProductCard from './components/ProductCard';
 import ProductFilterBar from './components/ProductFilterBar';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Toast from '../../../components/Toast';
 import Pagination from '../../../components/Pagination';
+import { usePagination } from '../../../hooks/usePagination';
 import { fetchProducts, deleteProduct } from './productService';
 import { usePayoutBlocked } from '../usePayoutBlocked';
 
@@ -96,38 +97,14 @@ function ProductsPage() {
   }, [products, filters]);
 
   // Pagination lives in the URL (?page=N) so it survives leaving for a product's
-  // detail page and coming back — the supplier returns to the page they were on
-  // instead of being bounced to page 1.
-  const [searchParams, setSearchParams] = useSearchParams();
-  const totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
-  const page = Math.min(Math.max(1, Number(searchParams.get('page')) || 1), totalPages);
-  const pageItems = useMemo(
-    () => visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [visible, page]);
+  // detail page and coming back. resetKey (the filters) jumps back to page 1
+  // when the filters change — see usePagination.
+  const { page, setPage, totalPages, pageItems } = usePagination(
+    visible, PAGE_SIZE, JSON.stringify(filters));
 
-  // update the ?page= param. `replace` avoids stacking a history entry per click,
-  // so the browser Back button jumps straight to the detail page's referrer
-  // rather than cycling through page numbers.
-  function setPage(p, replace = true) {
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      if (p <= 1) next.delete('page'); else next.set('page', String(p));
-      return next;
-    }, { replace });
-  }
-
-  // Filter changes reset to page 1 — done HERE (on the actual change) rather
-  // than in a mount effect, so returning from a product's detail page keeps the
-  // restored ?page=. (A mount effect would fire under React StrictMode's double
-  // invoke and wipe the page back to 1.)
-  function handleFilterChange(next) {
-    setFilters(next);
-    setPage(1);
-  }
-
-  // the current list URL (with page/query) — handed to each card so its
-  // View/Edit links can bring the supplier back to exactly this spot.
-  const listUrl = `/products${searchParams.toString() ? `?${searchParams}` : ''}`;
+  // the current list URL (with ?page=) — handed to each card so its View/Edit
+  // links can bring the supplier back to exactly this spot.
+  const listUrl = `/products${location.search}`;
 
   return (
     <div className="container py-4 text-start">
@@ -187,7 +164,7 @@ function ProductsPage() {
         </div>
       )}
 
-      <ProductFilterBar filters={filters} onChange={handleFilterChange} />
+      <ProductFilterBar filters={filters} onChange={setFilters} />
 
       {isLoading ? (
         <div className="text-center my-5">

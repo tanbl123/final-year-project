@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { getSupplierOrders } from './orderService';
 import Pagination from '../../../components/Pagination';
 import SortableTh from '../../../components/SortableTh';
@@ -45,7 +45,10 @@ function SupplierOrdersPage() {
     },
   });
 
-  const { page, setPage, totalPages, pageItems } = usePagination(sort.sorted, PAGE_SIZE);
+  // page lives in the URL; resets to 1 when the status/needs-action filter changes
+  const location = useLocation();
+  const { page, setPage, totalPages, pageItems } = usePagination(
+    sort.sorted, PAGE_SIZE, JSON.stringify([status, needsActionOnly]));
 
   function load() {
     setLoading(true);
@@ -57,7 +60,6 @@ function SupplierOrdersPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
-    setPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
@@ -87,7 +89,7 @@ function SupplierOrdersPage() {
             <div className="form-check">
               <input className="form-check-input" type="checkbox" id="needsActionOnly"
                 checked={needsActionOnly}
-                onChange={(e) => { setNeedsActionOnly(e.target.checked); setPage(1); }} />
+                onChange={(e) => setNeedsActionOnly(e.target.checked)} />
               <label className="form-check-label" htmlFor="needsActionOnly">
                 🚚 Needs my action only <span className="text-muted">(parcels to ship)</span>
               </label>
@@ -162,7 +164,8 @@ function SupplierOrdersPage() {
                   <td className="text-center">{o.itemCount}</td>
                   <td className="text-end fw-semibold">{money(o.supplierSubtotal)}</td>
                   <td className="text-center">
-                    <Link to={`/orders/${o.orderId}`} className="btn btn-outline-primary btn-sm">
+                    <Link to={`/orders/${o.orderId}`} state={{ from: `/orders${location.search}` }}
+                      className="btn btn-outline-primary btn-sm">
                       View
                     </Link>
                   </td>
