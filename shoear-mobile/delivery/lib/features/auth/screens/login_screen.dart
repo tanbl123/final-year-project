@@ -85,12 +85,8 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(Icons.local_shipping, size: 48, color: theme.colorScheme.primary),
+                Image.asset('assets/branding/logo.png', height: 150, fit: BoxFit.contain),
                 const SizedBox(height: 8),
-                const Text('ShoeAR Express',
-                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center),
-                const SizedBox(height: 4),
                 Text('Delivery personnel sign in',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
