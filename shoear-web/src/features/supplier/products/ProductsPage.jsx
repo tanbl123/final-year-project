@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import ProductCard from './components/ProductCard';
 import ProductFilterBar from './components/ProductFilterBar';
@@ -105,9 +105,9 @@ function ProductsPage() {
     () => visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
     [visible, page]);
 
-  // update the ?page= param. `replace` avoids stacking a history entry per click
-  // (and per filter-reset), so the browser Back button jumps straight to the
-  // detail page's referrer rather than cycling through page numbers.
+  // update the ?page= param. `replace` avoids stacking a history entry per click,
+  // so the browser Back button jumps straight to the detail page's referrer
+  // rather than cycling through page numbers.
   function setPage(p, replace = true) {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
@@ -116,14 +116,14 @@ function ProductsPage() {
     }, { replace });
   }
 
-  // jump back to page 1 whenever the filters change — but NOT on first mount,
-  // so a restored ?page= (returning from a detail page) isn't wiped out.
-  const firstRun = useRef(true);
-  useEffect(() => {
-    if (firstRun.current) { firstRun.current = false; return; }
+  // Filter changes reset to page 1 — done HERE (on the actual change) rather
+  // than in a mount effect, so returning from a product's detail page keeps the
+  // restored ?page=. (A mount effect would fire under React StrictMode's double
+  // invoke and wipe the page back to 1.)
+  function handleFilterChange(next) {
+    setFilters(next);
     setPage(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters]);
+  }
 
   // the current list URL (with page/query) — handed to each card so its
   // View/Edit links can bring the supplier back to exactly this spot.
@@ -187,7 +187,7 @@ function ProductsPage() {
         </div>
       )}
 
-      <ProductFilterBar filters={filters} onChange={setFilters} />
+      <ProductFilterBar filters={filters} onChange={handleFilterChange} />
 
       {isLoading ? (
         <div className="text-center my-5">
