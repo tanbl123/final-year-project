@@ -1,110 +1,73 @@
-# ar_test — DeepAR shoe try-on spike (webview plugin)
+# ar_test — Snapchat Camera Kit shoe try-on spike
 
-Throwaway spike to confirm DeepAR **foot-tracking** shoe try-on works with **our
-own custom effect** on your phone (**ALI NX1**). Delete this folder when done.
+Throwaway spike to confirm **Snapchat Camera Kit** foot-tracking shoe try-on works
+with **our own custom shoe lens** on your phone (**ALI NX1**). Delete this folder
+when done.
 
-## Why the webview plugin (not the native fork)
+## Why Snapchat (not DeepAR)
 
-We tried the native fork `deepar_flutter_plus` (+ a downloaded `deepar.aar`). It
-initialised, applied the effect and ran the camera, but **never tracked a shoe** —
-not the demo, not our custom effect. The free native DeepAR SDK doesn't include
-foot tracking.
+DeepAR **removed shoe try-on from its SDK** (a staff member confirmed it "has been
+moved from the DeepAR SDK to the ShopAR platform", and "Flutter is not being
+actively supported"). So custom foot-tracking effects can't run on the free DeepAR
+path. Snapchat's **Camera Kit** + **Lens Studio Footwear Try-On** is the only free
+route left to a custom in-app shoe — and Snap actively maintains it (foot tracking
+was upgraded to a new SnapML model in 2025).
 
-The **official webview plugin `deepar_shoe_try_on_flutter`** uses DeepAR's *web*
-engine, which **does** have foot tracking — it already tracked the demo shoe on
-the foot. So we're back on it, and the only remaining job is getting our **own**
-`.deepar` effect (hosted on Firebase) to load in it.
+> The DeepAR version is preserved on the `ar-deepar-spike` branch as a fallback.
 
-- No DeepAR license key needed.
-- No `.aar` needed (the plugin bundles its own web engine).
-- Only needs the **camera** permission and **minSdk ≥ 19**.
-
----
-
-## THE REAL ROOT CAUSE (why the custom effect said "couldn't find this effect")
-
-The plugin builds the webview URL like this (from its source):
-
-```dart
-static const String kBaseUrl = "https://try.deepar.ai/flutter/shoe";
-controller.loadRequest(Uri.parse('$kBaseUrl?e=$link'));   // link NOT url-encoded
-```
-
-So it loads `https://try.deepar.ai/flutter/shoe?e=<effectUrl>`. Because `<effectUrl>`
-is pasted in **raw**, a Firebase *download* URL breaks it: that URL has its own
-query string `...model.deepar?alt=media&token=XXXX`. The player splits on `&`, so
-`token=XXXX` is torn off as a separate param and the effect URL loses its token →
-Firebase returns **403** → the player shows *"couldn't find this effect"*.
-
-The demo URL works only because it has **no `?`/`&`** to collide.
-
-**Fix: host the effect at a CLEAN url (no `?`, no `&`).** The direct Google Cloud
-Storage object URL is clean — it just needs the object made public.
-
-### Make the effect object public (one command, in Cloud Shell)
-
-```bash
-gsutil acl ch -u AllUsers:R gs://shoear-65edb.firebasestorage.app/model.deepar
-```
-If that errors with *"uniform bucket-level access"*, use IAM instead:
-```bash
-gsutil iam ch allUsers:objectViewer gs://shoear-65edb.firebasestorage.app
-```
-Then the clean URL (already set as `kCustomEffectUrl` in `lib/main.dart`) is:
-```
-https://storage.googleapis.com/shoear-65edb.firebasestorage.app/model.deepar
-```
-
-### CORS (already done, keep it)
-
-We also set the bucket CORS earlier so the cross-origin fetch is allowed:
-```bash
-gsutil cors set cors.json gs://shoear-65edb.firebasestorage.app
-gsutil cors get gs://shoear-65edb.firebasestorage.app   # verify
-```
-`cors.json` is in this folder. This stays required — leave it in place.
+- Free at our scale; **staging** token just adds a Snapchat watermark (fine for a
+  demo — mention it as a limitation, like DeepAR's).
+- Live camera + real-time lens via the `camerakit_flutter` package.
 
 ---
 
-## Step B — pull + build the spike
+## Step 1 — Snap developer account + Camera Kit app
+1. Sign in at **https://devportal.snap.com/** with a Snapchat account.
+2. Create an **Organization** (if asked), then a **Camera Kit** app.
+3. Copy the **App ID** and the **Staging API token** (Staging = watermark, fine).
 
+## Step 2 — Build the lens in Lens Studio, publish to Camera Kit
+1. Install **Lens Studio** (free, https://ar.snap.com/download) — v4.34.0+.
+2. New project → **Footwear Try-On** template.
+3. Replace the `[REPLACE_ME]` shoe object with your own shoe model (`model.glb`).
+   Tune scale/position/rotation so it sits on the foot. (This is your per-shoe
+   tuning contribution — same skill, better tool.)
+4. **Publish** the lens and **link it to your Camera Kit app** (assign it to a
+   **lens group**). Copy the **lens group ID**.
+
+## Step 3 — wire credentials into the Android build
+`git checkout ar-snapchat-spike && git pull`, then in `ar_test`:
 ```bash
-git checkout ar-deepar-spike
-git pull
-cd ar_test
-flutter create .        # keeps our pubspec.yaml + lib/main.dart
+flutter create .
 flutter pub get
 ```
-
-## Step C — Android setup
-
-- `android/app/build.gradle(.kts)` → `minSdk = 19` or higher (23 is fine).
-- `android/app/src/main/AndroidManifest.xml` — add ABOVE `<application ...>`:
+- `android/app/src/main/AndroidManifest.xml` — inside `<application>` add (paste
+  your real values; these stay LOCAL, not committed):
   ```xml
-  <uses-permission android:name="android.permission.CAMERA" />
-  <uses-permission android:name="android.permission.INTERNET" />
+  <meta-data android:name="com.snap.camerakit.app.id" android:value="YOUR_APP_ID" />
+  <meta-data android:name="com.snap.camerakit.api.token" android:value="YOUR_STAGING_TOKEN" />
   ```
-- The `deepar.aar` from the native attempt is no longer needed — you can leave it
-  or delete `android/app/libs/deepar.aar`; it's ignored by this plugin.
+  Keep the CAMERA / RECORD_AUDIO / INTERNET `<uses-permission>` lines (above
+  `<application>`).
+- `android/app/build.gradle(.kts)` → `minSdk = 21` or higher (23 is fine).
+- Kotlin **1.8.10+** (bump `ext.kotlin_version` / the Kotlin plugin if older).
+- `android/app/src/main/res/values/styles.xml` — the app theme must inherit
+  **`Theme.AppCompat.NoActionBar`** (Camera Kit requires an AppCompat theme).
 
-## Step D — run
-
+## Step 4 — run with your lens group ID
 ```bash
-flutter run -d AWCX6R4329002626
+flutter run -d AWCX6R4329002626 --dart-define=CK_GROUP_ID=YOUR_LENS_GROUP_ID
 ```
-Grant camera, point at your foot. The app **starts on the CUSTOM effect**; use the
-bottom button to flip between **CUSTOM** and **DEMO** to compare.
+Tap **Open AR Try-On**, grant camera/mic, point at your foot.
 
 ---
 
 ## What to report back
-- ✅ **Custom shoe tracks your foot** → 🎉 done — we wire this into the customer app.
-- ⚠️ **"Couldn't find this effect" on CUSTOM but DEMO tracks** → CORS not applied
-  yet (redo Step CORS) or the bucket name is different.
-- ⚠️ **Neither tracks / build error** → paste the exact error; likely a
-  `webview_flutter` version pin on this old plugin.
-
-## If a build error appears (`does not provide an inline implementation`)
-This plugin is an old (2022) beta and pins old webview packages. If `flutter pub
-get` / build fails, paste the FULL error — the fix is a `dependency_overrides`
-block in pubspec pinning `webview_flutter*` to versions the plugin expects.
+- ✅ **Your custom shoe appears and tracks your foot** → 🎉 we integrate Camera Kit
+  into the real customer app.
+- ⚠️ **Camera opens but no shoe / wrong placement** → Lens Studio tuning (scale /
+  position / occluder) — we iterate on the lens.
+- ⚠️ **Build error** (Kotlin/theme/minSdk) → paste it; usually the AppCompat theme,
+  Kotlin version, or minSdk bump above.
+- ⚠️ **"Invalid token" / lenses don't load** → double-check the App ID + staging
+  token in the manifest and the lens group ID passed via `--dart-define`.

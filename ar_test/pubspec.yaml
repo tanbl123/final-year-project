@@ -1,5 +1,5 @@
 name: ar_test
-description: "Throwaway spike: verify DeepAR foot-tracking shoe try-on on a real device."
+description: "Throwaway spike: verify Snapchat Camera Kit foot-tracking shoe try-on on a real device."
 publish_to: 'none'
 version: 0.1.0
 
@@ -9,14 +9,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  # We drive DeepAR's web shoe-player ourselves (same URL the official plugin
-  # uses: https://try.deepar.ai/flutter/shoe?e=<effectUrl>), so we can display the
-  # web engine's console + errors ON SCREEN to diagnose why the custom effect
-  # hangs at "Loading AR". Uses the current webview_flutter (avoids the old
-  # plugin's pinned-dependency build error).
-  webview_flutter: ^4.7.0
-  webview_flutter_android: ^3.16.0
-  # camera permission at runtime
+  # Snapchat Camera Kit wrapper for Flutter (live camera + real-time lens).
+  # We build a Footwear Try-On lens in Lens Studio, publish it to our Camera Kit
+  # app, and open it here by its lens GROUP ID. Snap actively maintains foot
+  # tracking (unlike DeepAR, which removed it).
+  camerakit_flutter: ^1.0.7
+  # camera + mic permission at runtime
   permission_handler: ^11.0.0
 
 flutter:
