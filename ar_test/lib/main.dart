@@ -11,6 +11,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:camerakit_flutter/camerakit_flutter.dart';
+import 'package:camerakit_flutter/lens_model.dart'; // Lens model (id, name, groupId, thumbnail)
 import 'package:permission_handler/permission_handler.dart';
 
 // Lens group ID from the Snap developer portal (after publishing the lens).
