@@ -17,6 +17,11 @@ import 'package:permission_handler/permission_handler.dart';
 // Lens group ID from the Snap developer portal (after publishing the lens).
 const String kGroupId = String.fromEnvironment('CK_GROUP_ID');
 
+// OPTIONAL: a specific lens ID. If given, we open THAT lens directly (applies it
+// immediately) instead of showing the group's carousel — more reliable for a
+// single-lens group. Pass with --dart-define=CK_LENS_ID=...
+const String kLensId = String.fromEnvironment('CK_LENS_ID');
+
 void main() => runApp(const MaterialApp(home: SpikeScreen()));
 
 class SpikeScreen extends StatefulWidget {
@@ -41,10 +46,19 @@ class _SpikeScreenState extends State<SpikeScreen>
     await [Permission.camera, Permission.microphone].request();
     try {
       setState(() => _status = 'Opening Camera Kit… point at your foot 👟');
-      await _cameraKit.openCameraKit(
-        groupIds: [kGroupId],
-        isHideCloseButton: false,
-      );
+      if (kLensId.isNotEmpty) {
+        // apply our specific lens directly (no carousel needed)
+        await _cameraKit.openCameraKitWithSingleLens(
+          lensId: kLensId,
+          groupId: kGroupId,
+          isHideCloseButton: false,
+        );
+      } else {
+        await _cameraKit.openCameraKit(
+          groupIds: [kGroupId],
+          isHideCloseButton: false,
+        );
+      }
     } catch (e) {
       setState(() => _status = 'Camera Kit error: $e');
     }
