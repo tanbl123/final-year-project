@@ -94,9 +94,11 @@ function handleGetCatalogProduct(PDO $pdo, string $id): void {
   $imgs->execute(['id' => $id]);
   $row['images'] = array_column($imgs->fetchAll(), 'productImageUrl');
 
-  $mdl = $pdo->prepare('SELECT productModelUrl FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
+  $mdl = $pdo->prepare('SELECT productModelUrl, arLensId FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
   $mdl->execute(['id' => $id]);
-  $row['modelUrl'] = $mdl->fetchColumn() ?: null;
+  $modelRow = $mdl->fetch();
+  $row['modelUrl'] = $modelRow ? ($modelRow['productModelUrl'] ?: null) : null;
+  $row['arLensId'] = $modelRow ? $modelRow['arLensId'] : null;   // Camera Kit lens id for AR try-on
 
   // sizes + stock so the app can disable out-of-stock sizes
   $vars = $pdo->prepare(

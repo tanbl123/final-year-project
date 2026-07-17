@@ -830,6 +830,15 @@ if ($method === 'POST' && preg_match('#^/admin/products/([^/]+)/reject$#', $path
   handleRejectProduct($pdo, $m[1]);
 }
 
+// admin records/clears the Camera Kit AR lens id for a product (after building
+// the try-on lens in Lens Studio). Declared before the generic GET detail route.
+if ($method === 'PUT' && preg_match('#^/admin/products/([^/]+)/ar-lens$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleSetAdminProductArLens($pdo, $m[1]);
+}
+
 // full product detail for the admin (any status) — to review before approving.
 // Declared after /pending + /approve + /reject so those specific routes win.
 if ($method === 'GET' && preg_match('#^/admin/products/([^/]+)$#', $path, $m)) {

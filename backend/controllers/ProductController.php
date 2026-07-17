@@ -197,10 +197,11 @@ function handleGetProduct(PDO $pdo, array $auth, string $id): void {
   $imgs->execute(['id' => $id]);
   $row['images'] = array_column($imgs->fetchAll(), 'productImageUrl');
 
-  $mdl = $pdo->prepare('SELECT productModelUrl FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
+  $mdl = $pdo->prepare('SELECT productModelUrl, arLensId FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
   $mdl->execute(['id' => $id]);
   $modelRow = $mdl->fetch();
   $row['modelUrl'] = $modelRow ? $modelRow['productModelUrl'] : null;
+  $row['arLensId'] = $modelRow ? $modelRow['arLensId'] : null;   // Camera Kit lens id (AR try-on)
 
   $vars = $pdo->prepare('SELECT size, stockQuantity AS stock FROM product_variant WHERE productId = :id ORDER BY productVariantId');
   $vars->execute(['id' => $id]);
@@ -262,10 +263,11 @@ function handleGetAdminProduct(PDO $pdo, string $id): void {
   $imgs->execute(['id' => $id]);
   $row['images'] = array_column($imgs->fetchAll(), 'productImageUrl');
 
-  $mdl = $pdo->prepare('SELECT productModelUrl FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
+  $mdl = $pdo->prepare('SELECT productModelUrl, arLensId FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
   $mdl->execute(['id' => $id]);
   $modelRow = $mdl->fetch();
   $row['modelUrl'] = $modelRow ? $modelRow['productModelUrl'] : null;
+  $row['arLensId'] = $modelRow ? $modelRow['arLensId'] : null;   // Camera Kit lens id (AR try-on)
 
   $vars = $pdo->prepare('SELECT size, stockQuantity AS stock FROM product_variant WHERE productId = :id ORDER BY productVariantId');
   $vars->execute(['id' => $id]);
@@ -276,6 +278,41 @@ function handleGetAdminProduct(PDO $pdo, string $id): void {
   $row['totalStock'] = array_sum(array_column($row['variants'], 'stock'));
 
   sendJson(200, true, $row);
+}
+
+// PUT /admin/products/{id}/ar-lens  — admin records (or clears) the Snapchat
+// Camera Kit LENS ID for a product's 3D model, after building the foot-tracking
+// lens in Lens Studio. When set, the customer app offers AR try-on for the
+// product; sending an empty/null value removes it. The lens GROUP id is a single
+// app-level constant, so only the per-product lens id is stored here.
+function handleSetAdminProductArLens(PDO $pdo, string $id): void {
+  $body   = getJsonBody();
+  $lensId = trim((string) ($body['arLensId'] ?? ''));
+
+  // Camera Kit lens ids are short, UUID-like tokens.
+  if ($lensId !== '' && !preg_match('/^[A-Za-z0-9._-]{1,64}$/', $lensId)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Invalid lens id.']);
+  }
+
+  $chk = $pdo->prepare('SELECT 1 FROM product WHERE productId = :id');
+  $chk->execute(['id' => $id]);
+  if (!$chk->fetch()) {
+    sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Product not found.']);
+  }
+
+  // The lens is attached to the product's 3D model row, so one must exist.
+  $mdl = $pdo->prepare('SELECT productModelId FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
+  $mdl->execute(['id' => $id]);
+  $modelId = $mdl->fetchColumn();
+  if (!$modelId) {
+    sendJson(400, false, null, ['code' => 'NO_MODEL',
+      'message' => 'This product has no 3D model to attach an AR lens to.']);
+  }
+
+  $upd = $pdo->prepare('UPDATE product_model SET arLensId = :lens WHERE productModelId = :mid');
+  $upd->execute(['lens' => $lensId !== '' ? $lensId : null, 'mid' => $modelId]);
+
+  sendJson(200, true, ['productId' => $id, 'arLensId' => $lensId !== '' ? $lensId : null]);
 }
 
 // PUT /products/{id}  — edit one of this supplier's products. Mirrors create:

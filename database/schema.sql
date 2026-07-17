@@ -257,6 +257,7 @@ CREATE TABLE product_model (
     productModelId  VARCHAR(10)  NOT NULL,                -- MOD0001
     productId       VARCHAR(10)  NOT NULL,
     productModelUrl VARCHAR(255) NOT NULL,                -- .glb/.gltf in Firebase Storage
+    arLensId        VARCHAR(64)  NULL,                    -- Snapchat Camera Kit lens id (set by admin after building the lens)
     PRIMARY KEY (productModelId),
     KEY idx_model_product (productId),
     CONSTRAINT fk_model_product FOREIGN KEY (productId) REFERENCES product(productId)
