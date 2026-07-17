@@ -110,6 +110,13 @@ export function setProductArLens(productId, arLensId) {
   return apiPut(`/admin/products/${productId}/ar-lens`, { arLensId }, getToken());
 }
 
+// Camera Kit config for the admin lens PICKER: the staging api token + lens group
+// id, handed to a logged-in admin so their browser can list the group's lenses.
+// Token stays server-side otherwise (admin-only endpoint).
+export function getCameraKitConfig() {
+  return apiGet('/admin/ar/camerakit-config', getToken());
+}
+
 // ── supplier business-detail change requests (re-approval queue) ──────
 export function getSupplierChangeRequests() {
   return apiGet('/admin/supplier-changes', getToken());

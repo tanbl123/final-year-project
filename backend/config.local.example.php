@@ -86,4 +86,11 @@ return [
     'from'      => 'you@gmail.com',
     'from_name' => 'ShoeAR',
   ],
+
+  // Snapchat Camera Kit — STAGING api token (Camera Kit portal → Apps → your app
+  // → API Tokens → Staging). Powers the admin AR-lens PICKER only: the backend
+  // hands this to a logged-in admin so their browser can list your group's lenses.
+  // The group id is the Camera Kit Lens Group holding your ShoeAR try-on lenses.
+  // 'camerakit_api_token' => 'eyJhbGciOi...your-staging-token...',
+  // 'camerakit_group_id'  => 'fdac5175-05fe-47e9-adf5-108b36419d71',
 ];

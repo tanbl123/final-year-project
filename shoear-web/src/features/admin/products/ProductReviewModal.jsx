@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getAdminProduct, setProductArLens } from '../adminService';
+import LensPicker from './LensPicker';
 
 const rm = (n) => 'RM ' + Number(n || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -139,11 +140,23 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                           ? <span className="badge text-bg-success">live</span>
                           : <span className="badge text-bg-secondary">not set</span>}
                       </div>
+
+                      {/* Pick from the lenses in your Camera Kit group (loaded via
+                          the Web SDK with an admin-only token). */}
+                      <div className="mb-2">
+                        <LensPicker
+                          selectedLensId={lensId}
+                          onPick={(id) => setLensId(id)}
+                          disabled={savingLens}
+                        />
+                      </div>
+
+                      {/* Manual fallback / confirm + save. */}
                       <div className="input-group">
                         <input
                           type="text"
                           className="form-control"
-                          placeholder="Camera Kit lens id (e.g. 0a1cd533-081e-41b9-8a82-3091f8a21c4b)"
+                          placeholder="…or paste a Camera Kit lens id"
                           value={lensId}
                           onChange={(e) => setLensId(e.target.value)}
                         />
@@ -152,8 +165,8 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                         </button>
                       </div>
                       <div className="form-text">
-                        Build the foot-tracking lens from this 3D model in Lens Studio, publish it to the Camera Kit
-                        lens group, then paste the lens id here. Customers can use AR try-on once it&apos;s set; clear it to disable.
+                        Build the foot-tracking lens from this 3D model in Lens Studio and publish it to your Camera Kit
+                        lens group — it then appears above to pick. Customers can use AR try-on once saved; clear it to disable.
                       </div>
                       {lensMsg && <div className="small mt-1">{lensMsg}</div>}
                     </div>
