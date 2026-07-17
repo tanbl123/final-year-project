@@ -245,6 +245,12 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: OutlinedButton.icon(
                           onPressed: () async {
+                            // AR try-on is a member feature — send guests to login
+                            // first (same gate as add-to-cart / write-review).
+                            if (!context.read<AuthProvider>().isLoggedIn) {
+                              Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LoginScreen()));
+                              return;
+                            }
                             try {
                               await _ar.open(p.arLensId!);
                             } catch (e) {
