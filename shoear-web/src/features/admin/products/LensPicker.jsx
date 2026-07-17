@@ -13,6 +13,7 @@ function LensPicker({ selectedLensId, onPick, disabled }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [lenses, setLenses] = useState([]);
+  const [search, setSearch] = useState('');   // filter by lens name / id
   const ckRef = useRef(null);
 
   useEffect(() => {
@@ -56,27 +57,53 @@ function LensPicker({ selectedLensId, onPick, disabled }) {
     return <div className="text-muted small py-2">No lenses found in the Camera Kit group yet. Publish a lens to it, or paste the id below.</div>;
   }
 
+  const q = search.trim().toLowerCase();
+  const filtered = q
+    ? lenses.filter((l) => (l.name || '').toLowerCase().includes(q) || (l.id || '').toLowerCase().includes(q))
+    : lenses;
+
   return (
-    <div className="d-flex flex-wrap gap-2">
-      {lenses.map((lens) => {
-        const active = lens.id === selectedLensId;
-        return (
-          <button
-            key={lens.id}
-            type="button"
-            disabled={disabled}
-            onClick={() => onPick(lens.id)}
-            className={`btn p-1 text-center ${active ? 'btn-primary' : 'btn-outline-secondary'}`}
-            style={{ width: 96 }}
-            title={`${lens.name || 'Lens'}\n${lens.id}`}
-          >
-            {lens.iconUrl
-              ? <img src={lens.iconUrl} alt={lens.name || 'lens'} style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8 }} />
-              : <div style={{ width: 64, height: 64, borderRadius: 8, background: '#e9ecef' }} className="d-flex align-items-center justify-content-center">👟</div>}
-            <div className="small text-truncate mt-1" style={{ maxWidth: 88 }}>{lens.name || lens.id.slice(0, 8)}</div>
-          </button>
-        );
-      })}
+    <div>
+      <div className="input-group input-group-sm mb-2">
+        <span className="input-group-text">🔍</span>
+        <input
+          type="text"
+          className="form-control"
+          placeholder={`Search ${lenses.length} lens${lenses.length === 1 ? '' : 'es'} by name or id…`}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {search && (
+          <button className="btn btn-outline-secondary" type="button" onClick={() => setSearch('')} title="Clear">×</button>
+        )}
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="text-muted small py-2">No lenses match “{search}”.</div>
+      ) : (
+        <div className="d-flex flex-wrap gap-2 overflow-auto p-1" style={{ maxHeight: 240 }}>
+          {filtered.map((lens) => {
+            const active = lens.id === selectedLensId;
+            return (
+              <button
+                key={lens.id}
+                type="button"
+                disabled={disabled}
+                onClick={() => onPick(lens.id)}
+                className={`btn p-1 text-center ${active ? 'btn-primary' : 'btn-outline-secondary'}`}
+                style={{ width: 96 }}
+                title={`${lens.name || 'Lens'}\n${lens.id}`}
+              >
+                {lens.iconUrl
+                  ? <img src={lens.iconUrl} alt={lens.name || 'lens'} style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 8 }} />
+                  : <div style={{ width: 64, height: 64, borderRadius: 8, background: '#e9ecef' }} className="d-flex align-items-center justify-content-center">👟</div>}
+                <div className="small text-truncate mt-1" style={{ maxWidth: 88 }}>{lens.name || lens.id.slice(0, 8)}</div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <div className="form-text">{filtered.length} of {lenses.length} shown</div>
     </div>
   );
 }
