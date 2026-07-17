@@ -460,10 +460,21 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
       <label className="form-label fw-semibold">3D model (for AR virtual try-on)</label>
       <p className="text-muted small">A .glb or .gltf file, up to 30&nbsp;MB.</p>
       {modelUrl ? (
-        <div className="d-flex align-items-center gap-2">
-          <span className="badge text-bg-success">🧊 {modelName || '3D model uploaded'}</span>
-          <button type="button" className="btn btn-outline-danger btn-sm" onClick={removeModel}>Remove</button>
-        </div>
+        <>
+          <div className="d-flex align-items-center gap-2">
+            <span className="badge text-bg-success">🧊 {modelName || '3D model uploaded'}</span>
+            <button type="button" className="btn btn-outline-danger btn-sm" onClick={removeModel}>Remove</button>
+          </div>
+          {/* live WebGL preview so the supplier can verify their 3D model
+              (drag to rotate) before saving — matches the admin review preview */}
+          <model-viewer
+            src={modelUrl}
+            camera-controls
+            auto-rotate
+            shadow-intensity="1"
+            style={{ width: '100%', height: '260px', background: '#f8f9fa', borderRadius: '0.5rem', marginTop: '0.5rem' }}
+          ></model-viewer>
+        </>
       ) : (
         <input type="file" className="form-control" accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
           onChange={handleModelFile} disabled={uploading} />
