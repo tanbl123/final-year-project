@@ -839,6 +839,19 @@ if ($method === 'PUT' && preg_match('#^/admin/products/([^/]+)/ar-lens$#', $path
   handleSetAdminProductArLens($pdo, $m[1]);
 }
 
+// admin AR-lens PICKER config: hand the Camera Kit staging token + group id to a
+// logged-in ADMIN so their browser's Camera Kit Web SDK can list the group's
+// lenses (Snap has no server-side lens list API, so the fetch must run in the
+// browser). Gating it behind admin auth keeps the token out of the public app.
+if ($method === 'GET' && $path === '/admin/ar/camerakit-config') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  sendJson(200, true, [
+    'apiToken' => (string) ($config['camerakit_api_token'] ?? ''),
+    'groupId'  => (string) ($config['camerakit_group_id'] ?? ''),
+  ]);
+}
+
 // full product detail for the admin (any status) — to review before approving.
 // Declared after /pending + /approve + /reject so those specific routes win.
 if ($method === 'GET' && preg_match('#^/admin/products/([^/]+)$#', $path, $m)) {

@@ -77,6 +77,15 @@ $config = [
     'from'      => getenv('SMTP_FROM')      ?: (getenv('SMTP_USERNAME') ?: ''),
     'from_name' => getenv('SMTP_FROM_NAME') ?: 'ShoeAR',
   ],
+
+  // Snapchat Camera Kit — the STAGING api token + the app's single lens GROUP id.
+  // Used ONLY by the admin AR-lens picker: the backend hands the token to an
+  // authenticated admin at runtime so their browser's Camera Kit Web SDK can list
+  // the group's lenses. Keep the token OUT of git — set it in config.local.php.
+  // The group id is not secret (just an identifier). Snap has no server-side lens
+  // list API, so the token has to reach the (admin-only) browser to fetch lenses.
+  'camerakit_api_token' => getenv('CAMERAKIT_API_TOKEN') ?: '',
+  'camerakit_group_id'  => getenv('CAMERAKIT_GROUP_ID')  ?: 'fdac5175-05fe-47e9-adf5-108b36419d71',
 ];
 
 // Local, gitignored overrides (real secrets live here on each machine).
