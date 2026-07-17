@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getAdminProduct } from '../adminService';
+import { getAdminProduct, setProductArLens } from '../adminService';
 
 const rm = (n) => 'RM ' + Number(n || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -10,6 +10,9 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
   const [product, setProduct] = useState(null);
   const [error, setError] = useState('');
   const [activeImage, setActiveImage] = useState('');
+  const [lensId, setLensId] = useState('');       // AR Camera Kit lens id (editable)
+  const [savingLens, setSavingLens] = useState(false);
+  const [lensMsg, setLensMsg] = useState('');     // transient save feedback
 
   useEffect(() => {
     if (!productId) return undefined;
@@ -17,15 +20,32 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setProduct(null);
     setError('');
+    setLensMsg('');
     getAdminProduct(productId)
       .then((p) => {
         if (!active) return;
         setProduct(p);
         setActiveImage(p.images?.[0] || '');
+        setLensId(p.arLensId || '');
       })
       .catch((err) => { if (active) setError(err.message); });
     return () => { active = false; };
   }, [productId]);
+
+  async function saveLens() {
+    setSavingLens(true);
+    setLensMsg('');
+    try {
+      const trimmed = lensId.trim();
+      await setProductArLens(productId, trimmed);
+      setProduct((p) => (p ? { ...p, arLensId: trimmed || null } : p));
+      setLensMsg(trimmed ? 'AR lens saved — try-on is now live for this product.' : 'AR lens removed.');
+    } catch (err) {
+      setLensMsg(err.message || 'Could not save the lens id.');
+    } finally {
+      setSavingLens(false);
+    }
+  }
 
   if (!productId) return null;
 
@@ -105,6 +125,37 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                         shadow-intensity="1"
                         style={{ width: '100%', height: '320px', background: '#f8f9fa', borderRadius: '0.5rem' }}
                       ></model-viewer>
+                    </div>
+                  )}
+
+                  {/* AR try-on lens (Snapchat Camera Kit). Admin builds the lens
+                      from the 3D model in Lens Studio, then records the lens id
+                      here so the customer app can offer AR try-on. */}
+                  {product.modelUrl && (
+                    <div className="mt-3">
+                      <div className="fw-semibold small text-uppercase text-muted mb-1">
+                        AR try-on lens (Camera Kit){' '}
+                        {product.arLensId
+                          ? <span className="badge text-bg-success">live</span>
+                          : <span className="badge text-bg-secondary">not set</span>}
+                      </div>
+                      <div className="input-group">
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="Camera Kit lens id (e.g. 0a1cd533-081e-41b9-8a82-3091f8a21c4b)"
+                          value={lensId}
+                          onChange={(e) => setLensId(e.target.value)}
+                        />
+                        <button type="button" className="btn btn-primary" disabled={savingLens} onClick={saveLens}>
+                          {savingLens ? 'Saving…' : 'Save'}
+                        </button>
+                      </div>
+                      <div className="form-text">
+                        Build the foot-tracking lens from this 3D model in Lens Studio, publish it to the Camera Kit
+                        lens group, then paste the lens id here. Customers can use AR try-on once it&apos;s set; clear it to disable.
+                      </div>
+                      {lensMsg && <div className="small mt-1">{lensMsg}</div>}
                     </div>
                   )}
                 </>

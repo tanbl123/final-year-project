@@ -104,6 +104,12 @@ export function rejectProduct(productId) {
   return apiPost(`/admin/products/${productId}/reject`, {}, getToken());
 }
 
+// Record (or clear) the Snapchat Camera Kit AR lens id for a product's 3D model,
+// after building the foot-tracking try-on lens in Lens Studio. Pass '' to remove.
+export function setProductArLens(productId, arLensId) {
+  return apiPut(`/admin/products/${productId}/ar-lens`, { arLensId }, getToken());
+}
+
 // ── supplier business-detail change requests (re-approval queue) ──────
 export function getSupplierChangeRequests() {
   return apiGet('/admin/supplier-changes', getToken());
