@@ -111,10 +111,14 @@ class ProductDetail {
   final String? supplierName;
   final List<String> images;
   final String? modelUrl;
+  final String? arLensId; // Snapchat Camera Kit lens id — AR try-on is available when set
   final List<ProductVariant> variants;
   final List<ProductReview> reviews;
   final double ratingAverage;
   final int ratingCount;
+
+  /// AR try-on is available only once an admin has built + recorded the lens.
+  bool get arReady => arLensId != null && arLensId!.trim().isNotEmpty;
 
   ProductDetail({
     required this.id,
@@ -127,6 +131,7 @@ class ProductDetail {
     this.supplierName,
     required this.images,
     this.modelUrl,
+    this.arLensId,
     required this.variants,
     required this.reviews,
     required this.ratingAverage,
@@ -144,6 +149,7 @@ class ProductDetail {
         supplierName: j['supplierName'] as String?,
         images: ((j['images'] as List?) ?? []).map((e) => e.toString()).toList(),
         modelUrl: j['modelUrl'] as String?,
+        arLensId: (j['arLensId'] as String?)?.isNotEmpty == true ? j['arLensId'] as String : null,
         variants: ((j['variants'] as List?) ?? [])
             .map((e) => ProductVariant.fromJson(e as Map<String, dynamic>))
             .toList(),

@@ -14,6 +14,7 @@ import 'package:customer/features/wishlist/state/wishlist_provider.dart';
 import 'package:customer/core/widgets/product_image.dart';
 import 'package:customer/core/utils/snackbar.dart';
 import 'package:customer/features/auth/screens/login_screen.dart';
+import 'package:customer/features/ar/ar_tryon_service.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final String productId;
@@ -25,6 +26,7 @@ class ProductDetailScreen extends StatefulWidget {
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
   late Future<ProductDetail> _future;
+  final ArTryOnService _ar = ArTryOnService();
   MyReviewStatus? _myStatus; // null until loaded / not logged in
   String? _selectedVariantId;
   bool _adding = false;
@@ -234,12 +236,21 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
 
                     // ── AR Try-On ─────────────────────────────────────────────
-                    if (p.virtualTryOnEnable) ...[
+                    // Shown only once an admin has built + recorded the Camera
+                    // Kit lens for this product (p.arReady), so the button always
+                    // works when visible.
+                    if (p.arReady) ...[
                       const SizedBox(height: 16),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: OutlinedButton.icon(
-                          onPressed: () => context.showSnack('AR try-on is coming in the next update.'),
+                          onPressed: () async {
+                            try {
+                              await _ar.open(p.arLensId!);
+                            } catch (e) {
+                              if (mounted) context.showSnack('Could not open AR try-on: $e');
+                            }
+                          },
                           icon: const Icon(Icons.view_in_ar),
                           label: const Text('AR Try-On'),
                           style: OutlinedButton.styleFrom(
