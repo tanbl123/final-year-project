@@ -20,11 +20,21 @@ flutter pub get
 
 ## 2. Android config (local only — do NOT commit these)
 **`android/app/src/main/AndroidManifest.xml`**
+- Add `xmlns:tools="http://schemas.android.com/tools"` to the `<manifest>` tag.
 - Above `<application>`:
   ```xml
   <uses-permission android:name="android.permission.CAMERA" />
   <uses-permission android:name="android.permission.RECORD_AUDIO" />
   <uses-permission android:name="android.permission.INTERNET" />
+
+  <!-- Camera Kit's media-picker module pulls these in; remove them so the
+       "access photos and videos" prompt never appears during AR try-on.
+       (Profile/order photos use image_picker's system Photo Picker, which
+       needs no permission, so this is safe.) -->
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove" />
+  <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" tools:node="remove" />
+  <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" tools:node="remove" />
+  <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" tools:node="remove" />
   ```
 - Inside `<application …>` (paste YOUR values):
   ```xml
