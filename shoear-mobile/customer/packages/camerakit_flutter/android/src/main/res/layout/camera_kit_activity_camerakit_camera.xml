@@ -23,9 +23,9 @@
         android:layout_margin="12dp"
         android:fitsSystemWindows="true"
         android:background="@drawable/close_btn_bg"
-        android:contentDescription="desc"
+        android:contentDescription="Back"
         android:padding="10dp"
-        android:src="@drawable/close"
+        android:src="@drawable/back_arrow"
         tools:ignore="HardcodedText,RtlHardcoded" />
 
 </FrameLayout>
