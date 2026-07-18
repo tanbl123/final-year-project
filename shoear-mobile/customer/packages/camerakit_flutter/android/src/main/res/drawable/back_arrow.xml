@@ -1,8 +1,6 @@
-<!-- ShoeAR: "back" arrow for the VTO screen.
-     NOTE: Snap's Camera Kit camera activity renders this drawable horizontally
-     MIRRORED on-device, so the SOURCE path below points RIGHT on purpose — it
-     shows as a LEFT-pointing back arrow in the running app. Do not "correct"
-     the direction here without re-testing on a device. -->
+<!-- ShoeAR: left-pointing "back" arrow for the VTO screen (Material arrow_back).
+     Verified on-device: this activity does NOT mirror the drawable, so a
+     left-pointing source renders left. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="28dp"
     android:height="28dp"
@@ -11,5 +9,5 @@
     android:viewportHeight="24">
     <path
         android:fillColor="@android:color/white"
-        android:pathData="M12,4l-1.41,1.41L16.17,11H4v2h12.17l-5.58,5.59L12,20l8,-8z" />
+        android:pathData="M20,11H7.83l5.59,-5.59L12,4l-8,8 8,8 1.41,-1.41L7.83,13H20v-2z" />
 </vector>
