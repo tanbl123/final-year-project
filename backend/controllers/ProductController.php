@@ -403,9 +403,10 @@ function handleUpdateProduct(PDO $pdo, array $auth, string $id): void {
   $curImgs->execute(['id' => $id]);
   $currentImages = array_column($curImgs->fetchAll(), 'productImageUrl');
 
-  $curMdl = $pdo->prepare('SELECT productModelUrl FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
+  $curMdl = $pdo->prepare('SELECT productModelId, productModelUrl, arLensId FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
   $curMdl->execute(['id' => $id]);
-  $currentModel = (string) ($curMdl->fetchColumn() ?: '');
+  $curModelRow  = $curMdl->fetch();
+  $currentModel = (string) ($curModelRow['productModelUrl'] ?? '');
 
   // Did any *identity* field change? PRICE and STOCK are deliberately excluded
   // here — they're commercial/inventory fields that apply instantly with no
@@ -503,9 +504,20 @@ function handleUpdateProduct(PDO $pdo, array $auth, string $id): void {
       )->execute(['iid' => $iid, 'pid' => $id, 'url' => $url]);
     }
 
-    // ── 3D model: full replace ──
-    $pdo->prepare('DELETE FROM product_model WHERE productId = :id')->execute(['id' => $id]);
-    if ($modelUrl !== '') {
+    // ── 3D model: preserve the admin-set AR lens when the model is unchanged ──
+    // The Camera Kit lens is built FROM a specific 3D model, so a blind
+    // delete+reinsert would wipe the admin's arLensId on every supplier edit.
+    //   • model URL unchanged → keep the row + its arLensId
+    //   • model URL changed   → update the URL, clear arLensId (old lens is stale)
+    //   • model removed        → drop the row (and its lens)
+    if ($modelUrl === '') {
+      $pdo->prepare('DELETE FROM product_model WHERE productId = :id')->execute(['id' => $id]);
+    } elseif ($curModelRow) {
+      $keepLens = ($currentModel === $modelUrl) ? ($curModelRow['arLensId'] ?? null) : null;
+      $pdo->prepare(
+        'UPDATE product_model SET productModelUrl = :url, arLensId = :lens WHERE productModelId = :mid'
+      )->execute(['url' => $modelUrl, 'lens' => $keepLens, 'mid' => $curModelRow['productModelId']]);
+    } else {
       $mid = nextId($pdo, 'product_model', 'productModelId', 'MOD');
       $pdo->prepare(
         'INSERT INTO product_model (productModelId, productId, productModelUrl) VALUES (:mid, :pid, :url)'
