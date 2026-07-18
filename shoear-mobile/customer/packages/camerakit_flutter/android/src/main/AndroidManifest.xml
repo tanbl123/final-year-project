@@ -1,0 +1,15 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.camerakit.camerakit_flutter">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- ShoeAR: storage permission removed. We run the lens in PLAY mode (no media
+         capture/gallery), so no "access photos and videos" prompt appears. -->
+
+
+    <application>
+        <activity android:name="com.camerakit.camerakit_flutter.ARCameraActivity" />
+    </application>
+
+</manifest>

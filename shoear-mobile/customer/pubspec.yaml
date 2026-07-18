@@ -20,7 +20,12 @@ dependencies:
   google_sign_in: ^6.2.1    # Google OAuth sign-in (customer app only)
   pdf: ^3.11.1              # render the receipt to a PDF document
   printing: ^5.13.3         # OS print/share/save sheet for the receipt PDF
-  camerakit_flutter: ^1.0.7  # Snapchat Camera Kit — AR foot-tracking shoe try-on
+  # Camera Kit AR foot-tracking shoe try-on. Vendored from DevCrew-io/camerakit-flutter
+  # (MIT) into packages/ and patched for our VTO: rear camera by default, PLAY mode
+  # (no photo-capture button, no gallery/storage prompt), top-left back button.
+  # See packages/camerakit_flutter/README_SHOEAR.md.
+  camerakit_flutter:
+    path: packages/camerakit_flutter
   permission_handler: ^11.0.0 # camera/mic permission for AR try-on
 
 dev_dependencies:

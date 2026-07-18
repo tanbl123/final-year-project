@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/root_layout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <com.snap.camerakit.support.widget.CameraLayout
+        android:id="@+id/camera_layout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fitsSystemWindows="true" />
+
+    <!-- ShoeAR: back/close button, top-left. fitsSystemWindows keeps it below the
+         status-bar / notch; the translucent circle keeps it visible on any camera
+         background. Tapping it returns to the product page (ARCameraActivity finish). -->
+    <ImageButton
+        android:id="@+id/close_btn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|left"
+        android:layout_margin="12dp"
+        android:fitsSystemWindows="true"
+        android:background="@drawable/close_btn_bg"
+        android:contentDescription="desc"
+        android:padding="10dp"
+        android:src="@drawable/close"
+        tools:ignore="HardcodedText,RtlHardcoded" />
+
+</FrameLayout>

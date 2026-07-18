@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- ShoeAR: translucent circle behind the close (X) button so it stays visible
+     on top of any camera background (bright floor, dark furniture, etc.). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#66000000" />
+</shape>
