@@ -60,10 +60,9 @@ packages:
   camerakit_flutter:
     dependency: "direct main"
     description:
-      name: camerakit_flutter
-      sha256: e9e329ed95ca07673164275e1a7534e79eaf0f7322a5518acf8cba1aac6351ed
-      url: "https://pub.dev"
-    source: hosted
+      path: "packages/camerakit_flutter"
+      relative: true
+    source: path
     version: "1.0.7"
   characters:
     dependency: transitive
