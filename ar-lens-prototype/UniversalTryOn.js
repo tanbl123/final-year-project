@@ -14,7 +14,7 @@
 //      "UniversalTryOn" at the top of the scene.
 //   2. Add these to the project and drag them into the inputs below:
 //        • RemoteMediaModule   (Asset Browser > + > RemoteMediaModule)
-//        • InternetModule      (Asset Browser > + > InternetModule)
+//        • RemoteServiceModule (Asset Browser > + > RemoteServiceModule)
 //   3. Drag your template's "Left Foot Binding" and "Right Foot Binding"
 //      SceneObjects into leftFoot / rightFoot.
 //   4. DELETE or DISABLE the baked Shoe_L / Shoe_R meshes (model_L / model_R) —
@@ -30,7 +30,7 @@
 // =============================================================================
 
 // @input Asset.RemoteMediaModule remoteMediaModule
-// @input Asset.InternetModule internetModule
+// @input Asset.RemoteServiceModule remoteServiceModule
 // @input SceneObject leftFoot   {"label":"Left Foot Binding"}
 // @input SceneObject rightFoot  {"label":"Right Foot Binding"}
 // @input Asset.Material defaultMaterial {"label":"Fallback material (optional)"}
@@ -73,7 +73,7 @@ if (!modelUrl) {
   print('ShoeAR: no modelUrl (set fallbackModelUrl or pass LaunchData).');
 } else {
   print('ShoeAR: downloading model → ' + modelUrl);
-  var resource = script.internetModule.makeResourceFromUrl(modelUrl);
+  var resource = script.remoteServiceModule.makeResourceFromUrl(modelUrl);
   script.remoteMediaModule.loadResourceAsGltfAsset(resource, onLoaded, onError);
 }
 
