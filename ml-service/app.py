@@ -96,7 +96,7 @@ def autofit_endpoint():
 
     meta, fitted = autofit.analyze_and_fit(
         data,
-        declared_count=int(body.get('count') or 1),
+        declared_count=(int(body['count']) if body.get('count') else None),  # None -> auto-detect
         declared_length_cm=body.get('lengthCm'),
         declared_side=(body.get('side') or 'right'),
         mirror_single=bool(body.get('mirrorSingle', True)),

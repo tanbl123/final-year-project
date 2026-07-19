@@ -93,6 +93,28 @@ def _count_clusters(mesh, overall_max):
     return len(big) if big else 1
 
 
+def _detect_count(mesh):
+    """Guess 1 or 2 shoes when the supplier didn't declare it. Combines two cues:
+      * connected-component count (2 big clusters -> a pair), when a graph engine
+        is available; and
+      * a PCA width/length ratio -- a single shoe is ~0.35-0.45 wide relative to
+        its length, whereas a side-by-side pair is ~0.6-0.8.
+    Returns (count, reason). Deterministic geometry, not ML."""
+    clusters = _count_clusters(mesh, float(mesh.extents.max()))
+    aligned = _pca_align(mesh)
+    L = float(aligned.extents[2])
+    W = float(aligned.extents[0])
+    ratio = (W / L) if L > 1e-9 else 0.0
+    if clusters == 2:
+        return 2, "two separate meshes"
+    if clusters == 1:
+        # one connected mesh, but a very wide footprint can still be a joined pair
+        return (2, "wide footprint (w/l=%.2f)" % ratio) if ratio > 0.60 else (1, "single mesh")
+    # no graph engine -> decide on the ratio alone
+    return (2, "wide footprint (w/l=%.2f)" % ratio) if ratio > 0.55 \
+        else (1, "narrow footprint (w/l=%.2f)" % ratio)
+
+
 def _normalise(mesh, target_length_m, mirror=False, auto_orient=True):
     """Return a copy: (PCA-aligned if auto_orient), uniform-scaled so its length
     == target, optionally mirrored across X, then seated (X/Z centred, sole on
@@ -110,7 +132,7 @@ def _normalise(mesh, target_length_m, mirror=False, auto_orient=True):
     return m
 
 
-def analyze_and_fit(glb_bytes, declared_count=1, declared_length_cm=None,
+def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                     declared_side="right", mirror_single=True, auto_orient=True):
     """Validate + auto-fit a shoe model.
 
@@ -124,8 +146,8 @@ def analyze_and_fit(glb_bytes, declared_count=1, declared_length_cm=None,
     target_m = length_cm / 100.0
     meta = {
         "ok": False, "rejected": False, "rejectReason": None, "warnings": [],
-        "shoeCount": declared_count, "dimensionsCm": None, "appliedScale": None,
-        "side": declared_side, "autoOriented": bool(auto_orient),
+        "shoeCount": declared_count, "countDetection": None, "dimensionsCm": None,
+        "appliedScale": None, "side": declared_side, "autoOriented": bool(auto_orient),
     }
 
     # 1. size ---------------------------------------------------------------
@@ -154,6 +176,12 @@ def analyze_and_fit(glb_bytes, declared_count=1, declared_length_cm=None,
     if tri > TRI_WARN:
         meta["warnings"].append("High poly count (%d triangles) — consider "
                                 "decimating for AR performance." % tri)
+
+    # auto-detect 1 vs 2 shoes when the supplier didn't declare it ----------
+    if declared_count is None:
+        declared_count, reason = _detect_count(mesh)
+        meta["countDetection"] = reason
+    meta["shoeCount"] = declared_count
 
     # measure ONE shoe (aligned) for the reported dimensions + scale --------
     if declared_count == 2:
