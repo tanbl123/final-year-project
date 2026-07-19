@@ -71,6 +71,7 @@ function recMlItems(array $config, string $path): ?array {
 
 // Best-sellers by units sold; if there are no sales yet, newest approved.
 function recTrendingFallback(PDO $pdo, int $k): array {
+  // 1) real best-sellers by units sold (paid+ orders only; excludes cancelled).
   $ids = $pdo->query(
     "SELECT p.productId
        FROM order_item oi
@@ -83,11 +84,20 @@ function recTrendingFallback(PDO $pdo, int $k): array {
       ORDER BY SUM(oi.orderQuantity) DESC
       LIMIT " . (int) $k
   )->fetchAll(PDO::FETCH_COLUMN);
-  if (!$ids) {
-    $ids = $pdo->query(
+
+  // 2) cold-start backfill: at launch there may be few/zero sales, which would
+  //    leave the "Trending now" rail with 0–1 cards. Top it up with the newest
+  //    approved products (not already listed) so it's never sparse. Pure ranking
+  //    logic — no ML.
+  if (count($ids) < $k) {
+    $extra = $pdo->query(
       "SELECT productId FROM product WHERE productStatus = 'Approved'
-        ORDER BY created_at DESC LIMIT " . (int) $k
+        ORDER BY created_at DESC LIMIT " . (int) ($k * 3)
     )->fetchAll(PDO::FETCH_COLUMN);
+    foreach ($extra as $pid) {
+      if (count($ids) >= $k) break;
+      if (!in_array($pid, $ids, true)) { $ids[] = $pid; }
+    }
   }
   return recCardsForIds($pdo, $ids);
 }

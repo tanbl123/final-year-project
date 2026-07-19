@@ -243,8 +243,26 @@ class HybridRecommender:
         return scored[:k]
 
     def trending(self, k=10):
-        """Best-sellers by units sold; falls back to catalogue order if no sales."""
-        if self.popularity:
-            items = sorted(self.popularity.items(), key=lambda x: x[1], reverse=True)
-            return [{'productId': pid, 'score': float(c)} for pid, c in items[:k]]
-        return [{'productId': p['productId'], 'score': 0.0} for p in self.products[:k]]
+        """Best-sellers by units sold, then BACKFILLED with catalogue order so the
+        rail is never sparse at cold start (few/zero sales at launch). Pure ranking
+        logic — no model involved."""
+        ranked, seen = [], set()
+
+        # 1) real best-sellers (units sold, excludes cancelled — see db.load_popularity)
+        for pid, c in sorted(self.popularity.items(), key=lambda x: x[1], reverse=True):
+            if len(ranked) >= k:
+                break
+            ranked.append({'productId': pid, 'score': float(c)})
+            seen.add(pid)
+
+        # 2) cold-start backfill: top up with catalogue products (newest first, as
+        #    loaded) not already listed, so we always return a full row.
+        for p in self.products:
+            if len(ranked) >= k:
+                break
+            pid = p['productId']
+            if pid not in seen:
+                ranked.append({'productId': pid, 'score': 0.0})
+                seen.add(pid)
+
+        return ranked
