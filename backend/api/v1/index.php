@@ -226,7 +226,7 @@ if ($method === 'POST' && preg_match('#^/orders/([^/]+)/refund$#', $path, $m)) {
 if ($method === 'POST' && preg_match('#^/orders/([^/]+)/cancel$#', $path, $m)) {
   $auth = requireAuth($secret);
   $pdo  = getPDO();
-  handleCancelOrder($pdo, $auth, $m[1]);
+  handleCancelOrder($pdo, $auth, $m[1], $config);
 }
 
 if ($method === 'GET' && $path === '/refunds') {
@@ -1083,7 +1083,7 @@ if ($method === 'PATCH' && preg_match('#^/admin/refunds/([^/]+)/status$#', $path
   $auth = requireAuth($secret);
   requireAdmin($auth);
   $pdo  = getPDO();
-  handleSetRefundStatus($pdo, $m[1]);
+  handleSetRefundStatus($pdo, $m[1], $config);
 }
 
 // ── reviews & ratings (admin moderation; supplier sees reviews on product detail) ──

@@ -673,7 +673,7 @@ function handleGetCustomerOrder(PDO $pdo, array $auth, string $orderId): void {
 // shipped yet (Paid/Processing). Full refund: the payment is marked Refunded
 // (which removes the supplier's earnings + platform commission) and stock is
 // restored since nothing was shipped.
-function handleCancelOrder(PDO $pdo, array $auth, string $orderId): void {
+function handleCancelOrder(PDO $pdo, array $auth, string $orderId, array $config = []): void {
   $customerId = requireCustomerId($pdo, $auth);
   $o = $pdo->prepare("SELECT orderStatus FROM `order` WHERE orderId = :oid AND customerId = :cid");
   $o->execute(['oid' => $orderId, 'cid' => $customerId]);
@@ -688,6 +688,17 @@ function handleCancelOrder(PDO $pdo, array $auth, string $orderId): void {
   if (_orderHasActiveRefund($pdo, $orderId)) {
     sendJson(409, false, null, ['code' => 'CONFLICT', 'message' => 'A refund is already in progress for this order.']);
   }
+
+  // Return the money for real via Stripe BEFORE flipping status, so the order is
+  // only ever marked Refunded when money has actually gone back. Skips silently
+  // for non-Stripe/unconfigured demos; aborts if Stripe rejects the refund.
+  try {
+    refundOrderPayment($pdo, $orderId, $config, 'requested_by_customer');
+  } catch (Throwable $e) {
+    sendJson(502, false, null, ['code' => 'REFUND_FAILED',
+      'message' => 'Could not process the refund with Stripe: ' . $e->getMessage()]);
+  }
+
   try {
     $pdo->beginTransaction();
     // restore stock for each line (items never shipped)

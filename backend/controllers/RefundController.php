@@ -43,7 +43,7 @@ function handleListRefunds(PDO $pdo): void {
 // PATCH /admin/refunds/{refundId}/status — body: { status }.
 // Allowed transitions: Pending → Approved | Rejected; Approved → Completed.
 // Completing a refund marks the order's payment as Refunded (money returned).
-function handleSetRefundStatus(PDO $pdo, string $refundId): void {
+function handleSetRefundStatus(PDO $pdo, string $refundId, array $config = []): void {
   $body   = getJsonBody();
   $status = trim($body['status'] ?? '');
   if (!in_array($status, ['Approved', 'Rejected', 'Completed'], true)) {
@@ -67,6 +67,18 @@ function handleSetRefundStatus(PDO $pdo, string $refundId): void {
       'code' => 'CONFLICT',
       'message' => "Cannot change a {$current} refund to {$status}.",
     ]);
+  }
+
+  // Completing a refund returns the money for real via Stripe FIRST, so we only
+  // record 'Refunded' when money has actually gone back. Skips silently for
+  // non-Stripe/unconfigured demos; aborts if Stripe rejects the refund.
+  if ($status === 'Completed') {
+    try {
+      refundOrderPayment($pdo, $refund['orderId'], $config, 'requested_by_customer');
+    } catch (Throwable $e) {
+      sendJson(502, false, null, ['code' => 'REFUND_FAILED',
+        'message' => 'Could not process the refund with Stripe: ' . $e->getMessage()]);
+    }
   }
 
   try {
