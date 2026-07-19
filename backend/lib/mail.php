@@ -208,6 +208,28 @@ function sendCourierDecisionEmail(array $config, string $toEmail, string $fullNa
 
 // Tell a supplier applicant the admin's decision on their application.
 // $status is 'Active' (approved), 'Rejected' (fixable) or 'Banned' (final).
+// Formal notice to a supplier when the admin rejects one of their products,
+// naming the product and the reason so they can fix it and resubmit.
+function sendProductDecisionEmail(array $config, string $toEmail, string $companyName, string $productName, ?string $reason): void {
+  $name      = $companyName !== '' ? $companyName : 'Supplier';
+  $product   = $productName !== '' ? $productName : 'your product';
+  $reasonTxt = ($reason !== null && $reason !== '') ? $reason : '';
+
+  $subject  = 'ShoeAR Product Submission — Action Required';
+  $textBody = "Thank you for submitting \"$product\" to the ShoeAR platform. After reviewing it, we are unable to approve it in its current form, so it will not be listed.\n\n"
+            . ($reasonTxt !== '' ? "Reason: $reasonTxt\n\n" : '')
+            . "Please sign in to the ShoeAR Supplier Portal to update the product and resubmit it for review.\n\n"
+            . "If you have any questions, please contact our support team.";
+  $bodyHtml = '<p>Thank you for submitting <strong>' . htmlspecialchars($product, ENT_QUOTES) . '</strong> to the ShoeAR platform. After reviewing it, we are unable to approve it in its current form, so it will not be listed.</p>'
+            . ($reasonTxt !== '' ? '<p><strong>Reason:</strong> ' . htmlspecialchars($reasonTxt, ENT_QUOTES) . '</p>' : '')
+            . '<p>Please sign in to the ShoeAR Supplier Portal to update the product and <strong>resubmit</strong> it for review.</p>'
+            . '<p>If you have any questions, please contact our support team.</p>';
+
+  $text = "Dear $name,\n\n$textBody\n\nYours sincerely,\nThe ShoeAR Team";
+  $html = formalLetterHtml($name, $bodyHtml, '👟 ShoeAR');
+  sendMail($config, $toEmail, $companyName, $subject, $text, $html);
+}
+
 function sendSupplierDecisionEmail(array $config, string $toEmail, string $companyName, string $status, ?string $reason): void {
   $name      = $companyName !== '' ? $companyName : 'Applicant';
   $reasonTxt = ($reason !== null && $reason !== '') ? $reason : '';

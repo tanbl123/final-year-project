@@ -143,6 +143,16 @@ function ProductDetailPage() {
         </Link>
       </div>
 
+      {/* Why the product was rejected — the admin's reason. Editing it resubmits
+          for review (which clears this). */}
+      {product.status === 'Rejected' && product.rejectionReason && (
+        <div className="alert alert-danger">
+          <div className="fw-semibold mb-1">This product was rejected</div>
+          <div className="mb-2" style={{ whiteSpace: 'pre-wrap' }}>{product.rejectionReason}</div>
+          <div className="small mb-0">Update the product to address this, then save — it will be resubmitted for review.</div>
+        </div>
+      )}
+
       {/* ── summary stat tiles (seller-dashboard style) ── */}
       <div className="row g-3 mb-4">
         <div className="col-6 col-md-3">

@@ -827,7 +827,7 @@ if ($method === 'POST' && preg_match('#^/admin/products/([^/]+)/reject$#', $path
   $auth = requireAuth($secret);
   requireAdmin($auth);
   $pdo  = getPDO();
-  handleRejectProduct($pdo, $m[1]);
+  handleRejectProduct($pdo, $m[1], $config);
 }
 
 // admin records/clears the Camera Kit AR lens id for a product (after building

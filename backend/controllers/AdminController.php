@@ -174,8 +174,18 @@ function handleListPendingProducts(PDO $pdo): void {
 }
 
 // Shared: move a currently-Pending product to a new status (Approved/Rejected).
-function setProductStatus(PDO $pdo, string $productId, string $newStatus): void {
-  $stmt = $pdo->prepare("SELECT productStatus FROM product WHERE productId = :id");
+// On rejection we store the admin's reason and email the supplier a formal
+// notice (mirroring supplier/courier decisions); on approval we clear any
+// previous reason.
+function setProductStatus(PDO $pdo, string $productId, string $newStatus, ?string $reason = null, array $config = []): void {
+  // Pull the product + the supplier's contact so we can notify them.
+  $stmt = $pdo->prepare(
+    "SELECT p.productStatus, p.productName, u.email, s.companyName
+       FROM product p
+       JOIN supplier s ON s.supplierId = p.supplierId
+       JOIN `user`  u ON u.userId    = s.userId
+      WHERE p.productId = :id"
+  );
   $stmt->execute(['id' => $productId]);
   $row = $stmt->fetch();
 
@@ -186,8 +196,17 @@ function setProductStatus(PDO $pdo, string $productId, string $newStatus): void 
     sendJson(409, false, null, ['code' => 'CONFLICT', 'message' => 'This product has already been reviewed.']);
   }
 
-  $upd = $pdo->prepare("UPDATE product SET productStatus = :s WHERE productId = :id");
-  $upd->execute(['s' => $newStatus, 'id' => $productId]);
+  // Approve clears any prior reason; Reject stores it.
+  $storedReason = ($newStatus === 'Rejected') ? $reason : null;
+  $upd = $pdo->prepare("UPDATE product SET productStatus = :s, rejectionReason = :r WHERE productId = :id");
+  $upd->execute(['s' => $newStatus, 'r' => $storedReason, 'id' => $productId]);
+
+  // Best-effort email to the supplier (never block the API on mail failure).
+  if ($newStatus === 'Rejected' && !empty($row['email']) && function_exists('sendProductDecisionEmail')) {
+    try {
+      sendProductDecisionEmail($config, $row['email'], $row['companyName'] ?? '', $row['productName'] ?? '', (string) $reason);
+    } catch (Throwable $e) { /* best effort */ }
+  }
 
   sendJson(200, true, ['productId' => $productId, 'status' => $newStatus]);
 }
@@ -197,9 +216,18 @@ function handleApproveProduct(PDO $pdo, string $productId): void {
   setProductStatus($pdo, $productId, 'Approved');
 }
 
-// POST /admin/products/{productId}/reject
-function handleRejectProduct(PDO $pdo, string $productId): void {
-  setProductStatus($pdo, $productId, 'Rejected');
+// POST /admin/products/{productId}/reject — requires a reason (shown to the
+// supplier in-app and emailed to them).
+function handleRejectProduct(PDO $pdo, string $productId, array $config = []): void {
+  $body   = getJsonBody();
+  $reason = trim($body['reason'] ?? '');
+  if ($reason === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A rejection reason is required.']);
+  }
+  if (mb_strlen($reason) > 255) {
+    $reason = mb_substr($reason, 0, 255);
+  }
+  setProductStatus($pdo, $productId, 'Rejected', $reason, $config);
 }
 
 // ── User management ──────────────────────────────────────────────────

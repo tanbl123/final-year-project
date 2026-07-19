@@ -17,7 +17,9 @@ function AdminProductApprovalsPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');        // transient success message
   const [busyId, setBusyId] = useState('');         // productId currently being actioned
+  const [approving, setApproving] = useState(null); // product pending approve confirmation
   const [rejecting, setRejecting] = useState(null); // product pending reject confirmation
+  const [rejectReason, setRejectReason] = useState(''); // reason typed in the reject dialog
   const [reviewId, setReviewId] = useState('');     // product being previewed in the modal
   const [search, setSearch] = useState('');
 
@@ -54,12 +56,12 @@ function AdminProductApprovalsPage() {
   }, []);
 
   // approve / reject share the same shape: call the API, drop the row, notify
-  async function act(product, action) {
+  async function act(product, action, reason) {
     setBusyId(product.productId);
     setError('');
     try {
       if (action === 'approve') await approveProduct(product.productId);
-      else await rejectProduct(product.productId);
+      else await rejectProduct(product.productId, reason);
 
       setProducts((prev) => prev.filter((p) => p.productId !== product.productId));
       setNotice(`${product.productName} ${action === 'approve' ? 'approved' : 'rejected'}.`);
@@ -135,14 +137,14 @@ function AdminProductApprovalsPage() {
                     <button
                       className="btn btn-success btn-sm me-2"
                       disabled={busyId === p.productId}
-                      onClick={() => act(p, 'approve')}
+                      onClick={() => setApproving(p)}
                     >
                       {busyId === p.productId ? '…' : 'Approve'}
                     </button>
                     <button
                       className="btn btn-outline-danger btn-sm"
                       disabled={busyId === p.productId}
-                      onClick={() => setRejecting(p)}
+                      onClick={() => { setRejectReason(''); setRejecting(p); }}
                     >
                       Reject
                     </button>
@@ -161,19 +163,43 @@ function AdminProductApprovalsPage() {
         productId={reviewId}
         busy={busyId === reviewId}
         onClose={() => setReviewId('')}
-        onApprove={(prod) => { setReviewId(''); act({ productId: prod.id, productName: prod.name }, 'approve'); }}
-        onReject={(prod) => { setReviewId(''); setRejecting({ productId: prod.id, productName: prod.name }); }}
+        onApprove={(prod) => { setReviewId(''); setApproving({ productId: prod.id, productName: prod.name }); }}
+        onReject={(prod) => { setReviewId(''); setRejectReason(''); setRejecting({ productId: prod.id, productName: prod.name }); }}
       />
 
+      {/* Approve is now behind a confirm — it makes the product publicly visible. */}
+      <ConfirmDialog
+        isOpen={!!approving}
+        title="Approve product?"
+        message={approving ? `Approve "${approving.productName}"? It will be published and visible to customers.` : ''}
+        confirmText="Approve"
+        confirmColor="success"
+        onCancel={() => setApproving(null)}
+        onConfirm={() => { const p = approving; setApproving(null); act(p, 'approve'); }}
+      />
+
+      {/* Reject requires a reason — shown to the supplier in-app and emailed. */}
       <ConfirmDialog
         isOpen={!!rejecting}
         title="Reject product?"
-        message={rejecting ? `Reject "${rejecting.productName}"? It won't be listed on the platform.` : ''}
+        message={rejecting ? `Reject "${rejecting.productName}"? It won't be listed, and the supplier will be told why.` : ''}
         confirmText="Reject"
         confirmColor="danger"
-        onCancel={() => setRejecting(null)}
-        onConfirm={() => { const p = rejecting; setRejecting(null); act(p, 'reject'); }}
-      />
+        confirmDisabled={!rejectReason.trim()}
+        onCancel={() => { setRejecting(null); setRejectReason(''); }}
+        onConfirm={() => { const p = rejecting; const r = rejectReason.trim(); setRejecting(null); setRejectReason(''); act(p, 'reject', r); }}
+      >
+        <label className="form-label small fw-semibold mt-2 mb-1">Reason for rejection <span className="text-danger">*</span></label>
+        <textarea
+          className="form-control"
+          rows={3}
+          maxLength={255}
+          placeholder="e.g. The 3D model is low quality / doesn't match the product photos."
+          value={rejectReason}
+          onChange={(e) => setRejectReason(e.target.value)}
+        />
+        <div className="form-text">{rejectReason.length}/255 · the supplier sees this and can fix it, then resubmit.</div>
+      </ConfirmDialog>
     </div>
   );
 }

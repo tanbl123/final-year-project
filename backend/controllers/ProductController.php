@@ -179,7 +179,8 @@ function handleGetProduct(PDO $pdo, array $auth, string $id): void {
   $stmt = $pdo->prepare(
     'SELECT p.productId AS id, p.productName AS name, p.productBrand AS brand,
             p.productDescription AS description, p.productPrice AS price,
-            p.productStatus AS status, p.virtualTryOnEnable AS virtualTryOnEnable,
+            p.productStatus AS status, p.rejectionReason AS rejectionReason,
+            p.virtualTryOnEnable AS virtualTryOnEnable,
             p.categoryId AS categoryId, c.categoryName AS categoryName
      FROM product p
      JOIN category c ON c.categoryId = p.categoryId
@@ -243,7 +244,8 @@ function handleGetAdminProduct(PDO $pdo, string $id): void {
   $stmt = $pdo->prepare(
     'SELECT p.productId AS id, p.productName AS name, p.productBrand AS brand,
             p.productDescription AS description, p.productPrice AS price,
-            p.productStatus AS status, p.virtualTryOnEnable AS virtualTryOnEnable,
+            p.productStatus AS status, p.rejectionReason AS rejectionReason,
+            p.virtualTryOnEnable AS virtualTryOnEnable,
             p.categoryId AS categoryId, c.categoryName AS categoryName,
             s.companyName AS supplierName
      FROM product p
@@ -443,7 +445,7 @@ function handleUpdateProduct(PDO $pdo, array $auth, string $id): void {
       'UPDATE product
           SET productName = :name, productBrand = :brand, productDescription = :desc,
               productPrice = :price, categoryId = :cat, virtualTryOnEnable = :tryon,
-              productStatus = :status
+              productStatus = :status, rejectionReason = NULL
         WHERE productId = :id AND supplierId = :sid'
     )->execute([
       'name'   => $name,

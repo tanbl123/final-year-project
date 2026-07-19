@@ -99,9 +99,10 @@ export function approveProduct(productId) {
   return apiPost(`/admin/products/${productId}/approve`, {}, getToken());
 }
 
-// Reject a pending product (status → Rejected).
-export function rejectProduct(productId) {
-  return apiPost(`/admin/products/${productId}/reject`, {}, getToken());
+// Reject a pending product (status → Rejected). reason is required and is shown
+// to the supplier in-app and emailed to them.
+export function rejectProduct(productId, reason) {
+  return apiPost(`/admin/products/${productId}/reject`, { reason }, getToken());
 }
 
 // Record (or clear) the Snapchat Camera Kit AR lens id for a product's 3D model,

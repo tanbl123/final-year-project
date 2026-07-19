@@ -20,7 +20,9 @@ function ConfirmDialog(props) {
             </div>
 
             <div className="modal-body">
-              <p className="mb-0">{props.message}</p>
+              {props.message && <p className="mb-0">{props.message}</p>}
+              {/* optional extra content, e.g. a reason textarea */}
+              {props.children}
             </div>
 
             <div className="modal-footer">
@@ -30,6 +32,7 @@ function ConfirmDialog(props) {
               <button
                 type="button"
                 className={'btn btn-' + (props.confirmColor || 'primary')}
+                disabled={props.confirmDisabled}
                 onClick={props.onConfirm}
               >
                 {props.confirmText || 'Confirm'}

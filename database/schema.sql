@@ -212,6 +212,7 @@ CREATE TABLE product (
     -- Rejected : rejected by admin
     -- Removed  : taken down by supplier/admin (soft delete)
     productStatus       ENUM('Pending','Approved','Rejected','Removed') NOT NULL DEFAULT 'Pending',
+    rejectionReason     VARCHAR(255)  NULL,     -- admin's reason when productStatus = 'Rejected'
     virtualTryOnEnable  BOOLEAN       NOT NULL DEFAULT FALSE,
     created_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
