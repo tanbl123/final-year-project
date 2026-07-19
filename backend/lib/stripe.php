@@ -62,9 +62,11 @@ function stripeRefund(string $secret, string $paymentIntentId, string $reason = 
 // caller can abort instead of marking an order 'Refunded' when no money moved.
 function refundOrderPayment(PDO $pdo, string $orderId, array $config, string $reason = 'requested_by_customer'): bool {
   if (!stripeConfigured($config)) { return false; }
+  // A completed payment is stored as 'Successful' (payment.paymentStatus enum is
+  // Pending/Successful/Failed/Refunded — there is no 'Paid').
   $stmt = $pdo->prepare(
     "SELECT paymentMethod, transactionId FROM payment
-      WHERE orderId = :oid AND paymentStatus = 'Paid'
+      WHERE orderId = :oid AND paymentStatus = 'Successful'
       ORDER BY paymentDate DESC LIMIT 1"
   );
   $stmt->execute(['oid' => $orderId]);
