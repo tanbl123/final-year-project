@@ -100,6 +100,7 @@ def autofit_endpoint():
         declared_length_cm=body.get('lengthCm'),
         declared_side=(body.get('side') or 'right'),
         mirror_single=bool(body.get('mirrorSingle', True)),
+        auto_orient=bool(body.get('autoOrient', True)),
     )
     out = dict(meta)
     if bool(body.get('returnFiles', False)) and fitted:
