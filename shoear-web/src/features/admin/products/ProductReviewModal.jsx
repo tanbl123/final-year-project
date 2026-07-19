@@ -160,8 +160,20 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                           value={lensId}
                           onChange={(e) => setLensId(e.target.value)}
                         />
-                        <button type="button" className="btn btn-primary" disabled={savingLens} onClick={saveLens}>
-                          {savingLens ? 'Saving…' : 'Save'}
+                        {/* Dirty-check: only enable Save when the id differs from
+                            what's already stored, so the admin can't re-save the
+                            same lens id. Auto-disables again after a save. */}
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={savingLens || lensId.trim() === (product.arLensId || '')}
+                          onClick={saveLens}
+                        >
+                          {savingLens
+                            ? 'Saving…'
+                            : lensId.trim() === (product.arLensId || '')
+                              ? (product.arLensId ? 'Saved' : 'Save')
+                              : 'Save'}
                         </button>
                       </div>
                       <div className="form-text">
