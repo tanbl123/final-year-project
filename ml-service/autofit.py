@@ -26,8 +26,8 @@ import io
 import numpy as np
 import trimesh
 
-MAX_BYTES = 8 * 1024 * 1024      # 8 MB
-MAX_TRIANGLES = 100_000
+MAX_BYTES = 50 * 1024 * 1024     # 50 MB — generous; Lens Studio optimises at publish
+TRI_WARN = 150_000               # high-poly: warn (admin/Lens Studio can decimate)
 DEFAULT_LENGTH_CM = 26.0         # average adult foot if none declared
 
 
@@ -149,12 +149,11 @@ def analyze_and_fit(glb_bytes, declared_count=1, declared_length_cm=None,
         meta["rejectReason"] = "No 3D mesh found in the file."
         return meta, None
 
-    # 3. triangle budget ----------------------------------------------------
+    # 3. triangle budget (warn, don't reject — Lens Studio can decimate) ----
     tri = int(len(mesh.faces))
-    if tri > MAX_TRIANGLES:
-        meta["rejected"] = True
-        meta["rejectReason"] = "Model has %d triangles (limit %d)." % (tri, MAX_TRIANGLES)
-        return meta, None
+    if tri > TRI_WARN:
+        meta["warnings"].append("High poly count (%d triangles) — consider "
+                                "decimating for AR performance." % tri)
 
     # measure ONE shoe (aligned) for the reported dimensions + scale --------
     if declared_count == 2:
