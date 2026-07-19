@@ -6,9 +6,12 @@ Endpoints (all return {"items": [{"productId", "score"}]}):
   GET  /recommend/for-you?customerId=&k=     personalized weighted hybrid
   GET  /recommend/trending?k=                best-sellers
   POST /reload                               retrain from the latest DB data
+  POST /autofit                              validate + auto-fit a shoe .glb (geometry, not ML)
 
 The PHP backend proxies to these and enriches the returned productIds into full
-product cards, so this service stays a thin ML layer.
+product cards, so this service stays a thin ML layer. /autofit is a geometry
+helper (see autofit.py) that shares this service's process but is NOT machine
+learning — it validates a supplier model and bakes the AR fit into per-foot glbs.
 """
 from flask import Flask, request, jsonify
 
@@ -55,6 +58,53 @@ def trending():
 @app.post('/reload')
 def reload_model():
     return jsonify({'status': 'reloaded', **rec.train()})
+
+
+@app.post('/autofit')
+def autofit_endpoint():
+    """Validate + auto-fit a supplier shoe model (geometry, NOT ML).
+
+    Body JSON: { modelUrl, count?, lengthCm?, side?, mirrorSingle?, returnFiles? }
+      modelUrl     public .glb URL to analyse (required)
+      count        1 or 2 shoes in the model (default 1)
+      lengthCm     real shoe length for scaling (default ~26)
+      side         'left'/'right' for a single shoe (default 'right')
+      mirrorSingle mirror a single shoe to the other foot (default true)
+      returnFiles  if true, also return base64 fitted per-foot .glb files
+
+    Returns the analysis (ok/rejected/rejectReason/warnings/shoeCount/
+    dimensionsCm/appliedScale) and, when returnFiles, the baked 'fitted' glbs.
+    """
+    import base64
+    import urllib.request
+    try:
+        import autofit
+    except Exception as e:   # trimesh not installed
+        return jsonify({'error': 'auto-fit unavailable (install trimesh): %s' % e}), 503
+
+    body = request.get_json(silent=True) or {}
+    url = (body.get('modelUrl') or '').strip()
+    if not url:
+        return jsonify({'error': 'modelUrl is required'}), 400
+
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': 'ShoeAR-autofit'})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = resp.read()
+    except Exception as e:
+        return jsonify({'error': 'Could not download modelUrl: %s' % e}), 400
+
+    meta, fitted = autofit.analyze_and_fit(
+        data,
+        declared_count=int(body.get('count') or 1),
+        declared_length_cm=body.get('lengthCm'),
+        declared_side=(body.get('side') or 'right'),
+        mirror_single=bool(body.get('mirrorSingle', True)),
+    )
+    out = dict(meta)
+    if bool(body.get('returnFiles', False)) and fitted:
+        out['fitted'] = {k: base64.b64encode(v).decode('ascii') for k, v in fitted.items()}
+    return jsonify(out)
 
 
 @app.get('/metrics')
