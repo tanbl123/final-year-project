@@ -37,7 +37,13 @@ function mlAutofit(array $config, array $payload): array {
   }
   $data = json_decode($res, true);
   if (!is_array($data)) {
-    return ['__error' => 'The AR auto-fit service returned an unexpected response.'];
+    // Non-JSON usually means an HTML error page: 404 = the service is stale
+    // (restart python app.py after pulling) or the route is missing; 500 = it
+    // crashed. Surface the status so it's diagnosable, not just "unexpected".
+    $hint = $code === 404
+      ? ' (HTTP 404 — the AR service may be running old code; restart python app.py)'
+      : ' (HTTP ' . (int) $code . ')';
+    return ['__error' => 'The AR auto-fit service returned an unexpected response' . $hint . '.'];
   }
   if ($code < 200 || $code >= 300) {
     return ['__error' => (string) ($data['error'] ?? 'The AR auto-fit service reported an error.')];

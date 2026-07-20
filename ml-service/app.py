@@ -94,14 +94,22 @@ def autofit_endpoint():
     except Exception as e:
         return jsonify({'error': 'Could not download modelUrl: %s' % e}), 400
 
-    meta, fitted = autofit.analyze_and_fit(
-        data,
-        declared_count=(int(body['count']) if body.get('count') else None),  # None -> auto-detect
-        declared_length_cm=body.get('lengthCm'),
-        declared_side=(body.get('side') or 'right'),
-        mirror_single=bool(body.get('mirrorSingle', True)),
-        auto_orient=bool(body.get('autoOrient', True)),
-    )
+    # Never let an exception escape as an HTML 500 page — the PHP caller needs
+    # JSON, and the admin needs to see the real reason (not "unexpected response").
+    try:
+        meta, fitted = autofit.analyze_and_fit(
+            data,
+            declared_count=(int(body['count']) if body.get('count') else None),  # None -> auto-detect
+            declared_length_cm=body.get('lengthCm'),
+            declared_side=(body.get('side') or 'right'),
+            mirror_single=bool(body.get('mirrorSingle', True)),
+            auto_orient=bool(body.get('autoOrient', True)),
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()   # full trace in the service console for debugging
+        return jsonify({'error': 'Auto-fit failed while processing the model: %s' % e}), 500
+
     out = dict(meta)
     if bool(body.get('returnFiles', False)) and fitted:
         out['fitted'] = {k: base64.b64encode(v).decode('ascii') for k, v in fitted.items()}
