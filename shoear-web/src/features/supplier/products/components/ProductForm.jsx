@@ -65,6 +65,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
   const [modelUrl, setModelUrl] = useState(init.modelUrl);   // single .glb/.gltf
   const [modelName, setModelName] = useState(init.modelName); // shown to the supplier
   const [modelWarnings, setModelWarnings] = useState([]);     // AR validation warnings (non-blocking)
+  const [modelError, setModelError] = useState('');           // shown inline at the 3D-model section
   const [validatingModel, setValidatingModel] = useState(false);
   const [tryOn, setTryOn] = useState(init.tryOn);
 
@@ -218,16 +219,19 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
     event.target.value = '';
     if (!file) return;
 
+    setModelError('');
+    setModelWarnings([]);
+
     // .glb ONLY — reject anything else immediately (the OS "All files" option
     // can bypass the picker filter). .glb is self-contained; a lone .gltf is
-    // missing its .bin/textures and would arrive broken.
+    // missing its .bin/textures and would arrive broken. Shown inline so the
+    // supplier sees it right here, not in a banner at the top of the form.
+    const chosen = file.name || 'that file';
     if (!file.name.toLowerCase().endsWith('.glb')) {
-      setError('Please upload a .glb file (a single self-contained 3D model). Other formats — including .gltf — are not supported.');
+      setModelError(`"${chosen}" is not a .glb file, so it was not uploaded. Please choose a .glb file (a single self-contained 3D model) — other formats, including .gltf, are not supported.`);
       return;
     }
 
-    setError('');
-    setModelWarnings([]);
     setUploading(true);
     try {
       const { url } = await uploadFile(file, 'model');
@@ -243,7 +247,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
       }
       if (result?.available && result.rejected) {
         // reject the model so the supplier fixes it before submitting
-        setError(`This 3D model can't be used for AR try-on: ${result.rejectReason} Please upload a corrected file.`);
+        setModelError(`This 3D model can't be used for AR try-on: ${result.rejectReason} Please upload a corrected file.`);
         setModelUrl('');
         setModelName('');
         setTryOn(false);
@@ -254,12 +258,13 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
       setModelWarnings(result?.available ? (result.warnings || []) : []);
       // leave the try-on choice to the supplier (they tick the box below)
     } catch (err) {
-      setError(err.message);
+      setModelError(err.message);
     } finally {
       setUploading(false);
     }
   }
   function removeModel() {
+    setModelError('');
     setModelUrl('');
     setModelName('');
     setModelWarnings([]);
@@ -490,6 +495,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
       {/* 3D model + try-on */}
       <label className="form-label fw-semibold">3D model (for AR virtual try-on)</label>
       <p className="text-muted small">A .glb file (self-contained), up to 30&nbsp;MB. It's checked automatically for AR try-on.</p>
+      {modelError && <div className="alert alert-danger py-2 small">{modelError}</div>}
       {validatingModel && (
         <div className="text-muted small mb-2">🔎 Checking the model for AR try-on…</div>
       )}
