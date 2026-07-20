@@ -54,3 +54,10 @@ export function uploadFile(file, kind) {
   form.append('file', file);
   return apiUpload('/uploads', form, getToken());
 }
+
+// Fail-fast AR validation of a just-uploaded 3D model. Returns
+// { available, rejected, rejectReason, warnings, shoeCount, dimensionsCm, ... }.
+// available=false means the AR service is offline (upload should still proceed).
+export function validateModel(modelUrl) {
+  return apiPost('/supplier/models/validate', { modelUrl }, getToken());
+}

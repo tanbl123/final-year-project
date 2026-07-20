@@ -1142,6 +1142,14 @@ if ($path === '/supplier/inventory') {
 }
 
 // ── product routes (all require a valid token) ──
+// supplier fail-fast model validation (called right after uploading a .glb, so
+// a bad model is caught before submission instead of at admin review).
+if ($path === '/supplier/models/validate' && $method === 'POST') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleValidateSupplierModel($pdo, $auth, $config);
+}
+
 if ($path === '/products') {
   $auth = requireAuth($secret);
   $pdo  = getPDO();

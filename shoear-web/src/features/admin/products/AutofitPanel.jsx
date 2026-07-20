@@ -36,9 +36,9 @@ function AutofitPanel({ productId, modelUrl }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
 
-  const [fitted, setFitted] = useState(null);   // { left?: url, right?: url }
+  const [fitted, setFitted] = useState(null);   // { url } of the combined pair glb
   const [generating, setGenerating] = useState(false);
-  const [foot, setFoot] = useState('right');     // which fitted foot to preview
+  const [showFitted, setShowFitted] = useState(false);  // preview: original vs fitted pair
   const blobUrls = useRef([]);                    // track for revocation
 
   function revokeBlobs() {
@@ -73,12 +73,12 @@ function AutofitPanel({ productId, modelUrl }) {
     try {
       const res = await getProductAutofit(productId, opts({ files: true }));
       setMeta(res);
-      const out = {};
-      ['left', 'right'].forEach((k) => {
-        if (res.fitted?.[k]) { out[k] = b64ToBlobUrl(res.fitted[k]); blobUrls.current.push(out[k]); }
-      });
-      setFitted(out);
-      setFoot(out.right ? 'right' : 'left');
+      if (res.fitted?.combined) {
+        const url = b64ToBlobUrl(res.fitted.combined);
+        blobUrls.current.push(url);
+        setFitted({ url });
+        setShowFitted(true);
+      }
     } catch (e) {
       setErr(e.message || 'Could not generate the fitted model.');
     } finally {
@@ -86,11 +86,11 @@ function AutofitPanel({ productId, modelUrl }) {
     }
   }
 
-  function download(k) {
-    if (!fitted?.[k]) return;
+  function download() {
+    if (!fitted?.url) return;
     const a = document.createElement('a');
-    a.href = fitted[k];
-    a.download = `${productId}_${k}_fitted.glb`;
+    a.href = fitted.url;
+    a.download = `${productId}_fitted_pair.glb`;
     a.click();
   }
 
@@ -195,23 +195,20 @@ function AutofitPanel({ productId, modelUrl }) {
               {/* before / after preview */}
               <div className="col-md-6">
                 <div className="btn-group btn-group-sm w-100 mb-1" role="group">
-                  <button type="button" className={`btn btn-outline-secondary${!fitted ? ' active' : ''}`} disabled>Original</button>
-                  {fitted?.left && (
-                    <button type="button" className={`btn btn-outline-secondary${foot === 'left' ? ' active' : ''}`}
-                      onClick={() => setFoot('left')}>Fitted L</button>
-                  )}
-                  {fitted?.right && (
-                    <button type="button" className={`btn btn-outline-secondary${foot === 'right' ? ' active' : ''}`}
-                      onClick={() => setFoot('right')}>Fitted R</button>
-                  )}
+                  <button type="button" className={`btn btn-outline-secondary${!showFitted ? ' active' : ''}`}
+                    onClick={() => setShowFitted(false)}>Original</button>
+                  <button type="button" className={`btn btn-outline-secondary${showFitted ? ' active' : ''}`}
+                    onClick={() => fitted && setShowFitted(true)} disabled={!fitted}>Fitted pair</button>
                 </div>
                 <model-viewer
-                  src={fitted?.[foot] || modelUrl}
+                  src={showFitted && fitted ? fitted.url : modelUrl}
                   camera-controls auto-rotate shadow-intensity="1"
                   style={{ width: '100%', height: '240px', background: '#f8f9fa', borderRadius: '0.5rem' }}
                 ></model-viewer>
                 <div className="text-muted small mt-1">
-                  {fitted ? `Showing fitted ${foot} shoe (oriented, scaled, seated).` : 'Showing the original upload.'}
+                  {showFitted && fitted
+                    ? 'Fitted pair (Shoe_L + Shoe_R, oriented, scaled, seated).'
+                    : 'Original upload. Generate the fitted model to compare.'}
                 </div>
               </div>
             </div>
@@ -228,20 +225,15 @@ function AutofitPanel({ productId, modelUrl }) {
               <button type="button" className="btn btn-sm btn-outline-primary" onClick={generate} disabled={generating}>
                 {generating ? 'Generating…' : fitted ? 'Regenerate fitted model' : 'Generate fitted model (preview + download)'}
               </button>
-              {fitted?.left && (
-                <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => download('left')}>
-                  Download left .glb
-                </button>
-              )}
-              {fitted?.right && (
-                <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => download('right')}>
-                  Download right .glb
+              {fitted?.url && (
+                <button type="button" className="btn btn-sm btn-outline-secondary" onClick={download}>
+                  Download fitted pair .glb
                 </button>
               )}
             </div>
             <div className="form-text">
-              Download the fitted model, open it in Lens Studio replacing the shoe mesh (keep the Foot Occluder),
-              paste the suggested position, and publish — then set the lens id below.
+              One .glb with both shoes (Shoe_L + Shoe_R). Import it into Lens Studio, bind each named node to its
+              foot (keep the Foot Occluder), paste the suggested position, and publish to your lens group — then set the lens id below.
             </div>
           </>
         ))}

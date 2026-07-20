@@ -20,10 +20,11 @@ a few declared facts, it:
      geometry to a per-foot triangle budget with quadric edge collapse. Geometry
      decimation is skipped for textured models (the backend drops UVs) and
      flagged for Lens Studio's UV-aware optimiser instead.
-  5. BAKES the fit into normalised per-foot .glb files (uniform-scale to real
-     length, seat sole on Y=0, centre on the sole) that drop into the Lens
-     Studio foot rig, and SUGGESTS the anchor transform (where to seat the shoe
-     on the foot binding) so the admin pastes numbers instead of eyeballing.
+  5. BAKES the fit into ONE .glb holding both shoes as named nodes (Shoe_L /
+     Shoe_R) — uniform-scaled to real length, sole on Y=0, laid out as a pair —
+     which is what Lens Studio publishes to a lens group. Also SUGGESTS the
+     anchor transform (where to seat each shoe on its foot binding) so the admin
+     pastes numbers instead of eyeballing.
   6. Handles 1 or 2 shoes.
 
 The output REPLACES only the shoe meshes (model_L/R, Shoe_L/R). The template's
@@ -422,6 +423,23 @@ def _normalise(mesh, target_length_m, mirror=False, auto_orient=True):
     return m
 
 
+def _combine_pair(left_mesh, right_mesh):
+    """Pack both fitted shoes into ONE .glb as two named nodes (Shoe_L / Shoe_R),
+    laid out side by side as a pair. This is what Lens Studio wants at publish:
+    import a single file, bind each named node to its foot, publish the pair to
+    the lens group. Each node's geometry stays centred/seated at its own origin
+    (so the suggested anchor still applies); the side-by-side offset is a node
+    transform for a clean pair preview and is reset when binding to a foot."""
+    scene = trimesh.Scene()
+    w = float(max(left_mesh.extents[0], right_mesh.extents[0]))
+    off = w / 2.0 + 0.02                      # 2 cm gap so they don't touch
+    tl = np.eye(4); tl[0, 3] = -off
+    tr = np.eye(4); tr[0, 3] = off
+    scene.add_geometry(left_mesh, node_name="Shoe_L", geom_name="Shoe_L", transform=tl)
+    scene.add_geometry(right_mesh, node_name="Shoe_R", geom_name="Shoe_R", transform=tr)
+    return scene.export(file_type="glb")
+
+
 def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                     declared_side="right", mirror_single=True, auto_orient=True):
     """Validate + auto-fit a shoe model.
@@ -430,8 +448,8 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
       meta   = dict (ok / rejected / rejectReason / warnings / shoeCount /
                countDetection / nativeUnit / nativeLengthCm / dimensionsCm /
                appliedScale / side / autoOriented / orientation / split)
-      fitted = {"left": glb_bytes, "right": glb_bytes} normalised per foot,
-               or None if rejected.
+      fitted = {"combined": glb_bytes} — ONE .glb with both shoes as named
+               nodes (Shoe_L / Shoe_R) ready to publish, or None if rejected.
     """
     length_cm = float(declared_length_cm) if declared_length_cm else DEFAULT_LENGTH_CM
     target_m = length_cm / 100.0
@@ -559,19 +577,15 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         dec_after += after
         return d
 
-    # 9. bake -> normalised per-foot glbs -----------------------------------
+    # 9. bake -> ONE combined per-pair glb (Shoe_L + Shoe_R) ----------------
     fitted = {}
     primary_norm = None            # keep a normalised mesh for the anchor suggestion
+    left_norm = right_norm = None
     if declared_count == 2:
         if halves and len(halves) >= 2:
             ordered = sorted(halves, key=lambda c: float(c.centroid[0]))
-            left_src = _prep(ordered[0])
-            right_src = _prep(ordered[-1])
-            left_norm = _normalise(left_src, target_m, auto_orient=auto_orient)
-            right_norm = _normalise(right_src, target_m, auto_orient=auto_orient)
-            fitted["left"] = left_norm.export(file_type="glb")
-            fitted["right"] = right_norm.export(file_type="glb")
-            primary_norm = right_norm
+            left_norm = _normalise(_prep(ordered[0]), target_m, auto_orient=auto_orient)
+            right_norm = _normalise(_prep(ordered[-1]), target_m, auto_orient=auto_orient)
             if split_conf is not None and split_conf < 0.5:
                 meta["warnings"].append("Two shoes separated by %s — verify the "
                                         "split in QC." % split_method)
@@ -579,24 +593,26 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             meta["warnings"].append("Could not separate two shoes; treating as one.")
             declared_count = 1
             meta["shoeCount"] = 1
-    if declared_count == 1 and not fitted:
+    if declared_count == 1 and left_norm is None and right_norm is None:
         side = (declared_side or "right").lower()
         src = _prep(mesh)
         base = _normalise(src, target_m, auto_orient=auto_orient)
         opp = _normalise(src, target_m, mirror=True, auto_orient=auto_orient) if mirror_single else None
-        primary_norm = base
         if side == "left":
-            fitted["left"] = base.export(file_type="glb")
-            if opp is not None:
-                fitted["right"] = opp.export(file_type="glb")
+            left_norm, right_norm = base, opp
         else:
-            fitted["right"] = base.export(file_type="glb")
-            if opp is not None:
-                fitted["left"] = opp.export(file_type="glb")
+            right_norm, left_norm = base, opp
         if mirror_single:
             meta["warnings"].append("Single shoe mirrored for the other foot — "
                                     "branding on the mirrored side is reversed. "
                                     "Upload both shoes for accurate left/right designs.")
+
+    # one file with both shoes (or the single shoe if the other foot is absent)
+    primary_norm = right_norm or left_norm
+    if left_norm is not None and right_norm is not None:
+        fitted["combined"] = _combine_pair(left_norm, right_norm)
+    elif primary_norm is not None:
+        fitted["combined"] = primary_norm.export(file_type="glb")
 
     # texture + decimation report -------------------------------------------
     if tex_before:

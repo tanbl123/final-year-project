@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { fetchCategories, uploadFile } from '../productService';
+import { fetchCategories, uploadFile, validateModel } from '../productService';
 import ConfirmDialog from '../../../../components/ConfirmDialog';
 import ClearableInput from '../../../../components/ClearableInput';
 
@@ -64,6 +64,8 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
   const [images, setImages] = useState(init.images);  // [{ url }]
   const [modelUrl, setModelUrl] = useState(init.modelUrl);   // single .glb/.gltf
   const [modelName, setModelName] = useState(init.modelName); // shown to the supplier
+  const [modelWarnings, setModelWarnings] = useState([]);     // AR validation warnings (non-blocking)
+  const [validatingModel, setValidatingModel] = useState(false);
   const [tryOn, setTryOn] = useState(init.tryOn);
 
   const [categories, setCategories] = useState([]);
@@ -217,11 +219,31 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
     if (!file) return;
 
     setError('');
+    setModelWarnings([]);
     setUploading(true);
     try {
       const { url } = await uploadFile(file, 'model');
+      // Fail-fast AR validation: catch a bad model now, not at admin review.
+      setValidatingModel(true);
+      let result;
+      try {
+        result = await validateModel(url);
+      } catch {
+        result = { available: false };   // don't block on a validation hiccup
+      } finally {
+        setValidatingModel(false);
+      }
+      if (result?.available && result.rejected) {
+        // reject the model so the supplier fixes it before submitting
+        setError(`This 3D model can't be used for AR try-on: ${result.rejectReason} Please upload a corrected file.`);
+        setModelUrl('');
+        setModelName('');
+        setTryOn(false);
+        return;
+      }
       setModelUrl(url);
       setModelName(file.name);
+      setModelWarnings(result?.available ? (result.warnings || []) : []);
       // leave the try-on choice to the supplier (they tick the box below)
     } catch (err) {
       setError(err.message);
@@ -232,6 +254,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
   function removeModel() {
     setModelUrl('');
     setModelName('');
+    setModelWarnings([]);
     setTryOn(false);
   }
 
@@ -458,13 +481,25 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
 
       {/* 3D model + try-on */}
       <label className="form-label fw-semibold">3D model (for AR virtual try-on)</label>
-      <p className="text-muted small">A .glb or .gltf file, up to 30&nbsp;MB.</p>
+      <p className="text-muted small">A .glb or .gltf file, up to 30&nbsp;MB. It's checked automatically for AR try-on.</p>
+      {validatingModel && (
+        <div className="text-muted small mb-2">🔎 Checking the model for AR try-on…</div>
+      )}
       {modelUrl ? (
         <>
           <div className="d-flex align-items-center gap-2">
             <span className="badge text-bg-success">🧊 {modelName || '3D model uploaded'}</span>
             <button type="button" className="btn btn-outline-danger btn-sm" onClick={removeModel}>Remove</button>
           </div>
+          {/* non-blocking AR warnings so the supplier can improve the model */}
+          {modelWarnings.length > 0 && (
+            <div className="alert alert-warning py-2 small mt-2 mb-0">
+              <div className="fw-semibold">AR try-on notes:</div>
+              <ul className="mb-0 ps-3">
+                {modelWarnings.map((w, i) => <li key={i}>{w}</li>)}
+              </ul>
+            </div>
+          )}
           {/* live WebGL preview so the supplier can verify their 3D model
               (drag to rotate) before saving — matches the admin review preview */}
           <model-viewer

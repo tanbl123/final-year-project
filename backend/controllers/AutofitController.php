@@ -45,6 +45,43 @@ function mlAutofit(array $config, array $payload): array {
   return $data;
 }
 
+// POST /supplier/models/validate   body: { modelUrl }
+//
+// Fail-fast validation the supplier's upload widget calls right after uploading
+// a .glb, so a bad model (corrupt / Draco / no mesh / implausible size) is caught
+// in seconds — instead of the slow round-trip of admin review -> rejection email
+// -> re-upload. Returns a light validation summary (no fitted files).
+//
+// Graceful: if the ML service is offline, returns available=false so the upload
+// still proceeds (infrastructure being down must not block suppliers).
+function handleValidateSupplierModel(PDO $pdo, array $auth, array $config): void {
+  requireSupplierId($pdo, $auth);   // suppliers only
+
+  $body     = getJsonBody();
+  $modelUrl = trim($body['modelUrl'] ?? '');
+  if ($modelUrl === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'modelUrl is required.']);
+    return;
+  }
+
+  $result = mlAutofit($config, ['modelUrl' => $modelUrl, 'returnFiles' => false]);
+  if (isset($result['__error'])) {
+    // ML down -> don't block the supplier; the admin still validates at review.
+    sendJson(200, true, ['available' => false, 'note' => $result['__error']]);
+    return;
+  }
+
+  sendJson(200, true, [
+    'available'     => true,
+    'rejected'      => (bool) ($result['rejected'] ?? false),
+    'rejectReason'  => $result['rejectReason'] ?? null,
+    'warnings'      => $result['warnings'] ?? [],
+    'shoeCount'     => $result['shoeCount'] ?? null,
+    'dimensionsCm'  => $result['dimensionsCm'] ?? null,
+    'nativeLengthCm'=> $result['nativeLengthCm'] ?? null,
+  ]);
+}
+
 // GET /admin/products/{id}/autofit
 //   ?count=auto|1|2   (default auto — let the algorithm detect)
 //   &side=left|right  (single-shoe base foot; default right)
