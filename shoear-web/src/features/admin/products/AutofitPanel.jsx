@@ -170,14 +170,20 @@ function AutofitPanel({ productId, modelUrl }) {
                 )}
                 {meta.textures && (
                   <Row label="Textures">
-                    {meta.textures.resized ? `${meta.textures.beforePx}px → ${meta.textures.afterPx}px` : `${meta.textures.beforePx}px (ok)`}
+                    {meta.textures.resized
+                      ? `${meta.textures.beforePx}px → ${meta.textures.afterPx}px`
+                      : meta.textures.willResize
+                        ? `${meta.textures.beforePx}px → ${meta.textures.afterPx}px (on generate)`
+                        : `${meta.textures.beforePx}px (ok)`}
                   </Row>
                 )}
                 {meta.decimation && (
                   <Row label="Triangles">
                     {meta.decimation.applied
                       ? `${meta.decimation.before} → ${meta.decimation.after}`
-                      : `${meta.decimation.before} (kept)`}
+                      : meta.decimation.willDecimate
+                        ? `${meta.decimation.before} → ≤${meta.decimation.targetPerFoot} (on generate)`
+                        : `${meta.decimation.before} (kept)`}
                   </Row>
                 )}
                 {anchor && (

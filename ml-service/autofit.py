@@ -57,6 +57,7 @@ DEFAULT_LENGTH_CM = 26.0         # average adult foot if none declared
 MIN_PLAUSIBLE_CM = 5.0           # a real shoe is never shorter than this
 MAX_PLAUSIBLE_CM = 55.0          # ...or longer than this (after unit conversion)
 HIGH_TOP_CM = 12.0               # collar higher than this -> boot/high-top (occluder)
+SPLIT_MAX_FACES = 400_000        # skip connected-component splits above this (too heavy)
 _TEX_ATTRS = ("baseColorTexture", "emissiveTexture", "normalTexture",
               "occlusionTexture", "metallicRoughnessTexture", "image")
 
@@ -102,6 +103,21 @@ def _has_uv_texture(mesh):
     if mat is None:
         return False
     return any(getattr(mat, a, None) is not None for a in _TEX_ATTRS)
+
+
+def _max_texture_px(mesh):
+    """Largest texture edge (px) on the mesh, read-only (no resize). Cheap — used
+    to report what texture optimisation WOULD do without doing the heavy work."""
+    v = getattr(mesh, "visual", None)
+    mat = getattr(v, "material", None) if v is not None else None
+    if mat is None:
+        return 0
+    biggest = 0
+    for a in _TEX_ATTRS:
+        img = getattr(mat, a, None)
+        if img is not None and hasattr(img, "size"):
+            biggest = max(biggest, max(img.size))
+    return biggest
 
 
 def _optimize_textures(mesh, max_dim):
@@ -324,6 +340,8 @@ def _split_by_components(mesh):
     """Separate a pair by connected components (two big disjoint meshes).
     Needs a graph engine (scipy); returns None if unavailable or not clearly
     two. Halves are ordered left (smaller X centroid) then right."""
+    if len(mesh.faces) > SPLIT_MAX_FACES:   # too heavy — fall back to geometric
+        return None
     try:
         comps = mesh.split(only_watertight=False)
     except Exception:
@@ -364,7 +382,9 @@ def _split_pair(loaded, combined):
 
 def _count_clusters(mesh, overall_max):
     """Best-effort connected-component count. Returns int, or None if a graph
-    engine isn't available here."""
+    engine isn't available (or the mesh is too big to split cheaply)."""
+    if len(mesh.faces) > SPLIT_MAX_FACES:   # too heavy — skip this best-effort check
+        return None
     try:
         comps = mesh.split(only_watertight=False)
     except Exception:
@@ -441,8 +461,15 @@ def _combine_pair(left_mesh, right_mesh):
 
 
 def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
-                    declared_side="right", mirror_single=True, auto_orient=True):
+                    declared_side="right", mirror_single=True, auto_orient=True,
+                    build_files=True):
     """Validate + auto-fit a shoe model.
+
+    build_files=False does only the (light) analysis — validation, dimensions,
+    orientation, count, anchor + a projection of what texture/triangle
+    optimisation WOULD do — and returns fitted=None. The heavy work (texture
+    resize, decimation, baking + glb export of both feet) runs only when
+    build_files=True, so "just analyse" never spikes memory/CPU.
 
     Returns (meta, fitted):
       meta   = dict (ok / rejected / rejectReason / warnings / shoeCount /
@@ -500,15 +527,29 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         meta["countDetection"] = {"count": declared_count, "reason": reason, "confidence": conf}
     meta["shoeCount"] = declared_count
 
-    # 5. measure ONE shoe (oriented) for the reported dimensions + scale -----
+    # 5. separate a pair (if needed) + measure ONE shoe (oriented) ----------
     halves = None
+    split_method = split_conf = None
     if declared_count == 2:
         halves, split_method, split_conf = _split_pair(loaded, mesh)
-        meta["split"] = {"method": split_method, "confidence": split_conf}
-        measure = halves[0] if halves else mesh
+        if halves and len(halves) >= 2:
+            meta["split"] = {"method": split_method, "confidence": split_conf}
+            measure = sorted(halves, key=lambda c: float(c.centroid[0]))[0]
+            if split_conf is not None and split_conf < 0.5:
+                meta["warnings"].append("Two shoes separated by %s — verify the "
+                                        "split in QC." % split_method)
+        else:
+            meta["warnings"].append("Could not separate two shoes; treating as one.")
+            declared_count = 1
+            meta["shoeCount"] = 1
+            halves = None
+            measure = mesh
     else:
-        split_method, split_conf = None, None
         measure = mesh
+    if declared_count == 1 and mirror_single:
+        meta["warnings"].append("Single shoe mirrored for the other foot — "
+                                "branding on the mirrored side is reversed. "
+                                "Upload both shoes for accurate left/right designs.")
     if auto_orient:
         aligned, orient_conf = _orient_canonical(measure)
         meta["orientation"] = orient_conf
@@ -550,104 +591,98 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             meta["warnings"].append("Declared 1 shoe but %d clusters detected — "
                                     "extra parts, or is this a pair?" % detected)
 
-    # 8. optimise each source shoe for mobile AR before baking --------------
-    #    (a) downscale oversized textures — safe, preserves UVs, biggest win.
-    #    (b) decimate geometry to the triangle budget, but ONLY when the shoe
-    #        has no UV texture (this backend drops UVs, which would strip the
-    #        texture); textured high-poly models are left for Lens Studio's
-    #        UV-aware optimiser at publish and flagged here.
-    dec_before = dec_after = tex_before = tex_after = tex_resized = 0
-    dec_skipped_tex = [False]
+    # 8. anchor + occluder (cheap: scale+seat ONE already-oriented shoe in
+    #    memory, no export). Runs in both the light and full paths.
+    seated = aligned if auto_orient else aligned.copy()   # aligned is a fresh copy when auto_orient
+    seated.apply_scale(scale)
+    sb = seated.bounds
+    seated.apply_translation([-(sb[0][0] + sb[1][0]) / 2.0, -sb[0][1], -(sb[0][2] + sb[1][2]) / 2.0])
+    meta["anchor"] = _anchor(seated)
+    collar = meta["anchor"]["collarHeightCm"]
+    high_top = collar > HIGH_TOP_CM
+    meta["occluder"] = {"retainFromTemplate": True, "collarHeightCm": collar, "highTop": high_top}
+    if high_top:
+        meta["warnings"].append("High-top/boot (collar ~%.1f cm) — extend the foot "
+                                "occluder up the ankle so the shoe doesn't clip or "
+                                "float." % collar)
 
-    def _prep(shoe):
-        nonlocal dec_before, dec_after, tex_before, tex_after, tex_resized
-        tb, ta, tr = _optimize_textures(shoe, MAX_TEX)
-        tex_before = max(tex_before, tb)
-        tex_after = max(tex_after, ta)
-        tex_resized += tr
-        n = int(len(shoe.faces))
-        if _has_uv_texture(shoe):
-            dec_before += n
-            dec_after += n
-            if n > TRI_TARGET:
-                dec_skipped_tex[0] = True
-            return shoe
-        d, before, after, _ = _decimate(shoe, TRI_TARGET)
-        dec_before += before
-        dec_after += after
-        return d
+    # 9. projected optimisation report (cheap: read texture sizes + face counts,
+    #    no resize/decimate/export). The full build below overrides with actuals.
+    tex_px = _max_texture_px(mesh)
+    if tex_px:
+        meta["textures"] = {"beforePx": tex_px, "afterPx": min(tex_px, MAX_TEX),
+                            "resized": 0, "cap": MAX_TEX, "willResize": tex_px > MAX_TEX}
+    per_foot = int(len(mesh.faces)) // (2 if declared_count == 2 else 1)
+    textured = _has_uv_texture(mesh)
+    meta["decimation"] = {"applied": False, "before": per_foot, "after": per_foot,
+                          "targetPerFoot": TRI_TARGET, "textured": textured,
+                          "willDecimate": per_foot > TRI_TARGET and not textured}
 
-    # 9. bake -> ONE combined per-pair glb (Shoe_L + Shoe_R) ----------------
-    fitted = {}
-    primary_norm = None            # keep a normalised mesh for the anchor suggestion
-    left_norm = right_norm = None
-    if declared_count == 2:
-        if halves and len(halves) >= 2:
+    # 10. build the fitted files — HEAVY, only on request -------------------
+    fitted = None
+    if build_files:
+        dec_before = dec_after = tex_before = tex_after = tex_resized = 0
+        dec_skipped_tex = [False]
+
+        def _prep(shoe):
+            nonlocal dec_before, dec_after, tex_before, tex_after, tex_resized
+            tb, ta, tr = _optimize_textures(shoe, MAX_TEX)
+            tex_before = max(tex_before, tb)
+            tex_after = max(tex_after, ta)
+            tex_resized += tr
+            n = int(len(shoe.faces))
+            if _has_uv_texture(shoe):
+                dec_before += n
+                dec_after += n
+                if n > TRI_TARGET:
+                    dec_skipped_tex[0] = True
+                return shoe
+            d, before, after, _ = _decimate(shoe, TRI_TARGET)
+            dec_before += before
+            dec_after += after
+            return d
+
+        left_norm = right_norm = None
+        if declared_count == 2 and halves and len(halves) >= 2:
             ordered = sorted(halves, key=lambda c: float(c.centroid[0]))
             left_norm = _normalise(_prep(ordered[0]), target_m, auto_orient=auto_orient)
             right_norm = _normalise(_prep(ordered[-1]), target_m, auto_orient=auto_orient)
-            if split_conf is not None and split_conf < 0.5:
-                meta["warnings"].append("Two shoes separated by %s — verify the "
-                                        "split in QC." % split_method)
         else:
-            meta["warnings"].append("Could not separate two shoes; treating as one.")
-            declared_count = 1
-            meta["shoeCount"] = 1
-    if declared_count == 1 and left_norm is None and right_norm is None:
-        side = (declared_side or "right").lower()
-        src = _prep(mesh)
-        base = _normalise(src, target_m, auto_orient=auto_orient)
-        opp = _normalise(src, target_m, mirror=True, auto_orient=auto_orient) if mirror_single else None
-        if side == "left":
-            left_norm, right_norm = base, opp
-        else:
-            right_norm, left_norm = base, opp
-        if mirror_single:
-            meta["warnings"].append("Single shoe mirrored for the other foot — "
-                                    "branding on the mirrored side is reversed. "
-                                    "Upload both shoes for accurate left/right designs.")
+            side = (declared_side or "right").lower()
+            src = _prep(mesh)
+            base = _normalise(src, target_m, auto_orient=auto_orient)
+            opp = _normalise(src, target_m, mirror=True, auto_orient=auto_orient) if mirror_single else None
+            if side == "left":
+                left_norm, right_norm = base, opp
+            else:
+                right_norm, left_norm = base, opp
 
-    # one file with both shoes (or the single shoe if the other foot is absent)
-    primary_norm = right_norm or left_norm
-    if left_norm is not None and right_norm is not None:
-        fitted["combined"] = _combine_pair(left_norm, right_norm)
-    elif primary_norm is not None:
-        fitted["combined"] = primary_norm.export(file_type="glb")
+        primary_norm = right_norm or left_norm
+        fitted = {}
+        if left_norm is not None and right_norm is not None:
+            fitted["combined"] = _combine_pair(left_norm, right_norm)
+        elif primary_norm is not None:
+            fitted["combined"] = primary_norm.export(file_type="glb")
 
-    # texture + decimation report -------------------------------------------
-    if tex_before:
-        meta["textures"] = {"beforePx": tex_before, "afterPx": tex_after,
-                            "resized": tex_resized, "cap": MAX_TEX}
-        if tex_resized:
-            meta["warnings"].append("Downscaled texture(s) %dpx -> %dpx for mobile "
-                                    "AR performance." % (tex_before, tex_after))
-    if dec_before:
-        applied = dec_after < dec_before
-        meta["decimation"] = {"applied": applied, "before": dec_before,
-                              "after": dec_after, "targetPerFoot": TRI_TARGET}
-        if applied:
-            meta["warnings"].append("Decimated %d -> %d triangles for real-time "
-                                    "mobile AR performance." % (dec_before, dec_after))
-        elif dec_skipped_tex[0]:
-            meta["warnings"].append("High poly (%d triangles) but textured — "
-                                    "geometry decimation skipped to preserve the UV "
-                                    "texture; Lens Studio optimises it (UV-aware) at "
-                                    "publish." % dec_before)
-
-    # 10. anchor suggestion + occluder note ---------------------------------
-    if primary_norm is not None:
-        meta["anchor"] = _anchor(primary_norm)
-        collar = meta["anchor"]["collarHeightCm"]
-        high_top = collar > HIGH_TOP_CM
-        meta["occluder"] = {
-            "retainFromTemplate": True,   # NEVER replace the template's foot occluder
-            "collarHeightCm": collar,
-            "highTop": high_top,
-        }
-        if high_top:
-            meta["warnings"].append("High-top/boot (collar ~%.1f cm) — extend the "
-                                    "foot occluder up the ankle so the shoe doesn't "
-                                    "clip or float." % collar)
+        # override the projected report with what actually happened
+        if tex_before:
+            meta["textures"] = {"beforePx": tex_before, "afterPx": tex_after,
+                                "resized": tex_resized, "cap": MAX_TEX}
+            if tex_resized:
+                meta["warnings"].append("Downscaled texture(s) %dpx -> %dpx for mobile "
+                                        "AR performance." % (tex_before, tex_after))
+        if dec_before:
+            applied = dec_after < dec_before
+            meta["decimation"] = {"applied": applied, "before": dec_before,
+                                  "after": dec_after, "targetPerFoot": TRI_TARGET}
+            if applied:
+                meta["warnings"].append("Decimated %d -> %d triangles for real-time "
+                                        "mobile AR performance." % (dec_before, dec_after))
+            elif dec_skipped_tex[0]:
+                meta["warnings"].append("High poly (%d triangles) but textured — "
+                                        "geometry decimation skipped to preserve the UV "
+                                        "texture; Lens Studio optimises it (UV-aware) at "
+                                        "publish." % dec_before)
 
     meta["ok"] = True
     return meta, fitted

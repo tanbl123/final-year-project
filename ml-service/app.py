@@ -94,6 +94,7 @@ def autofit_endpoint():
     except Exception as e:
         return jsonify({'error': 'Could not download modelUrl: %s' % e}), 400
 
+    want_files = bool(body.get('returnFiles', False))
     # Never let an exception escape as an HTML 500 page — the PHP caller needs
     # JSON, and the admin needs to see the real reason (not "unexpected response").
     try:
@@ -104,6 +105,7 @@ def autofit_endpoint():
             declared_side=(body.get('side') or 'right'),
             mirror_single=bool(body.get('mirrorSingle', True)),
             auto_orient=bool(body.get('autoOrient', True)),
+            build_files=want_files,   # skip the heavy bake/export for analysis-only
         )
     except Exception as e:
         import traceback
@@ -111,7 +113,7 @@ def autofit_endpoint():
         return jsonify({'error': 'Auto-fit failed while processing the model: %s' % e}), 500
 
     out = dict(meta)
-    if bool(body.get('returnFiles', False)) and fitted:
+    if want_files and fitted:
         out['fitted'] = {k: base64.b64encode(v).decode('ascii') for k, v in fitted.items()}
     return jsonify(out)
 
