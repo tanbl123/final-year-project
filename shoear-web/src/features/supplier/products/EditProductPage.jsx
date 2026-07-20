@@ -3,6 +3,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import ProductForm from './components/ProductForm';
 import { fetchProductById, updateProduct } from './productService';
 import BackButton from '../../../components/BackButton';
+import ConfirmDialog from '../../../components/ConfirmDialog';
 
 // Edit an existing product. Loads the current values, hands them to the shared
 // ProductForm in "edit" mode, and saves changes via PUT /products/{id}.
@@ -18,6 +19,14 @@ function EditProductPage() {
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [dirty, setDirty] = useState(false);       // unsaved edits in the form
+  const [confirmLeave, setConfirmLeave] = useState(false);
+
+  // Back-arrow guard: confirm before leaving if there are unsaved edits.
+  function handleBack() {
+    if (dirty) setConfirmLeave(true);
+    else navigate(from);
+  }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -53,13 +62,23 @@ function EditProductPage() {
 
   return (
     <div className="container py-4 text-start">
-      <BackButton to={from} />
+      <BackButton onClick={handleBack} />
       <h1 className="mb-4">Edit product</h1>
       <ProductForm
         mode="edit"
         initialValues={product}
         onAdd={saveProduct}
         onCancel={() => navigate(from)}
+        onDirtyChange={setDirty}
+      />
+      <ConfirmDialog
+        isOpen={confirmLeave}
+        title="Discard changes?"
+        message="You have unsaved changes. Are you sure you want to leave without saving?"
+        confirmText="Discard"
+        confirmColor="danger"
+        onCancel={() => setConfirmLeave(false)}
+        onConfirm={() => { setConfirmLeave(false); navigate(from); }}
       />
     </div>
   );

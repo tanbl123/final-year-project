@@ -51,7 +51,7 @@ function signatureOf(s) {
   });
 }
 
-function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' }) {
+function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', onDirtyChange }) {
   const init = useMemo(() => makeInit(initialValues), [initialValues]);
   const isEdit = mode === 'edit';
 
@@ -283,6 +283,9 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
   const dirty =
     signatureOf({ name, brand, price, categoryId, description, variants, images, modelUrl, tryOn })
     !== signatureOf(init);
+
+  // report unsaved-changes state up so the page's back button can guard too
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
 
   // cancel: confirm first if there's unsaved work, otherwise leave straight away
   function handleCancel() {

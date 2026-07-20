@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import ProductForm from './components/ProductForm';
 import { createProduct } from './productService';
 import BackButton from '../../../components/BackButton';
+import ConfirmDialog from '../../../components/ConfirmDialog';
 import { usePayoutBlocked } from '../usePayoutBlocked';
 
 // Dedicated page for creating a product (instead of an inline panel on the
@@ -10,6 +12,8 @@ import { usePayoutBlocked } from '../usePayoutBlocked';
 function AddProductPage() {
   const navigate = useNavigate();
   const payoutBlocked = usePayoutBlocked();   // guard against direct navigation here
+  const [dirty, setDirty] = useState(false);       // unsaved input in the form
+  const [confirmLeave, setConfirmLeave] = useState(false);
 
   // Throw on failure so ProductForm shows the error inline and stays open.
   // On success, return to the list and hand it a toast message to show.
@@ -20,9 +24,15 @@ function AddProductPage() {
     });
   }
 
+  // Back-arrow guard: confirm before leaving if there's unsaved input.
+  function handleBack() {
+    if (dirty) setConfirmLeave(true);
+    else navigate('/products');
+  }
+
   return (
     <div className="container py-4 text-start">
-      <BackButton to="/products" />
+      <BackButton onClick={handleBack} />
       <h1 className="mb-4">Add a product</h1>
       {payoutBlocked ? (
         <div className="alert alert-warning">
@@ -30,8 +40,17 @@ function AddProductPage() {
           your sales income through Stripe — <Link to="/payouts">set it up first</Link>.
         </div>
       ) : (
-        <ProductForm onAdd={addProduct} onCancel={() => navigate('/products')} />
+        <ProductForm onAdd={addProduct} onCancel={() => navigate('/products')} onDirtyChange={setDirty} />
       )}
+      <ConfirmDialog
+        isOpen={confirmLeave}
+        title="Discard product?"
+        message="You have unsaved changes. Are you sure you want to leave without saving?"
+        confirmText="Discard"
+        confirmColor="danger"
+        onCancel={() => setConfirmLeave(false)}
+        onConfirm={() => { setConfirmLeave(false); navigate('/products'); }}
+      />
     </div>
   );
 }
