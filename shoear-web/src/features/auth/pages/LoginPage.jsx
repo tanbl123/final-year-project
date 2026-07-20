@@ -179,7 +179,7 @@ function LoginPage({ variant = 'supplier' }) {
           </div>
         </div>
 
-        {formError && <div className="text-danger small mb-3">{formError}</div>}
+        {formError && <div className="alert alert-danger py-2">{formError}</div>}
 
         <button type="submit" className="btn btn-primary w-100 text-center" disabled={isSubmitting}>
           {isSubmitting ? 'Logging in...' : 'Login'}

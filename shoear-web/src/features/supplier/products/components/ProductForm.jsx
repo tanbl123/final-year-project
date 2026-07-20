@@ -459,7 +459,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
           </div>
         </div>
       ))}
-      {sizesError && <div className="text-danger small mt-1">{sizesError}</div>}
+      {sizesError && <div className="invalid-feedback d-block">{sizesError}</div>}
 
       <hr className="my-4" />
 
