@@ -41,6 +41,7 @@ require __DIR__ . '/../../controllers/CourierPayoutController.php';
 require __DIR__ . '/../../controllers/EasyParcelController.php';
 require __DIR__ . '/../../controllers/CourierController.php';
 require __DIR__ . '/../../controllers/RecommendationController.php';
+require __DIR__ . '/../../controllers/AutofitController.php';
 
 // ── Always answer with JSON, even on a PHP error ──
 // A stray warning/notice or an uncaught error would otherwise print into the
@@ -850,6 +851,16 @@ if ($method === 'GET' && $path === '/admin/ar/camerakit-config') {
     'apiToken' => (string) ($config['camerakit_api_token'] ?? ''),
     'groupId'  => (string) ($config['camerakit_group_id'] ?? ''),
   ]);
+}
+
+// admin AR auto-fit: run the product's 3D model through the ML auto-fit and
+// return the analysis (+ optional fitted per-foot glbs). Declared before the
+// generic GET detail route so the more specific path wins.
+if ($method === 'GET' && preg_match('#^/admin/products/([^/]+)/autofit$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleAdminProductAutofit($pdo, $m[1], $config);
 }
 
 // full product detail for the admin (any status) — to review before approving.

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { getAdminProduct, setProductArLens } from '../adminService';
 import LensPicker from './LensPicker';
+import AutofitPanel from './AutofitPanel';
 
 const rm = (n) => 'RM ' + Number(n || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -127,6 +128,12 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                         style={{ width: '100%', height: '320px', background: '#f8f9fa', borderRadius: '0.5rem' }}
                       ></model-viewer>
                     </div>
+                  )}
+
+                  {/* AR auto-fit: validate + pre-tune the uploaded model, then
+                      download the fitted, half-tuned .glb for Lens Studio. */}
+                  {product.modelUrl && (
+                    <AutofitPanel productId={productId} modelUrl={product.modelUrl} />
                   )}
 
                   {/* AR try-on lens (Snapchat Camera Kit). Admin builds the lens

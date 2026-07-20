@@ -111,6 +111,17 @@ export function setProductArLens(productId, arLensId) {
   return apiPut(`/admin/products/${productId}/ar-lens`, { arLensId }, getToken());
 }
 
+// Run the product's uploaded 3D model through the ML auto-fit and return the
+// analysis (dimensions, orientation confidence, anchor suggestion, occluder
+// note, warnings). Pass { files: true } to also get the fitted per-foot .glb
+// files as base64 (heavier — only when previewing/downloading). count is
+// 'auto' | 1 | 2; side is 'left' | 'right'; length is the real shoe length (cm).
+export function getProductAutofit(productId, { count = 'auto', side = 'right', length, files = false } = {}) {
+  const qs = new URLSearchParams({ count: String(count), side, files: files ? '1' : '0' });
+  if (length) { qs.set('length', String(length)); }
+  return apiGet(`/admin/products/${productId}/autofit?${qs}`, getToken());
+}
+
 // Camera Kit config for the admin lens PICKER: the staging api token + lens group
 // id, handed to a logged-in admin so their browser can list the group's lenses.
 // Token stays server-side otherwise (admin-only endpoint).
