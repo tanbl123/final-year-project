@@ -15,3 +15,6 @@ trimesh==4.5.3
 # Quadric edge-collapse backend for mesh decimation (high-poly -> mobile budget).
 # Optional: autofit falls back to no decimation if it isn't installed.
 fast-simplification==0.1.13
+# Texture downscaling for mobile AR (autofit._optimize_textures). Ships with
+# trimesh's texture support; pinned here as autofit uses it directly.
+Pillow==10.4.0

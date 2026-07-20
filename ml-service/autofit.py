@@ -15,13 +15,21 @@ a few declared facts, it:
            leaves — sole-down (mass sits low), toe-forward (the heel end is
            taller) — each with a CONFIDENCE score so low-confidence fits are
            flagged for QC instead of silently trusted.
-  4. DECIMATES high-poly models to a per-foot triangle budget with quadric
-     edge collapse — so the output is guaranteed safe for real-time mobile AR
-     instead of relying on the supplier to optimise it.
+  4. OPTIMISES for the mobile target: downscales oversized textures (the real
+     phone bottleneck — lossless to the UV mapping) and decimates high-poly
+     geometry to a per-foot triangle budget with quadric edge collapse. Geometry
+     decimation is skipped for textured models (the backend drops UVs) and
+     flagged for Lens Studio's UV-aware optimiser instead.
   5. BAKES the fit into normalised per-foot .glb files (uniform-scale to real
      length, seat sole on Y=0, centre on the sole) that drop into the Lens
-     Studio foot rig with (near) no manual tuning.
-  6. Handles 1 or 2 shoes. Two shoes are separated STRUCTURE-FIRST — named
+     Studio foot rig, and SUGGESTS the anchor transform (where to seat the shoe
+     on the foot binding) so the admin pastes numbers instead of eyeballing.
+  6. Handles 1 or 2 shoes.
+
+The output REPLACES only the shoe meshes (model_L/R, Shoe_L/R). The template's
+Foot Occluder is always retained — without it the shoe renders over the foot and
+appears to float — and a high-top collar is flagged so the occluder can be
+extended up the ankle. Two shoes are separated STRUCTURE-FIRST — named
      nodes (_L/_R) > connected components > geometric split — so the reliable
      methods are preferred and the unreliable one is reported with low
      confidence. A single shoe is mirrored for the other foot (branding
@@ -36,11 +44,20 @@ import io
 import numpy as np
 import trimesh
 
+try:
+    from PIL import Image
+except Exception:                # Pillow ships with trimesh's texture support
+    Image = None
+
 MAX_BYTES = 50 * 1024 * 1024     # 50 MB — generous; Lens Studio optimises at publish
 TRI_TARGET = 50_000              # per-foot triangle budget for real-time mobile AR
+MAX_TEX = 2048                   # cap texture edge (px) — the real mobile bottleneck
 DEFAULT_LENGTH_CM = 26.0         # average adult foot if none declared
 MIN_PLAUSIBLE_CM = 5.0           # a real shoe is never shorter than this
 MAX_PLAUSIBLE_CM = 55.0          # ...or longer than this (after unit conversion)
+HIGH_TOP_CM = 12.0               # collar higher than this -> boot/high-top (occluder)
+_TEX_ATTRS = ("baseColorTexture", "emissiveTexture", "normalTexture",
+              "occlusionTexture", "metallicRoughnessTexture", "image")
 
 
 # --------------------------------------------------------------------------- #
@@ -72,6 +89,80 @@ def _detect_unit(mesh):
     if longest > 0.02:
         return 1.0, "m"
     return 1.0, "unknown"
+
+
+def _has_uv_texture(mesh):
+    """True if the mesh carries a UV-mapped image texture (so decimation, which
+    drops UVs with this backend, would destroy it)."""
+    v = getattr(mesh, "visual", None)
+    if v is None or getattr(v, "uv", None) is None:
+        return False
+    mat = getattr(v, "material", None)
+    if mat is None:
+        return False
+    return any(getattr(mat, a, None) is not None for a in _TEX_ATTRS)
+
+
+def _optimize_textures(mesh, max_dim):
+    """Downscale oversized textures to max_dim — on a phone a 4K texture costs
+    more than the triangles, and it's the same 0..1 UVs afterwards so the
+    mapping is untouched (lossless to the fit). Returns (before_px, after_px,
+    resized_count). No-op if Pillow is unavailable."""
+    if Image is None:
+        return 0, 0, 0
+    v = getattr(mesh, "visual", None)
+    mat = getattr(v, "material", None) if v is not None else None
+    if mat is None:
+        return 0, 0, 0
+    before_px = after_px = resized = 0
+    for a in _TEX_ATTRS:
+        img = getattr(mat, a, None)
+        if img is None or not hasattr(img, "size"):
+            continue
+        w, h = img.size
+        before_px = max(before_px, w, h)
+        if max(w, h) > max_dim:
+            s = max_dim / float(max(w, h))
+            nw, nh = max(1, int(round(w * s))), max(1, int(round(h * s)))
+            try:
+                setattr(mat, a, img.resize((nw, nh), Image.LANCZOS))
+                resized += 1
+                after_px = max(after_px, nw, nh)
+            except Exception:
+                after_px = max(after_px, w, h)
+        else:
+            after_px = max(after_px, w, h)
+    return before_px, after_px, resized
+
+
+def _anchor(mesh_norm):
+    """Suggest how to seat the fitted shoe onto the Lens Studio foot binding, so
+    the admin pastes numbers instead of eyeballing. Works on the NORMALISED mesh
+    (metres; sole on Y=0, X/Z centred, toe +Z, heel -Z), so the numbers match
+    the exported glb. The ankle opening is the top rim over the rear of the shoe;
+    seating it at the foot-binding origin (assumed at the ankle) gives a suggested
+    local position. Rotation/scale are identity because the bake already oriented
+    and scaled the model (Lens Studio's convertMetersToCentimeters handles cm).
+    A SUGGESTION with its assumption stated — the admin fine-tunes in QC."""
+    b = mesh_norm.bounds
+    zmin, zmax = float(b[0][2]), float(b[1][2])
+    ymax = float(b[1][1])
+    lz = zmax - zmin
+    V = np.asarray(mesh_norm.vertices, dtype=np.float64)
+    rear_top = V[(V[:, 2] <= zmin + 0.35 * lz) & (V[:, 1] >= 0.60 * ymax)]
+    opening = rear_top.mean(axis=0) if len(rear_top) else np.array([0.0, ymax, zmin])
+    collar_cm = round(float(opening[1]) * 100, 1)
+    return {
+        "assumption": "foot-binding origin at ankle; convertMetersToCentimeters on",
+        "positionCm": [round(float(-opening[0]) * 100, 1),
+                       round(float(-opening[1]) * 100, 1),
+                       round(float(-opening[2]) * 100, 1)],
+        "rotationDeg": [0.0, 0.0, 0.0],
+        "scale": [1.0, 1.0, 1.0],
+        "toeTipCm": round(zmax * 100, 1),
+        "collarHeightCm": collar_cm,
+        "note": "Left foot mirrors X (negate position X).",
+    }
 
 
 def _decimate(mesh, target_faces):
@@ -350,6 +441,7 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         "nativeUnit": None, "nativeLengthCm": None, "dimensionsCm": None,
         "appliedScale": None, "side": declared_side, "autoOriented": bool(auto_orient),
         "orientation": None, "split": None, "decimation": None,
+        "textures": None, "anchor": None, "occluder": None,
     }
 
     # 1. size ---------------------------------------------------------------
@@ -440,12 +532,28 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             meta["warnings"].append("Declared 1 shoe but %d clusters detected — "
                                     "extra parts, or is this a pair?" % detected)
 
-    # 8. decimate each source shoe to the per-foot triangle budget ----------
-    #    (guarantees mobile-AR performance instead of leaving it to the supplier)
-    dec_before = dec_after = 0
+    # 8. optimise each source shoe for mobile AR before baking --------------
+    #    (a) downscale oversized textures — safe, preserves UVs, biggest win.
+    #    (b) decimate geometry to the triangle budget, but ONLY when the shoe
+    #        has no UV texture (this backend drops UVs, which would strip the
+    #        texture); textured high-poly models are left for Lens Studio's
+    #        UV-aware optimiser at publish and flagged here.
+    dec_before = dec_after = tex_before = tex_after = tex_resized = 0
+    dec_skipped_tex = [False]
 
     def _prep(shoe):
-        nonlocal dec_before, dec_after
+        nonlocal dec_before, dec_after, tex_before, tex_after, tex_resized
+        tb, ta, tr = _optimize_textures(shoe, MAX_TEX)
+        tex_before = max(tex_before, tb)
+        tex_after = max(tex_after, ta)
+        tex_resized += tr
+        n = int(len(shoe.faces))
+        if _has_uv_texture(shoe):
+            dec_before += n
+            dec_after += n
+            if n > TRI_TARGET:
+                dec_skipped_tex[0] = True
+            return shoe
         d, before, after, _ = _decimate(shoe, TRI_TARGET)
         dec_before += before
         dec_after += after
@@ -453,13 +561,17 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
 
     # 9. bake -> normalised per-foot glbs -----------------------------------
     fitted = {}
+    primary_norm = None            # keep a normalised mesh for the anchor suggestion
     if declared_count == 2:
         if halves and len(halves) >= 2:
             ordered = sorted(halves, key=lambda c: float(c.centroid[0]))
             left_src = _prep(ordered[0])
             right_src = _prep(ordered[-1])
-            fitted["left"] = _normalise(left_src, target_m, auto_orient=auto_orient).export(file_type="glb")
-            fitted["right"] = _normalise(right_src, target_m, auto_orient=auto_orient).export(file_type="glb")
+            left_norm = _normalise(left_src, target_m, auto_orient=auto_orient)
+            right_norm = _normalise(right_src, target_m, auto_orient=auto_orient)
+            fitted["left"] = left_norm.export(file_type="glb")
+            fitted["right"] = right_norm.export(file_type="glb")
+            primary_norm = right_norm
             if split_conf is not None and split_conf < 0.5:
                 meta["warnings"].append("Two shoes separated by %s — verify the "
                                         "split in QC." % split_method)
@@ -472,6 +584,7 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         src = _prep(mesh)
         base = _normalise(src, target_m, auto_orient=auto_orient)
         opp = _normalise(src, target_m, mirror=True, auto_orient=auto_orient) if mirror_single else None
+        primary_norm = base
         if side == "left":
             fitted["left"] = base.export(file_type="glb")
             if opp is not None:
@@ -485,6 +598,13 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                                     "branding on the mirrored side is reversed. "
                                     "Upload both shoes for accurate left/right designs.")
 
+    # texture + decimation report -------------------------------------------
+    if tex_before:
+        meta["textures"] = {"beforePx": tex_before, "afterPx": tex_after,
+                            "resized": tex_resized, "cap": MAX_TEX}
+        if tex_resized:
+            meta["warnings"].append("Downscaled texture(s) %dpx -> %dpx for mobile "
+                                    "AR performance." % (tex_before, tex_after))
     if dec_before:
         applied = dec_after < dec_before
         meta["decimation"] = {"applied": applied, "before": dec_before,
@@ -492,6 +612,26 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         if applied:
             meta["warnings"].append("Decimated %d -> %d triangles for real-time "
                                     "mobile AR performance." % (dec_before, dec_after))
+        elif dec_skipped_tex[0]:
+            meta["warnings"].append("High poly (%d triangles) but textured — "
+                                    "geometry decimation skipped to preserve the UV "
+                                    "texture; Lens Studio optimises it (UV-aware) at "
+                                    "publish." % dec_before)
+
+    # 10. anchor suggestion + occluder note ---------------------------------
+    if primary_norm is not None:
+        meta["anchor"] = _anchor(primary_norm)
+        collar = meta["anchor"]["collarHeightCm"]
+        high_top = collar > HIGH_TOP_CM
+        meta["occluder"] = {
+            "retainFromTemplate": True,   # NEVER replace the template's foot occluder
+            "collarHeightCm": collar,
+            "highTop": high_top,
+        }
+        if high_top:
+            meta["warnings"].append("High-top/boot (collar ~%.1f cm) — extend the "
+                                    "foot occluder up the ankle so the shoe doesn't "
+                                    "clip or float." % collar)
 
     meta["ok"] = True
     return meta, fitted
