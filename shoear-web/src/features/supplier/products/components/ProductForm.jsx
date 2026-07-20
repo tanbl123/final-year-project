@@ -495,7 +495,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
       {/* 3D model + try-on */}
       <label className="form-label fw-semibold">3D model (for AR virtual try-on)</label>
       <p className="text-muted small">A .glb file (self-contained), up to 30&nbsp;MB. It's checked automatically for AR try-on.</p>
-      {modelError && <div className="alert alert-danger py-2 small">{modelError}</div>}
+      {modelError && <div className="invalid-feedback d-block mb-2">{modelError}</div>}
       {validatingModel && (
         <div className="text-muted small mb-2">🔎 Checking the model for AR try-on…</div>
       )}
