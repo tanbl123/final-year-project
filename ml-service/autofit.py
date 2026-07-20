@@ -15,10 +15,13 @@ a few declared facts, it:
            leaves — sole-down (mass sits low), toe-forward (the heel end is
            taller) — each with a CONFIDENCE score so low-confidence fits are
            flagged for QC instead of silently trusted.
-  4. BAKES the fit into normalised per-foot .glb files (uniform-scale to real
+  4. DECIMATES high-poly models to a per-foot triangle budget with quadric
+     edge collapse — so the output is guaranteed safe for real-time mobile AR
+     instead of relying on the supplier to optimise it.
+  5. BAKES the fit into normalised per-foot .glb files (uniform-scale to real
      length, seat sole on Y=0, centre on the sole) that drop into the Lens
      Studio foot rig with (near) no manual tuning.
-  5. Handles 1 or 2 shoes. Two shoes are separated STRUCTURE-FIRST — named
+  6. Handles 1 or 2 shoes. Two shoes are separated STRUCTURE-FIRST — named
      nodes (_L/_R) > connected components > geometric split — so the reliable
      methods are preferred and the unreliable one is reported with low
      confidence. A single shoe is mirrored for the other foot (branding
@@ -34,7 +37,7 @@ import numpy as np
 import trimesh
 
 MAX_BYTES = 50 * 1024 * 1024     # 50 MB — generous; Lens Studio optimises at publish
-TRI_WARN = 150_000               # high-poly: warn (admin/Lens Studio can decimate)
+TRI_TARGET = 50_000              # per-foot triangle budget for real-time mobile AR
 DEFAULT_LENGTH_CM = 26.0         # average adult foot if none declared
 MIN_PLAUSIBLE_CM = 5.0           # a real shoe is never shorter than this
 MAX_PLAUSIBLE_CM = 55.0          # ...or longer than this (after unit conversion)
@@ -69,6 +72,26 @@ def _detect_unit(mesh):
     if longest > 0.02:
         return 1.0, "m"
     return 1.0, "unknown"
+
+
+def _decimate(mesh, target_faces):
+    """Reduce the triangle count to <= target with quadric edge collapse — it
+    merges the vertex pairs that change the silhouette least, so the shoe still
+    looks the same but renders far faster on a phone. This is what makes the
+    output safe for real-time mobile AR instead of leaving it to the supplier.
+    Returns (mesh, before, after, applied). Graceful: if the simplifier backend
+    (fast-simplification) isn't installed, returns the original unchanged."""
+    before = int(len(mesh.faces))
+    if before <= target_faces:
+        return mesh, before, before, False
+    try:
+        simplified = mesh.simplify_quadric_decimation(face_count=int(target_faces))
+    except Exception:
+        return mesh, before, before, False
+    after = int(len(simplified.faces))
+    if after == 0 or after >= before:
+        return mesh, before, before, False
+    return simplified, before, after, True
 
 
 def _pca_align(mesh):
@@ -326,7 +349,7 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         "shoeCount": declared_count, "countDetection": None,
         "nativeUnit": None, "nativeLengthCm": None, "dimensionsCm": None,
         "appliedScale": None, "side": declared_side, "autoOriented": bool(auto_orient),
-        "orientation": None, "split": None,
+        "orientation": None, "split": None, "decimation": None,
     }
 
     # 1. size ---------------------------------------------------------------
@@ -361,19 +384,13 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             "real shoe — check the model's units/scale." %
             (native_len_cm, unit_name, MIN_PLAUSIBLE_CM, MAX_PLAUSIBLE_CM))
 
-    # 4. triangle budget (warn, don't reject — Lens Studio can decimate) ----
-    tri = int(len(mesh.faces))
-    if tri > TRI_WARN:
-        meta["warnings"].append("High poly count (%d triangles) — consider "
-                                "decimating for AR performance." % tri)
-
-    # 5. auto-detect 1 vs 2 shoes when the supplier didn't declare it --------
+    # 4. auto-detect 1 vs 2 shoes when the supplier didn't declare it --------
     if declared_count is None:
         declared_count, reason, conf = _detect_count(mesh)
         meta["countDetection"] = {"count": declared_count, "reason": reason, "confidence": conf}
     meta["shoeCount"] = declared_count
 
-    # 6. measure ONE shoe (oriented) for the reported dimensions + scale -----
+    # 5. measure ONE shoe (oriented) for the reported dimensions + scale -----
     halves = None
     if declared_count == 2:
         halves, split_method, split_conf = _split_pair(loaded, mesh)
@@ -397,7 +414,7 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         "height": round(height_n * scale * 100, 1),
     }
 
-    # 7. orientation / shape notes ------------------------------------------
+    # 6. orientation / shape notes ------------------------------------------
     if auto_orient and orient_conf is not None:
         if orient_conf["flipped"]:
             meta["warnings"].append("Auto-oriented (%s)." % "; ".join(orient_conf["flipped"]))
@@ -413,7 +430,7 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         if height_n > 1e-9 and abs(measure.bounds[0][1]) > 0.5 * height_n:
             meta["warnings"].append("Sole is not near Y=0; check the sole-down rule.")
 
-    # 8. count sanity (best-effort; warning only) ---------------------------
+    # 7. count sanity (best-effort; warning only) ---------------------------
     detected = _count_clusters(mesh, float(mesh.extents.max()))
     if detected is not None:
         if declared_count == 2 and detected < 2:
@@ -423,13 +440,26 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             meta["warnings"].append("Declared 1 shoe but %d clusters detected — "
                                     "extra parts, or is this a pair?" % detected)
 
+    # 8. decimate each source shoe to the per-foot triangle budget ----------
+    #    (guarantees mobile-AR performance instead of leaving it to the supplier)
+    dec_before = dec_after = 0
+
+    def _prep(shoe):
+        nonlocal dec_before, dec_after
+        d, before, after, _ = _decimate(shoe, TRI_TARGET)
+        dec_before += before
+        dec_after += after
+        return d
+
     # 9. bake -> normalised per-foot glbs -----------------------------------
     fitted = {}
     if declared_count == 2:
         if halves and len(halves) >= 2:
             ordered = sorted(halves, key=lambda c: float(c.centroid[0]))
-            fitted["left"] = _normalise(ordered[0], target_m, auto_orient=auto_orient).export(file_type="glb")
-            fitted["right"] = _normalise(ordered[-1], target_m, auto_orient=auto_orient).export(file_type="glb")
+            left_src = _prep(ordered[0])
+            right_src = _prep(ordered[-1])
+            fitted["left"] = _normalise(left_src, target_m, auto_orient=auto_orient).export(file_type="glb")
+            fitted["right"] = _normalise(right_src, target_m, auto_orient=auto_orient).export(file_type="glb")
             if split_conf is not None and split_conf < 0.5:
                 meta["warnings"].append("Two shoes separated by %s — verify the "
                                         "split in QC." % split_method)
@@ -439,8 +469,9 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             meta["shoeCount"] = 1
     if declared_count == 1 and not fitted:
         side = (declared_side or "right").lower()
-        base = _normalise(mesh, target_m, auto_orient=auto_orient)
-        opp = _normalise(mesh, target_m, mirror=True, auto_orient=auto_orient) if mirror_single else None
+        src = _prep(mesh)
+        base = _normalise(src, target_m, auto_orient=auto_orient)
+        opp = _normalise(src, target_m, mirror=True, auto_orient=auto_orient) if mirror_single else None
         if side == "left":
             fitted["left"] = base.export(file_type="glb")
             if opp is not None:
@@ -453,6 +484,14 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             meta["warnings"].append("Single shoe mirrored for the other foot — "
                                     "branding on the mirrored side is reversed. "
                                     "Upload both shoes for accurate left/right designs.")
+
+    if dec_before:
+        applied = dec_after < dec_before
+        meta["decimation"] = {"applied": applied, "before": dec_before,
+                              "after": dec_after, "targetPerFoot": TRI_TARGET}
+        if applied:
+            meta["warnings"].append("Decimated %d -> %d triangles for real-time "
+                                    "mobile AR performance." % (dec_before, dec_after))
 
     meta["ok"] = True
     return meta, fitted

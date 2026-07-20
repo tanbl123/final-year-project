@@ -12,3 +12,6 @@ scikit-surprise==1.1.4
 # AR auto-fit (autofit.py): loads/normalises/exports .glb shoe models.
 # Uses the numpy + scipy already listed above (scipy powers mesh.split()).
 trimesh==4.5.3
+# Quadric edge-collapse backend for mesh decimation (high-poly -> mobile budget).
+# Optional: autofit falls back to no decimation if it isn't installed.
+fast-simplification==0.1.13
