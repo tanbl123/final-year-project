@@ -218,6 +218,14 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
     event.target.value = '';
     if (!file) return;
 
+    // .glb ONLY — reject anything else immediately (the OS "All files" option
+    // can bypass the picker filter). .glb is self-contained; a lone .gltf is
+    // missing its .bin/textures and would arrive broken.
+    if (!file.name.toLowerCase().endsWith('.glb')) {
+      setError('Please upload a .glb file (a single self-contained 3D model). Other formats — including .gltf — are not supported.');
+      return;
+    }
+
     setError('');
     setModelWarnings([]);
     setUploading(true);
@@ -481,7 +489,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
 
       {/* 3D model + try-on */}
       <label className="form-label fw-semibold">3D model (for AR virtual try-on)</label>
-      <p className="text-muted small">A .glb or .gltf file, up to 30&nbsp;MB. It's checked automatically for AR try-on.</p>
+      <p className="text-muted small">A .glb file (self-contained), up to 30&nbsp;MB. It's checked automatically for AR try-on.</p>
       {validatingModel && (
         <div className="text-muted small mb-2">🔎 Checking the model for AR try-on…</div>
       )}
@@ -511,7 +519,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create' })
           ></model-viewer>
         </>
       ) : (
-        <input type="file" className="form-control" accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
+        <input type="file" className="form-control" accept=".glb,model/gltf-binary"
           onChange={handleModelFile} disabled={uploading} />
       )}
       <div className="form-check mt-3">

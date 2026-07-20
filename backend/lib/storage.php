@@ -116,7 +116,10 @@ const UPLOAD_KINDS = [
   ],
   'model' => [
     'dir'      => 'models',
-    'exts'     => ['glb', 'gltf'],
+    // .glb ONLY: it is self-contained (embeds geometry + textures + buffers).
+    // A single .gltf references external .bin/texture files that a lone upload
+    // can't include, so it would arrive broken — and AR/autofit expect .glb.
+    'exts'     => ['glb'],
     'maxBytes' => 30 * 1024 * 1024,  // 30 MB
   ],
   // business documents (e.g. the SSM registration certificate) submitted at
