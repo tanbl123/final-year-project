@@ -279,9 +279,7 @@ function ProductDetailPage() {
             <model-viewer
               src={product.modelUrl}
               camera-controls
-              auto-rotate
-              ar
-              shadow-intensity="1"
+              loading="lazy"
               style={{ width: '100%', height: '420px', background: '#f8f9fa', borderRadius: '0.5rem' }}
             ></model-viewer>
           </div>

@@ -138,6 +138,28 @@ function AutofitPanel({ productId, modelUrl }) {
 
         {err && <div className="alert alert-warning py-2 small mb-2">{err}</div>}
 
+        {/* single 3D preview (one WebGL canvas, no auto-rotate — continuous
+            rendering + a second canvas was crashing weak GPUs). Original by
+            default; toggles to the fitted pair once generated. */}
+        <div className="mb-2">
+          <div className="btn-group btn-group-sm mb-1" role="group">
+            <button type="button" className={`btn btn-outline-secondary${!showFitted ? ' active' : ''}`}
+              onClick={() => setShowFitted(false)}>Original</button>
+            <button type="button" className={`btn btn-outline-secondary${showFitted ? ' active' : ''}`}
+              onClick={() => fitted && setShowFitted(true)} disabled={!fitted}>Fitted pair</button>
+          </div>
+          <model-viewer
+            src={showFitted && fitted ? fitted.url : modelUrl}
+            camera-controls loading="lazy"
+            style={{ width: '100%', height: '260px', background: '#f8f9fa', borderRadius: '0.5rem' }}
+          ></model-viewer>
+          <div className="text-muted small mt-1">
+            {showFitted && fitted
+              ? 'Fitted pair (Shoe_L + Shoe_R, oriented, scaled, seated).'
+              : 'Original upload. Drag to rotate.'}
+          </div>
+        </div>
+
         {meta && (rejected ? (
           <div className="alert alert-danger py-2 small mb-0">
             <strong>Rejected:</strong> {meta.rejectReason}
@@ -146,7 +168,7 @@ function AutofitPanel({ productId, modelUrl }) {
           <>
             <div className="row g-3">
               {/* report */}
-              <div className="col-md-6">
+              <div className="col-12">
                 <Row label="Shoes detected">
                   {meta.shoeCount}
                   {meta.countDetection && <Conf value={meta.countDetection.confidence} />}
@@ -196,26 +218,6 @@ function AutofitPanel({ productId, modelUrl }) {
                     keep template occluder{meta.occluder.highTop && <span className="badge text-bg-warning ms-1">high-top</span>}
                   </Row>
                 )}
-              </div>
-
-              {/* before / after preview */}
-              <div className="col-md-6">
-                <div className="btn-group btn-group-sm w-100 mb-1" role="group">
-                  <button type="button" className={`btn btn-outline-secondary${!showFitted ? ' active' : ''}`}
-                    onClick={() => setShowFitted(false)}>Original</button>
-                  <button type="button" className={`btn btn-outline-secondary${showFitted ? ' active' : ''}`}
-                    onClick={() => fitted && setShowFitted(true)} disabled={!fitted}>Fitted pair</button>
-                </div>
-                <model-viewer
-                  src={showFitted && fitted ? fitted.url : modelUrl}
-                  camera-controls auto-rotate shadow-intensity="1"
-                  style={{ width: '100%', height: '240px', background: '#f8f9fa', borderRadius: '0.5rem' }}
-                ></model-viewer>
-                <div className="text-muted small mt-1">
-                  {showFitted && fitted
-                    ? 'Fitted pair (Shoe_L + Shoe_R, oriented, scaled, seated).'
-                    : 'Original upload. Generate the fitted model to compare.'}
-                </div>
               </div>
             </div>
 

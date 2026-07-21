@@ -116,22 +116,10 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                     </div>
                   </div>
 
-                  {/* 3D model */}
-                  {product.modelUrl && (
-                    <div className="mt-3">
-                      <div className="fw-semibold small text-uppercase text-muted mb-1">3D model (AR try-on)</div>
-                      <model-viewer
-                        src={product.modelUrl}
-                        camera-controls
-                        auto-rotate
-                        shadow-intensity="1"
-                        style={{ width: '100%', height: '320px', background: '#f8f9fa', borderRadius: '0.5rem' }}
-                      ></model-viewer>
-                    </div>
-                  )}
-
                   {/* AR auto-fit: validate + pre-tune the uploaded model, then
-                      download the fitted, half-tuned .glb for Lens Studio. */}
+                      download the fitted, half-tuned .glb for Lens Studio. Its
+                      preview is the single 3D viewer in this modal (a second
+                      WebGL canvas here was crashing weak GPUs). */}
                   {product.modelUrl && (
                     <AutofitPanel productId={productId} modelUrl={product.modelUrl} />
                   )}

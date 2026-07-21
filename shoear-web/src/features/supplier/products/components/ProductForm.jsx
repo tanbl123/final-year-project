@@ -522,8 +522,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
           <model-viewer
             src={modelUrl}
             camera-controls
-            auto-rotate
-            shadow-intensity="1"
+            loading="lazy"
             style={{ width: '100%', height: '260px', background: '#f8f9fa', borderRadius: '0.5rem', marginTop: '0.5rem' }}
           ></model-viewer>
         </>
