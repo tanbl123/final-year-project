@@ -39,6 +39,7 @@ function AutofitPanel({ productId, modelUrl }) {
   const [fitted, setFitted] = useState(null);   // { url } of the combined pair glb
   const [generating, setGenerating] = useState(false);
   const [showFitted, setShowFitted] = useState(false);  // preview: original vs fitted pair
+  const [showPreview, setShowPreview] = useState(false); // 3D preview is OPT-IN (heavy)
   const blobUrls = useRef([]);                    // track for revocation
 
   function revokeBlobs() {
@@ -138,27 +139,36 @@ function AutofitPanel({ productId, modelUrl }) {
 
         {err && <div className="alert alert-warning py-2 small mb-2">{err}</div>}
 
-        {/* single 3D preview (one WebGL canvas, no auto-rotate — continuous
-            rendering + a second canvas was crashing weak GPUs). Original by
-            default; toggles to the fitted pair once generated. */}
-        <div className="mb-2">
-          <div className="btn-group btn-group-sm mb-1" role="group">
-            <button type="button" className={`btn btn-outline-secondary${!showFitted ? ' active' : ''}`}
-              onClick={() => setShowFitted(false)}>Original</button>
-            <button type="button" className={`btn btn-outline-secondary${showFitted ? ' active' : ''}`}
-              onClick={() => fitted && setShowFitted(true)} disabled={!fitted}>Fitted pair</button>
+        {/* 3D preview is OPT-IN. Rendering a large model in the browser (WebGL)
+            is what crashes low-spec machines — and none of the auto-fit analysis
+            needs it. So it only mounts when the admin explicitly asks. */}
+        {!showPreview ? (
+          <button type="button" className="btn btn-sm btn-outline-secondary mb-2"
+            onClick={() => setShowPreview(true)}>
+            Load 3D preview {fitted ? '(fitted pair)' : '(original — may be heavy)'}
+          </button>
+        ) : (
+          <div className="mb-2">
+            <div className="btn-group btn-group-sm mb-1" role="group">
+              <button type="button" className={`btn btn-outline-secondary${!showFitted ? ' active' : ''}`}
+                onClick={() => setShowFitted(false)}>Original</button>
+              <button type="button" className={`btn btn-outline-secondary${showFitted ? ' active' : ''}`}
+                onClick={() => fitted && setShowFitted(true)} disabled={!fitted}>Fitted pair</button>
+              <button type="button" className="btn btn-outline-secondary"
+                onClick={() => setShowPreview(false)}>Hide</button>
+            </div>
+            <model-viewer
+              src={showFitted && fitted ? fitted.url : modelUrl}
+              camera-controls loading="lazy"
+              style={{ width: '100%', height: '260px', background: '#f8f9fa', borderRadius: '0.5rem' }}
+            ></model-viewer>
+            <div className="text-muted small mt-1">
+              {showFitted && fitted
+                ? 'Fitted pair (Shoe_L + Shoe_R — lighter, optimised).'
+                : 'Original upload (full-size). Generate the fitted model for a lighter preview.'}
+            </div>
           </div>
-          <model-viewer
-            src={showFitted && fitted ? fitted.url : modelUrl}
-            camera-controls loading="lazy"
-            style={{ width: '100%', height: '260px', background: '#f8f9fa', borderRadius: '0.5rem' }}
-          ></model-viewer>
-          <div className="text-muted small mt-1">
-            {showFitted && fitted
-              ? 'Fitted pair (Shoe_L + Shoe_R, oriented, scaled, seated).'
-              : 'Original upload. Drag to rotate.'}
-          </div>
-        </div>
+        )}
 
         {meta && (rejected ? (
           <div className="alert alert-danger py-2 small mb-0">

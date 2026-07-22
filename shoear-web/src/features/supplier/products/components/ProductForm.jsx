@@ -67,6 +67,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
   const [modelWarnings, setModelWarnings] = useState([]);     // AR validation warnings (non-blocking)
   const [modelError, setModelError] = useState('');           // shown inline at the 3D-model section
   const [validatingModel, setValidatingModel] = useState(false);
+  const [showModelPreview, setShowModelPreview] = useState(false); // 3D preview is OPT-IN (heavy)
   const [tryOn, setTryOn] = useState(init.tryOn);
 
   const [categories, setCategories] = useState([]);
@@ -221,6 +222,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
 
     setModelError('');
     setModelWarnings([]);
+    setShowModelPreview(false);   // don't auto-render a freshly-uploaded (possibly heavy) model
 
     // .glb ONLY — reject anything else immediately (the OS "All files" option
     // can bypass the picker filter). .glb is self-contained; a lone .gltf is
@@ -268,6 +270,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
     setModelUrl('');
     setModelName('');
     setModelWarnings([]);
+    setShowModelPreview(false);
     setTryOn(false);
   }
 
@@ -517,14 +520,23 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
               </ul>
             </div>
           )}
-          {/* live WebGL preview so the supplier can verify their 3D model
-              (drag to rotate) before saving — matches the admin review preview */}
-          <model-viewer
-            src={modelUrl}
-            camera-controls
-            loading="lazy"
-            style={{ width: '100%', height: '260px', background: '#f8f9fa', borderRadius: '0.5rem', marginTop: '0.5rem' }}
-          ></model-viewer>
+          {/* 3D preview is OPT-IN — rendering a large model in the browser can
+              crash low-spec machines, and upload + AR validation don't need it. */}
+          {showModelPreview ? (
+            <>
+              <model-viewer
+                src={modelUrl}
+                camera-controls
+                loading="lazy"
+                style={{ width: '100%', height: '260px', background: '#f8f9fa', borderRadius: '0.5rem', marginTop: '0.5rem' }}
+              ></model-viewer>
+              <button type="button" className="btn btn-link btn-sm p-0 mt-1"
+                onClick={() => setShowModelPreview(false)}>Hide 3D preview</button>
+            </>
+          ) : (
+            <button type="button" className="btn btn-outline-secondary btn-sm mt-2"
+              onClick={() => setShowModelPreview(true)}>Show 3D preview</button>
+          )}
         </>
       ) : (
         <input type="file" className="form-control" accept=".glb,model/gltf-binary"
