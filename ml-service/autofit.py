@@ -42,6 +42,7 @@ runtime auto-generation isn't possible — see ar-lens-prototype/README.md).
 """
 
 import io
+import gc
 import numpy as np
 import trimesh
 
@@ -510,9 +511,23 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         meta["rejectReason"] = "No 3D mesh found in the file."
         return meta, None
 
+    # Geometry-only working copy for the ANALYSIS (PCA, count, orient, anchor).
+    # Textures are the bulk of the RAM but are irrelevant to analysis, so we
+    # never copy them here — and in light mode we drop the textured data now,
+    # keeping the footprint tiny (this is what a low-RAM / shared-VRAM laptop
+    # was choking on).
+    tex_px = _max_texture_px(mesh)
+    total_faces = int(len(mesh.faces))
+    geo = trimesh.Trimesh(vertices=np.asarray(mesh.vertices, dtype=np.float64),
+                          faces=np.asarray(mesh.faces), process=False)
+    if not build_files:
+        loaded = None
+        mesh = None
+        gc.collect()
+
     # 3. native unit + plausibility (informational; output is rescaled anyway)
-    unit_scale, unit_name = _detect_unit(mesh)
-    native_len_cm = float(mesh.extents.max()) * unit_scale * 100.0
+    unit_scale, unit_name = _detect_unit(geo)
+    native_len_cm = float(geo.extents.max()) * unit_scale * 100.0
     meta["nativeUnit"] = unit_name
     meta["nativeLengthCm"] = round(native_len_cm, 1)
     if not (MIN_PLAUSIBLE_CM <= native_len_cm <= MAX_PLAUSIBLE_CM):
@@ -523,18 +538,20 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
 
     # 4. auto-detect 1 vs 2 shoes when the supplier didn't declare it --------
     if declared_count is None:
-        declared_count, reason, conf = _detect_count(mesh)
+        declared_count, reason, conf = _detect_count(geo)
         meta["countDetection"] = {"count": declared_count, "reason": reason, "confidence": conf}
     meta["shoeCount"] = declared_count
 
     # 5. separate a pair (if needed) + measure ONE shoe (oriented) ----------
-    halves = None
+    #    Analysis split runs on the geometry-only copy (loaded=None in light
+    #    mode, so it uses components/geometric, not named nodes — fine for a
+    #    measurement). The build path re-splits the textured mesh below.
     split_method = split_conf = None
     if declared_count == 2:
-        halves, split_method, split_conf = _split_pair(loaded, mesh)
-        if halves and len(halves) >= 2:
+        halves_geo, split_method, split_conf = _split_pair(loaded, geo)
+        if halves_geo and len(halves_geo) >= 2:
             meta["split"] = {"method": split_method, "confidence": split_conf}
-            measure = sorted(halves, key=lambda c: float(c.centroid[0]))[0]
+            measure = sorted(halves_geo, key=lambda c: float(c.centroid[0]))[0]
             if split_conf is not None and split_conf < 0.5:
                 meta["warnings"].append("Two shoes separated by %s — verify the "
                                         "split in QC." % split_method)
@@ -542,10 +559,9 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             meta["warnings"].append("Could not separate two shoes; treating as one.")
             declared_count = 1
             meta["shoeCount"] = 1
-            halves = None
-            measure = mesh
+            measure = geo
     else:
-        measure = mesh
+        measure = geo
     if declared_count == 1 and mirror_single:
         meta["warnings"].append("Single shoe mirrored for the other foot — "
                                 "branding on the mirrored side is reversed. "
@@ -582,7 +598,7 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             meta["warnings"].append("Sole is not near Y=0; check the sole-down rule.")
 
     # 7. count sanity (best-effort; warning only) ---------------------------
-    detected = _count_clusters(mesh, float(mesh.extents.max()))
+    detected = _count_clusters(geo, float(geo.extents.max()))
     if detected is not None:
         if declared_count == 2 and detected < 2:
             meta["warnings"].append("Declared 2 shoes but only one cluster "
@@ -606,14 +622,13 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                                 "occluder up the ankle so the shoe doesn't clip or "
                                 "float." % collar)
 
-    # 9. projected optimisation report (cheap: read texture sizes + face counts,
-    #    no resize/decimate/export). The full build below overrides with actuals.
-    tex_px = _max_texture_px(mesh)
+    # 9. projected optimisation report (cheap: texture size + face count captured
+    #    up front). The full build below overrides with actuals.
     if tex_px:
         meta["textures"] = {"beforePx": tex_px, "afterPx": min(tex_px, MAX_TEX),
                             "resized": 0, "cap": MAX_TEX, "willResize": tex_px > MAX_TEX}
-    per_foot = int(len(mesh.faces)) // (2 if declared_count == 2 else 1)
-    textured = _has_uv_texture(mesh)
+    per_foot = total_faces // (2 if declared_count == 2 else 1)
+    textured = tex_px > 0
     meta["decimation"] = {"applied": False, "before": per_foot, "after": per_foot,
                           "targetPerFoot": TRI_TARGET, "textured": textured,
                           "willDecimate": per_foot > TRI_TARGET and not textured}
@@ -642,9 +657,11 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             dec_after += after
             return d
 
+        # re-split the TEXTURED mesh for the actual bake (analysis used geo)
+        build_halves = _split_pair(loaded, mesh)[0] if declared_count == 2 else None
         left_norm = right_norm = None
-        if declared_count == 2 and halves and len(halves) >= 2:
-            ordered = sorted(halves, key=lambda c: float(c.centroid[0]))
+        if declared_count == 2 and build_halves and len(build_halves) >= 2:
+            ordered = sorted(build_halves, key=lambda c: float(c.centroid[0]))
             left_norm = _normalise(_prep(ordered[0]), target_m, auto_orient=auto_orient)
             right_norm = _normalise(_prep(ordered[-1]), target_m, auto_orient=auto_orient)
         else:
