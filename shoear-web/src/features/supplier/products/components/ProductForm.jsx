@@ -247,10 +247,15 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
     try {
       const { url } = await uploadFile(file, 'model');
       // Fail-fast AR validation: catch a bad model now, not at admin review.
+      // Pass the declared count/side/length so the notes match the declaration.
       setValidatingModel(true);
       let result;
       try {
-        result = await validateModel(url);
+        result = await validateModel(url, {
+          count: Number(modelShoeCount),
+          side: modelSide,
+          length: modelLengthCm ? Number(modelLengthCm) : undefined,
+        });
       } catch {
         result = { available: false };   // don't block on a validation hiccup
       } finally {
@@ -280,6 +285,22 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
     setModelName('');
     setModelWarnings([]);
     setTryOn(false);
+  }
+
+  // Re-run the AR check with the supplier's DECLARED count so the notes stay in
+  // sync with their choice (never auto-detects over the declaration).
+  async function revalidateModel(count, side) {
+    if (!modelUrl) return;
+    setValidatingModel(true);
+    try {
+      const r = await validateModel(modelUrl, {
+        count: Number(count),
+        side,
+        length: modelLengthCm ? Number(modelLengthCm) : undefined,
+      });
+      if (r?.available) { setModelWarnings(r.warnings || []); }
+    } catch { /* keep the existing notes on a hiccup */ }
+    finally { setValidatingModel(false); }
   }
 
   function resetForm() {
@@ -552,7 +573,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
               <div className="col-sm-4">
                 <label className="form-label small mb-1">This file contains</label>
                 <select className="form-select form-select-sm" value={modelShoeCount}
-                  onChange={(e) => setModelShoeCount(e.target.value)}>
+                  onChange={(e) => { setModelShoeCount(e.target.value); revalidateModel(e.target.value, modelSide); }}>
                   <option value="1">1 shoe (we mirror the other foot)</option>
                   <option value="2">A pair (2 shoes)</option>
                 </select>
@@ -561,7 +582,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
                 <div className="col-sm-4">
                   <label className="form-label small mb-1">Which foot is it?</label>
                   <select className="form-select form-select-sm" value={modelSide}
-                    onChange={(e) => setModelSide(e.target.value)}>
+                    onChange={(e) => { setModelSide(e.target.value); revalidateModel(modelShoeCount, e.target.value); }}>
                     <option value="right">Right</option>
                     <option value="left">Left</option>
                   </select>

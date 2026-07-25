@@ -70,7 +70,16 @@ function handleValidateSupplierModel(PDO $pdo, array $auth, array $config): void
     return;
   }
 
-  $result = mlAutofit($config, ['modelUrl' => $modelUrl, 'returnFiles' => false]);
+  // Honour the supplier's DECLARED count/side/length (authoritative — the notes
+  // reflect their choice, we don't auto-detect over it). Missing -> auto-detect.
+  $payload = ['modelUrl' => $modelUrl, 'returnFiles' => false];
+  $c = (int) ($body['count'] ?? 0);
+  if ($c === 1 || $c === 2) { $payload['count'] = $c; }
+  $side = strtolower(trim((string) ($body['side'] ?? '')));
+  if (in_array($side, ['left', 'right'], true)) { $payload['side'] = $side; }
+  if (isset($body['lengthCm']) && is_numeric($body['lengthCm'])) { $payload['lengthCm'] = (float) $body['lengthCm']; }
+
+  $result = mlAutofit($config, $payload);
   if (isset($result['__error'])) {
     // ML down -> don't block the supplier; the admin still validates at review.
     sendJson(200, true, ['available' => false, 'note' => $result['__error']]);

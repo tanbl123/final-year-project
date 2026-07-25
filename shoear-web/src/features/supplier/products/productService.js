@@ -58,6 +58,12 @@ export function uploadFile(file, kind) {
 // Fail-fast AR validation of a just-uploaded 3D model. Returns
 // { available, rejected, rejectReason, warnings, shoeCount, dimensionsCm, ... }.
 // available=false means the AR service is offline (upload should still proceed).
-export function validateModel(modelUrl) {
-  return apiPost('/supplier/models/validate', { modelUrl }, getToken());
+// Pass the supplier's DECLARED count/side/length so the notes reflect their
+// choice (the declaration is authoritative — this never auto-detects over it).
+export function validateModel(modelUrl, { count, side, length } = {}) {
+  const body = { modelUrl };
+  if (count === 1 || count === 2) { body.count = count; }
+  if (side === 'left' || side === 'right') { body.side = side; }
+  if (length) { body.lengthCm = length; }
+  return apiPost('/supplier/models/validate', body, getToken());
 }
