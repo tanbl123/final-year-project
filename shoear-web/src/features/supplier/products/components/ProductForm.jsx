@@ -12,6 +12,15 @@ const MAX_IMAGES = 8;
 // Letters, numbers, spaces and a little punctuation — blocks junk like "??".
 const NAME_RE = /^[\p{L}\p{N} .,&'/+-]+$/u;
 
+// UK shoe sizes (Malaysia uses UK) and the fixed ISO/"barleycorn" conversion to
+// the shoe's real length in cm: each UK step is exactly 1/3 inch. This is a
+// physical standard (unlike a currency rate, it never changes over time); it's a
+// convenience so suppliers can pick a size they know and we fill the cm the
+// auto-fit needs. The cm field stays editable for brand fine-tuning.
+const UK_SIZES = ['3', '3.5', '4', '4.5', '5', '5.5', '6', '6.5', '7', '7.5', '8',
+                  '8.5', '9', '9.5', '10', '10.5', '11', '11.5', '12', '12.5', '13'];
+const ukToCm = (uk) => Math.round(((Number(uk) + 25) / 3) * 2.54 * 10) / 10;
+
 // Build the form's starting state from an existing product (edit) or blanks
 // (create). `init` is also used as the baseline for the "unsaved changes" check.
 function makeInit(initialValues) {
@@ -78,7 +87,8 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
   // supplier-declared 3D-model facts (the "submission spec")
   const [modelShoeCount, setModelShoeCount] = useState(init.modelShoeCount);  // '1' | '2'
   const [modelSide, setModelSide] = useState(init.modelSide);                 // 'right' | 'left'
-  const [modelLengthCm, setModelLengthCm] = useState(init.modelLengthCm);     // cm (string)
+  const [modelLengthCm, setModelLengthCm] = useState(init.modelLengthCm);     // cm (string) — stored
+  const [modelUkSize, setModelUkSize] = useState('');                          // transient UK-size helper
   const [tryOn, setTryOn] = useState(init.tryOn);
 
   const [categories, setCategories] = useState([]);
@@ -249,6 +259,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
     setModelShoeCount('');
     setModelSide('');
     setModelLengthCm('');
+    setModelUkSize('');
 
     setUploading(true);
     try {
@@ -292,6 +303,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
     setModelShoeCount('');
     setModelSide('');
     setModelLengthCm('');
+    setModelUkSize('');
     setTryOn(false);
   }
 
@@ -315,7 +327,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
     setName(''); setBrand(''); setPrice(''); setCategoryId('');
     setDescription(''); setVariants([emptyVariant()]); setImages([]);
     setModelUrl(''); setModelName(''); setTryOn(false);
-    setModelShoeCount(''); setModelSide(''); setModelLengthCm('');
+    setModelShoeCount(''); setModelSide(''); setModelLengthCm(''); setModelUkSize('');
     setError(''); setTouched({}); setFieldErrors({}); setVariantTouched({});
     setSubmitAttempted(false);
   }
@@ -615,15 +627,28 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
               )}
               <div className="col-sm-4">
                 <label className="form-label small mb-1">Real shoe length (cm)</label>
-                <input type="number" min="5" max="60" step="0.1"
-                  className={'form-control form-control-sm' + (lengthError ? ' is-invalid' : '')}
-                  placeholder="e.g. 28" value={modelLengthCm}
-                  onChange={(e) => setModelLengthCm(e.target.value)} />
+                <div className="input-group input-group-sm">
+                  {/* pick the UK size the model represents -> auto-fills cm */}
+                  <select className="form-select" style={{ maxWidth: '7.5rem' }} value={modelUkSize}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setModelUkSize(v);
+                      if (v) { setModelLengthCm(String(ukToCm(v))); }
+                    }}>
+                    <option value="">UK size…</option>
+                    {UK_SIZES.map((s) => <option key={s} value={s}>UK {s}</option>)}
+                  </select>
+                  <input type="number" min="5" max="60" step="0.1"
+                    className={'form-control' + (lengthError ? ' is-invalid' : '')}
+                    placeholder="cm" value={modelLengthCm}
+                    onChange={(e) => { setModelLengthCm(e.target.value); setModelUkSize(''); }} />
+                </div>
                 {lengthError && <div className="invalid-feedback d-block">{lengthError}</div>}
               </div>
             </div>
             <div className="form-text">
-              Required — this places the shoe accurately in AR. If it's a pair, name the two parts
+              Required — this places the shoe accurately in AR. Pick the model's <b>UK size</b> to
+              auto-fill the length (you can fine-tune the cm). If it's a pair, name the two parts
               <code> Shoe_L</code> and <code> Shoe_R</code> in your 3D tool for the best split.
             </div>
           </div>
