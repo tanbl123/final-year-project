@@ -629,22 +629,25 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
               )}
               <div className="col-sm-4">
                 <label className="form-label small mb-1">Real shoe length (cm)</label>
-                {/* cm is the actual value the auto-fit uses; its error sits right
-                    under it. The UK picker below is just a convenience to fill it. */}
-                <input type="number" min="5" max="60" step="0.1"
-                  className={'form-control form-control-sm' + (lengthError ? ' is-invalid' : '')}
-                  placeholder="e.g. 28" value={modelLengthCm}
-                  onChange={(e) => { setModelLengthCm(e.target.value); setModelUkSize(''); }} />
+                {/* cm (primary, left) is the value the auto-fit uses, so its error
+                    falls right under it; the UK picker on the right just auto-fills it. */}
+                <div className="input-group input-group-sm">
+                  <input type="number" min="5" max="60" step="0.1"
+                    className={'form-control' + (lengthError ? ' is-invalid' : '')}
+                    placeholder="e.g. 28" value={modelLengthCm}
+                    onChange={(e) => { setModelLengthCm(e.target.value); setModelUkSize(''); }} />
+                  <select className="form-select" style={{ maxWidth: '6.5rem' }} value={modelUkSize}
+                    title="Pick a UK size to auto-fill the length"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setModelUkSize(v);
+                      if (v) { setModelLengthCm(String(ukToCm(v))); }
+                    }}>
+                    <option value="">UK size…</option>
+                    {UK_SIZES.map((s) => <option key={s} value={s}>UK {s}</option>)}
+                  </select>
+                </div>
                 {lengthError && <div className="invalid-feedback d-block">{lengthError}</div>}
-                <select className="form-select form-select-sm mt-1" value={modelUkSize}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setModelUkSize(v);
-                    if (v) { setModelLengthCm(String(ukToCm(v))); }
-                  }}>
-                  <option value="">or pick a UK size to auto-fill…</option>
-                  {UK_SIZES.map((s) => <option key={s} value={s}>UK {s} (≈ {ukToCm(s)} cm)</option>)}
-                </select>
               </div>
             </div>
             <div className="form-text">
