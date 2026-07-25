@@ -27,9 +27,10 @@ function makeInit(initialValues) {
     images: (initialValues?.images ?? []).map((url) => ({ url })),
     modelUrl: initialValues?.modelUrl ?? '',
     modelName: initialValues?.modelUrl ? '3D model uploaded' : '',
-    // supplier-declared 3D-model facts (the "submission spec")
-    modelShoeCount: initialValues?.modelShoeCount ? String(initialValues.modelShoeCount) : '1',
-    modelSide: initialValues?.modelSide ?? 'right',
+    // supplier-declared 3D-model facts (the "submission spec") — no silent
+    // defaults; the supplier must consciously choose each one.
+    modelShoeCount: initialValues?.modelShoeCount ? String(initialValues.modelShoeCount) : '',
+    modelSide: initialValues?.modelSide ?? '',
     modelLengthCm: initialValues?.modelLengthCm != null ? String(initialValues.modelLengthCm) : '',
     // VTO only counts as on when a model exists — never load as checked-but-disabled
     tryOn: !!initialValues?.virtualTryOnEnable && !!initialValues?.modelUrl,
@@ -243,21 +244,22 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
       return;
     }
 
-    // A new model gets a FRESH declaration — never inherit the previous file's
-    // count/side/length. Defaults: 1 shoe, right foot, length blank.
-    setModelShoeCount('1');
-    setModelSide('right');
+    // A new model gets a FRESH, EMPTY declaration — the supplier must pick
+    // count/side/length for this file (never inherit the previous one's).
+    setModelShoeCount('');
+    setModelSide('');
     setModelLengthCm('');
 
     setUploading(true);
     try {
       const { url } = await uploadFile(file, 'model');
-      // Fail-fast AR validation: catch a bad model now, not at admin review.
-      // Validate with the fresh defaults (state resets above haven't flushed yet).
+      // Fail-fast AR validation: catch a bad/corrupt model now. Nothing is
+      // declared yet, so this first pass auto-detects (just an initial hint);
+      // the notes refresh once the supplier picks the count/side.
       setValidatingModel(true);
       let result;
       try {
-        result = await validateModel(url, { count: 1, side: 'right' });
+        result = await validateModel(url);
       } catch {
         result = { available: false };   // don't block on a validation hiccup
       } finally {
@@ -287,8 +289,8 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
     setModelName('');
     setModelWarnings([]);
     // the declaration is per-model — clear it so the next upload starts fresh
-    setModelShoeCount('1');
-    setModelSide('right');
+    setModelShoeCount('');
+    setModelSide('');
     setModelLengthCm('');
     setTryOn(false);
   }
@@ -313,7 +315,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
     setName(''); setBrand(''); setPrice(''); setCategoryId('');
     setDescription(''); setVariants([emptyVariant()]); setImages([]);
     setModelUrl(''); setModelName(''); setTryOn(false);
-    setModelShoeCount('1'); setModelSide('right'); setModelLengthCm('');
+    setModelShoeCount(''); setModelSide(''); setModelLengthCm('');
     setError(''); setTouched({}); setFieldErrors({}); setVariantTouched({});
     setSubmitAttempted(false);
   }
@@ -343,6 +345,14 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
     ? 'Add at least one size with its stock quantity.' : '';
   const imagesError = submitAttempted && images.length === 0
     ? 'Upload at least one product image.' : '';
+  // when a 3D model is uploaded, its submission spec must be filled in
+  const modelSpecError = (() => {
+    if (!submitAttempted || !modelUrl) return '';
+    if (!modelShoeCount) return 'Select whether the file has 1 shoe or a pair.';
+    if (modelShoeCount === '1' && !modelSide) return 'Select which foot the shoe is (left or right).';
+    if (!modelLengthCm || Number(modelLengthCm) <= 0) return 'Enter the real shoe length in cm.';
+    return '';
+  })();
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -376,9 +386,12 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
     // sizes and at least one image are required
     const noSizes = cleanVariants.length === 0;
     const noImages = images.length === 0;
+    // if a 3D model is uploaded, its submission spec (count/side/length) is required
+    const modelSpecIncomplete = !!modelUrl &&
+      (!modelShoeCount || (modelShoeCount === '1' && !modelSide) || !modelLengthCm || Number(modelLengthCm) <= 0);
 
     // inline field errors already explain what to fix — no summary banner
-    if (hasBaseError || hasSizeError || noSizes || noImages) {
+    if (hasBaseError || hasSizeError || noSizes || noImages || modelSpecIncomplete) {
       return;
     }
     if (uploading) { setError('Please wait for uploads to finish.'); return; }
@@ -396,8 +409,8 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
         images: images.map((img) => img.url),
         modelUrl,
         // supplier-declared submission spec (only meaningful when a model exists)
-        modelShoeCount: modelUrl ? Number(modelShoeCount) : null,
-        modelSide: modelUrl && modelShoeCount === '1' ? modelSide : null,
+        modelShoeCount: modelUrl && modelShoeCount ? Number(modelShoeCount) : null,
+        modelSide: modelUrl && modelShoeCount === '1' ? (modelSide || null) : null,
         modelLengthCm: modelUrl && modelLengthCm ? Number(modelLengthCm) : null,
       });
       if (!isEdit) resetForm();   // edit navigates away; create clears for the next one
@@ -574,12 +587,16 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
               supplier declares them once. The AR auto-fit uses these as the
               authoritative values. */}
           <div className="border rounded p-2 mt-2">
-            <div className="fw-semibold small text-uppercase text-muted mb-2">About this 3D model</div>
+            <div className="fw-semibold small text-uppercase text-muted mb-2">
+              About this 3D model <span className="text-danger">*</span>
+            </div>
             <div className="row g-2 align-items-end">
               <div className="col-sm-4">
                 <label className="form-label small mb-1">This file contains</label>
-                <select className="form-select form-select-sm" value={modelShoeCount}
+                <select className={'form-select form-select-sm' + (modelSpecError && !modelShoeCount ? ' is-invalid' : '')}
+                  value={modelShoeCount}
                   onChange={(e) => { setModelShoeCount(e.target.value); revalidateModel(e.target.value, modelSide); }}>
+                  <option value="" disabled>Select the number of shoes…</option>
                   <option value="1">1 shoe (we mirror the other foot)</option>
                   <option value="2">A pair (2 shoes)</option>
                 </select>
@@ -587,8 +604,10 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
               {modelShoeCount === '1' && (
                 <div className="col-sm-4">
                   <label className="form-label small mb-1">Which foot is it?</label>
-                  <select className="form-select form-select-sm" value={modelSide}
+                  <select className={'form-select form-select-sm' + (modelSpecError && !modelSide ? ' is-invalid' : '')}
+                    value={modelSide}
                     onChange={(e) => { setModelSide(e.target.value); revalidateModel(modelShoeCount, e.target.value); }}>
+                    <option value="" disabled>Select left or right…</option>
                     <option value="right">Right</option>
                     <option value="left">Left</option>
                   </select>
@@ -596,13 +615,15 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
               )}
               <div className="col-sm-4">
                 <label className="form-label small mb-1">Real shoe length (cm)</label>
-                <input type="number" min="5" max="60" step="0.1" className="form-control form-control-sm"
+                <input type="number" min="5" max="60" step="0.1"
+                  className={'form-control form-control-sm' + (modelSpecError && (!modelLengthCm || Number(modelLengthCm) <= 0) ? ' is-invalid' : '')}
                   placeholder="e.g. 28" value={modelLengthCm}
                   onChange={(e) => setModelLengthCm(e.target.value)} />
               </div>
             </div>
+            {modelSpecError && <div className="invalid-feedback d-block mt-1">{modelSpecError}</div>}
             <div className="form-text">
-              Helps place the shoe accurately in AR. If it's a pair, name the two parts
+              Required — this places the shoe accurately in AR. If it's a pair, name the two parts
               <code> Shoe_L</code> and <code> Shoe_R</code> in your 3D tool for the best split.
             </div>
           </div>
