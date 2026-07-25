@@ -345,14 +345,12 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
     ? 'Add at least one size with its stock quantity.' : '';
   const imagesError = submitAttempted && images.length === 0
     ? 'Upload at least one product image.' : '';
-  // when a 3D model is uploaded, its submission spec must be filled in
-  const modelSpecError = (() => {
-    if (!submitAttempted || !modelUrl) return '';
-    if (!modelShoeCount) return 'Select whether the file has 1 shoe or a pair.';
-    if (modelShoeCount === '1' && !modelSide) return 'Select which foot the shoe is (left or right).';
-    if (!modelLengthCm || Number(modelLengthCm) <= 0) return 'Enter the real shoe length in cm.';
-    return '';
-  })();
+  // when a 3D model is uploaded, its submission spec must be filled in —
+  // per-field errors so each shows under its own control
+  const showModelSpec = submitAttempted && !!modelUrl;
+  const countError  = showModelSpec && !modelShoeCount ? 'Select the number of shoes.' : '';
+  const sideError   = showModelSpec && modelShoeCount === '1' && !modelSide ? 'Select left or right.' : '';
+  const lengthError = showModelSpec && (!modelLengthCm || Number(modelLengthCm) <= 0) ? 'Enter the shoe length in cm.' : '';
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -593,35 +591,37 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
             <div className="row g-2 align-items-end">
               <div className="col-sm-4">
                 <label className="form-label small mb-1">This file contains</label>
-                <select className={'form-select form-select-sm' + (modelSpecError && !modelShoeCount ? ' is-invalid' : '')}
+                <select className={'form-select form-select-sm' + (countError ? ' is-invalid' : '')}
                   value={modelShoeCount}
                   onChange={(e) => { setModelShoeCount(e.target.value); revalidateModel(e.target.value, modelSide); }}>
                   <option value="" disabled>Select the number of shoes…</option>
                   <option value="1">1 shoe (we mirror the other foot)</option>
                   <option value="2">A pair (2 shoes)</option>
                 </select>
+                {countError && <div className="invalid-feedback d-block">{countError}</div>}
               </div>
               {modelShoeCount === '1' && (
                 <div className="col-sm-4">
                   <label className="form-label small mb-1">Which foot is it?</label>
-                  <select className={'form-select form-select-sm' + (modelSpecError && !modelSide ? ' is-invalid' : '')}
+                  <select className={'form-select form-select-sm' + (sideError ? ' is-invalid' : '')}
                     value={modelSide}
                     onChange={(e) => { setModelSide(e.target.value); revalidateModel(modelShoeCount, e.target.value); }}>
                     <option value="" disabled>Select left or right…</option>
                     <option value="right">Right</option>
                     <option value="left">Left</option>
                   </select>
+                  {sideError && <div className="invalid-feedback d-block">{sideError}</div>}
                 </div>
               )}
               <div className="col-sm-4">
                 <label className="form-label small mb-1">Real shoe length (cm)</label>
                 <input type="number" min="5" max="60" step="0.1"
-                  className={'form-control form-control-sm' + (modelSpecError && (!modelLengthCm || Number(modelLengthCm) <= 0) ? ' is-invalid' : '')}
+                  className={'form-control form-control-sm' + (lengthError ? ' is-invalid' : '')}
                   placeholder="e.g. 28" value={modelLengthCm}
                   onChange={(e) => setModelLengthCm(e.target.value)} />
+                {lengthError && <div className="invalid-feedback d-block">{lengthError}</div>}
               </div>
             </div>
-            {modelSpecError && <div className="invalid-feedback d-block mt-1">{modelSpecError}</div>}
             <div className="form-text">
               Required — this places the shoe accurately in AR. If it's a pair, name the two parts
               <code> Shoe_L</code> and <code> Shoe_R</code> in your 3D tool for the best split.
