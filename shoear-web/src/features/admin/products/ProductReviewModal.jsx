@@ -121,7 +121,15 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                       preview is the single 3D viewer in this modal (a second
                       WebGL canvas here was crashing weak GPUs). */}
                   {product.modelUrl && (
-                    <AutofitPanel productId={productId} modelUrl={product.modelUrl} />
+                    <AutofitPanel
+                      productId={productId}
+                      modelUrl={product.modelUrl}
+                      declared={{
+                        count: product.modelShoeCount,
+                        side: product.modelSide,
+                        length: product.modelLengthCm,
+                      }}
+                    />
                   )}
 
                   {/* AR try-on lens (Snapchat Camera Kit). Admin builds the lens

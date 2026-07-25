@@ -30,8 +30,14 @@ function Row({ label, children }) {
 // Admin AR auto-fit panel. Runs the product's uploaded 3D model through the ML
 // auto-fit service and shows the analysis + a before/after preview, so the admin
 // can QC it and download the fitted, half-tuned model to drop into Lens Studio.
-function AutofitPanel({ productId, modelUrl }) {
-  const [ctrl, setCtrl] = useState({ count: 'auto', side: 'right', length: '' });
+function AutofitPanel({ productId, modelUrl, declared = {} }) {
+  // default the controls to the supplier's declared submission spec (authoritative),
+  // falling back to auto-detect / right / ~26 when they didn't declare it.
+  const [ctrl, setCtrl] = useState({
+    count: declared.count ? String(declared.count) : 'auto',
+    side: declared.side || 'right',
+    length: declared.length != null ? String(declared.length) : '',
+  });
   const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');

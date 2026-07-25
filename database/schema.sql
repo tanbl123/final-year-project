@@ -257,7 +257,10 @@ CREATE TABLE product_image (
 CREATE TABLE product_model (
     productModelId  VARCHAR(10)  NOT NULL,                -- MOD0001
     productId       VARCHAR(10)  NOT NULL,
-    productModelUrl VARCHAR(255) NOT NULL,                -- .glb/.gltf in Firebase Storage
+    productModelUrl VARCHAR(255) NOT NULL,                -- .glb in Firebase Storage
+    shoeCount       TINYINT      NULL,                    -- supplier-declared: 1 = single (mirrored), 2 = pair
+    modelSide       VARCHAR(5)   NULL,                    -- for a single shoe: 'left' / 'right'
+    modelLengthCm   DECIMAL(4,1) NULL,                    -- real shoe length (cm) for AR scaling
     arLensId        VARCHAR(64)  NULL,                    -- Snapchat Camera Kit lens id (set by admin after building the lens)
     PRIMARY KEY (productModelId),
     KEY idx_model_product (productId),

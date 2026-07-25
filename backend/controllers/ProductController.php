@@ -5,6 +5,19 @@
 // Max product images per listing (kept in sync with the ProductForm cap).
 const MAX_PRODUCT_IMAGES = 8;
 
+// Supplier-declared 3D-model metadata (the "submission spec"): the facts geometry
+// can't reliably infer, so the AR auto-fit treats them as authoritative. Returns
+// [shoeCount(1|2|null), side('left'|'right'|null), lengthCm(float|null)] normalised.
+function readModelMeta(array $body): array {
+  $count = isset($body['modelShoeCount']) ? (int) $body['modelShoeCount'] : 0;
+  $count = ($count === 1 || $count === 2) ? $count : null;
+  $side  = strtolower(trim((string) ($body['modelSide'] ?? '')));
+  $side  = in_array($side, ['left', 'right'], true) ? $side : null;
+  $len   = (isset($body['modelLengthCm']) && is_numeric($body['modelLengthCm'])) ? (float) $body['modelLengthCm'] : null;
+  if ($len !== null && ($len <= 0 || $len > 60)) { $len = null; }  // sane real-shoe range
+  return [$count, $side, $len];
+}
+
 // GET /products  — list this supplier's products (newest first).
 // Returns the fields the portal needs to render cards AND filter the list:
 // category, status, a primary image, and total stock (summed across sizes).
@@ -148,11 +161,13 @@ function handleCreateProduct(PDO $pdo, array $auth, array $config = []): void {
     }
 
     if ($modelUrl !== '') {
+      [$mCount, $mSide, $mLen] = readModelMeta($body);
       $mid = nextId($pdo, 'product_model', 'productModelId', 'MOD');
       $pdo->prepare(
-        'INSERT INTO product_model (productModelId, productId, productModelUrl)
-         VALUES (:mid, :pid, :url)'
-      )->execute(['mid' => $mid, 'pid' => $id, 'url' => $modelUrl]);
+        'INSERT INTO product_model (productModelId, productId, productModelUrl, shoeCount, modelSide, modelLengthCm)
+         VALUES (:mid, :pid, :url, :cnt, :side, :len)'
+      )->execute(['mid' => $mid, 'pid' => $id, 'url' => $modelUrl,
+                  'cnt' => $mCount, 'side' => $mSide, 'len' => $mLen]);
     }
 
     $pdo->commit();
@@ -198,10 +213,13 @@ function handleGetProduct(PDO $pdo, array $auth, string $id): void {
   $imgs->execute(['id' => $id]);
   $row['images'] = array_column($imgs->fetchAll(), 'productImageUrl');
 
-  $mdl = $pdo->prepare('SELECT productModelUrl, arLensId FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
+  $mdl = $pdo->prepare('SELECT productModelUrl, shoeCount, modelSide, modelLengthCm, arLensId FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
   $mdl->execute(['id' => $id]);
   $modelRow = $mdl->fetch();
   $row['modelUrl'] = $modelRow ? $modelRow['productModelUrl'] : null;
+  $row['modelShoeCount'] = $modelRow && $modelRow['shoeCount'] !== null ? (int) $modelRow['shoeCount'] : null;
+  $row['modelSide'] = $modelRow ? $modelRow['modelSide'] : null;
+  $row['modelLengthCm'] = $modelRow && $modelRow['modelLengthCm'] !== null ? (float) $modelRow['modelLengthCm'] : null;
   $row['arLensId'] = $modelRow ? $modelRow['arLensId'] : null;   // Camera Kit lens id (AR try-on)
 
   $vars = $pdo->prepare('SELECT size, stockQuantity AS stock FROM product_variant WHERE productId = :id ORDER BY productVariantId');
@@ -265,10 +283,13 @@ function handleGetAdminProduct(PDO $pdo, string $id): void {
   $imgs->execute(['id' => $id]);
   $row['images'] = array_column($imgs->fetchAll(), 'productImageUrl');
 
-  $mdl = $pdo->prepare('SELECT productModelUrl, arLensId FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
+  $mdl = $pdo->prepare('SELECT productModelUrl, shoeCount, modelSide, modelLengthCm, arLensId FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
   $mdl->execute(['id' => $id]);
   $modelRow = $mdl->fetch();
   $row['modelUrl'] = $modelRow ? $modelRow['productModelUrl'] : null;
+  $row['modelShoeCount'] = $modelRow && $modelRow['shoeCount'] !== null ? (int) $modelRow['shoeCount'] : null;
+  $row['modelSide'] = $modelRow ? $modelRow['modelSide'] : null;
+  $row['modelLengthCm'] = $modelRow && $modelRow['modelLengthCm'] !== null ? (float) $modelRow['modelLengthCm'] : null;
   $row['arLensId'] = $modelRow ? $modelRow['arLensId'] : null;   // Camera Kit lens id (AR try-on)
 
   $vars = $pdo->prepare('SELECT size, stockQuantity AS stock FROM product_variant WHERE productId = :id ORDER BY productVariantId');
@@ -512,18 +533,24 @@ function handleUpdateProduct(PDO $pdo, array $auth, string $id): void {
     //   • model URL unchanged → keep the row + its arLensId
     //   • model URL changed   → update the URL, clear arLensId (old lens is stale)
     //   • model removed        → drop the row (and its lens)
+    [$mCount, $mSide, $mLen] = readModelMeta($body);
     if ($modelUrl === '') {
       $pdo->prepare('DELETE FROM product_model WHERE productId = :id')->execute(['id' => $id]);
     } elseif ($curModelRow) {
       $keepLens = ($currentModel === $modelUrl) ? ($curModelRow['arLensId'] ?? null) : null;
       $pdo->prepare(
-        'UPDATE product_model SET productModelUrl = :url, arLensId = :lens WHERE productModelId = :mid'
-      )->execute(['url' => $modelUrl, 'lens' => $keepLens, 'mid' => $curModelRow['productModelId']]);
+        'UPDATE product_model SET productModelUrl = :url, arLensId = :lens,
+             shoeCount = :cnt, modelSide = :side, modelLengthCm = :len
+           WHERE productModelId = :mid'
+      )->execute(['url' => $modelUrl, 'lens' => $keepLens, 'cnt' => $mCount, 'side' => $mSide,
+                  'len' => $mLen, 'mid' => $curModelRow['productModelId']]);
     } else {
       $mid = nextId($pdo, 'product_model', 'productModelId', 'MOD');
       $pdo->prepare(
-        'INSERT INTO product_model (productModelId, productId, productModelUrl) VALUES (:mid, :pid, :url)'
-      )->execute(['mid' => $mid, 'pid' => $id, 'url' => $modelUrl]);
+        'INSERT INTO product_model (productModelId, productId, productModelUrl, shoeCount, modelSide, modelLengthCm)
+         VALUES (:mid, :pid, :url, :cnt, :side, :len)'
+      )->execute(['mid' => $mid, 'pid' => $id, 'url' => $modelUrl,
+                  'cnt' => $mCount, 'side' => $mSide, 'len' => $mLen]);
     }
 
     $pdo->commit();

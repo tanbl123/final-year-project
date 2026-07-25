@@ -97,22 +97,30 @@ function handleValidateSupplierModel(PDO $pdo, array $auth, array $config): void
 // Runs the uploaded model through the ML auto-fit and returns the analysis so
 // the admin can QC it and download the fitted model for Lens Studio.
 function handleAdminProductAutofit(PDO $pdo, string $id, array $config): void {
-  // the product's primary 3D model (same lookup the admin detail view uses)
+  // the product's primary 3D model + the supplier's declared submission metadata,
+  // which the auto-fit treats as authoritative defaults (geometry is the fallback)
   $mdl = $pdo->prepare(
-    'SELECT productModelUrl FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1'
+    'SELECT productModelUrl, shoeCount, modelSide, modelLengthCm
+       FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1'
   );
   $mdl->execute(['id' => $id]);
-  $modelUrl = (string) ($mdl->fetchColumn() ?: '');
+  $modelRow = $mdl->fetch();
+  $modelUrl = (string) ($modelRow['productModelUrl'] ?? '');
   if ($modelUrl === '') {
     sendJson(404, false, null, ['code' => 'NO_MODEL',
       'message' => 'This product has no 3D model to auto-fit.']);
     return;
   }
 
-  $countRaw = strtolower(trim((string) ($_GET['count'] ?? 'auto')));
-  $side     = strtolower(trim((string) ($_GET['side'] ?? 'right')));
+  // Precedence: explicit query param (admin override in the panel) > supplier's
+  // declared value > geometric auto-detect / default.
+  $countRaw = strtolower(trim((string) ($_GET['count'] ?? '')));
+  if ($countRaw === '') { $countRaw = $modelRow['shoeCount'] ? (string) (int) $modelRow['shoeCount'] : 'auto'; }
+  $side = strtolower(trim((string) ($_GET['side'] ?? '')));
+  if ($side === '') { $side = $modelRow['modelSide'] ?: 'right'; }
   $files    = ((string) ($_GET['files'] ?? '0')) === '1';
   $lengthCm = isset($_GET['length']) && is_numeric($_GET['length']) ? (float) $_GET['length'] : null;
+  if ($lengthCm === null && $modelRow['modelLengthCm'] !== null) { $lengthCm = (float) $modelRow['modelLengthCm']; }
 
   $payload = [
     'modelUrl'     => $modelUrl,

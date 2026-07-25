@@ -27,6 +27,10 @@ function makeInit(initialValues) {
     images: (initialValues?.images ?? []).map((url) => ({ url })),
     modelUrl: initialValues?.modelUrl ?? '',
     modelName: initialValues?.modelUrl ? '3D model uploaded' : '',
+    // supplier-declared 3D-model facts (the "submission spec")
+    modelShoeCount: initialValues?.modelShoeCount ? String(initialValues.modelShoeCount) : '1',
+    modelSide: initialValues?.modelSide ?? 'right',
+    modelLengthCm: initialValues?.modelLengthCm != null ? String(initialValues.modelLengthCm) : '',
     // VTO only counts as on when a model exists — never load as checked-but-disabled
     tryOn: !!initialValues?.virtualTryOnEnable && !!initialValues?.modelUrl,
   };
@@ -47,6 +51,9 @@ function signatureOf(s) {
       .sort((a, b) => a.size.localeCompare(b.size)),
     images: s.images.map((i) => i.url),
     modelUrl: s.modelUrl,
+    modelShoeCount: s.modelShoeCount,
+    modelSide: s.modelSide,
+    modelLengthCm: String(s.modelLengthCm ?? ''),
     tryOn: !!s.tryOn,
   });
 }
@@ -62,11 +69,15 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
   const [description, setDescription] = useState(init.description);
   const [variants, setVariants] = useState(init.variants);
   const [images, setImages] = useState(init.images);  // [{ url }]
-  const [modelUrl, setModelUrl] = useState(init.modelUrl);   // single .glb/.gltf
+  const [modelUrl, setModelUrl] = useState(init.modelUrl);   // single .glb
   const [modelName, setModelName] = useState(init.modelName); // shown to the supplier
   const [modelWarnings, setModelWarnings] = useState([]);     // AR validation warnings (non-blocking)
   const [modelError, setModelError] = useState('');           // shown inline at the 3D-model section
   const [validatingModel, setValidatingModel] = useState(false);
+  // supplier-declared 3D-model facts (the "submission spec")
+  const [modelShoeCount, setModelShoeCount] = useState(init.modelShoeCount);  // '1' | '2'
+  const [modelSide, setModelSide] = useState(init.modelSide);                 // 'right' | 'left'
+  const [modelLengthCm, setModelLengthCm] = useState(init.modelLengthCm);     // cm (string)
   const [tryOn, setTryOn] = useState(init.tryOn);
 
   const [categories, setCategories] = useState([]);
@@ -275,13 +286,15 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
     setName(''); setBrand(''); setPrice(''); setCategoryId('');
     setDescription(''); setVariants([emptyVariant()]); setImages([]);
     setModelUrl(''); setModelName(''); setTryOn(false);
+    setModelShoeCount('1'); setModelSide('right'); setModelLengthCm('');
     setError(''); setTouched({}); setFieldErrors({}); setVariantTouched({});
     setSubmitAttempted(false);
   }
 
   // has anything changed from the starting state? (confirm before discarding)
   const dirty =
-    signatureOf({ name, brand, price, categoryId, description, variants, images, modelUrl, tryOn })
+    signatureOf({ name, brand, price, categoryId, description, variants, images, modelUrl,
+                  modelShoeCount, modelSide, modelLengthCm, tryOn })
     !== signatureOf(init);
 
   // report unsaved-changes state up so the page's back button can guard too
@@ -355,6 +368,10 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
         variants: cleanVariants,
         images: images.map((img) => img.url),
         modelUrl,
+        // supplier-declared submission spec (only meaningful when a model exists)
+        modelShoeCount: modelUrl ? Number(modelShoeCount) : null,
+        modelSide: modelUrl && modelShoeCount === '1' ? modelSide : null,
+        modelLengthCm: modelUrl && modelLengthCm ? Number(modelLengthCm) : null,
       });
       if (!isEdit) resetForm();   // edit navigates away; create clears for the next one
       // onAdd owns what happens next (e.g. navigate away + show a toast)
@@ -525,6 +542,43 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
             loading="lazy"
             style={{ width: '100%', height: '260px', background: '#f8f9fa', borderRadius: '0.5rem', marginTop: '0.5rem' }}
           ></model-viewer>
+
+          {/* Submission spec: the facts geometry can't reliably read, so the
+              supplier declares them once. The AR auto-fit uses these as the
+              authoritative values. */}
+          <div className="border rounded p-2 mt-2">
+            <div className="fw-semibold small text-uppercase text-muted mb-2">About this 3D model</div>
+            <div className="row g-2 align-items-end">
+              <div className="col-sm-4">
+                <label className="form-label small mb-1">This file contains</label>
+                <select className="form-select form-select-sm" value={modelShoeCount}
+                  onChange={(e) => setModelShoeCount(e.target.value)}>
+                  <option value="1">1 shoe (we mirror the other foot)</option>
+                  <option value="2">A pair (2 shoes)</option>
+                </select>
+              </div>
+              {modelShoeCount === '1' && (
+                <div className="col-sm-4">
+                  <label className="form-label small mb-1">Which foot is it?</label>
+                  <select className="form-select form-select-sm" value={modelSide}
+                    onChange={(e) => setModelSide(e.target.value)}>
+                    <option value="right">Right</option>
+                    <option value="left">Left</option>
+                  </select>
+                </div>
+              )}
+              <div className="col-sm-4">
+                <label className="form-label small mb-1">Real shoe length (cm)</label>
+                <input type="number" min="5" max="60" step="0.1" className="form-control form-control-sm"
+                  placeholder="e.g. 28" value={modelLengthCm}
+                  onChange={(e) => setModelLengthCm(e.target.value)} />
+              </div>
+            </div>
+            <div className="form-text">
+              Helps place the shoe accurately in AR. If it's a pair, name the two parts
+              <code> Shoe_L</code> and <code> Shoe_R</code> in your 3D tool for the best split.
+            </div>
+          </div>
         </>
       ) : (
         <input type="file" className="form-control" accept=".glb,model/gltf-binary"
