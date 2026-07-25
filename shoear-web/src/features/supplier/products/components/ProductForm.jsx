@@ -600,7 +600,9 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
             <div className="fw-semibold small text-uppercase text-muted mb-2">
               About this 3D model <span className="text-danger">*</span>
             </div>
-            <div className="row g-2 align-items-end">
+            {/* top-align so a per-field error growing one column doesn't shove
+                the other fields' inputs up/down (keeps them on one line) */}
+            <div className="row g-2 align-items-start">
               <div className="col-sm-4">
                 <label className="form-label small mb-1">This file contains</label>
                 <select className={'form-select form-select-sm' + (countError ? ' is-invalid' : '')}
