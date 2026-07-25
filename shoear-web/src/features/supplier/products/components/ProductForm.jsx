@@ -243,19 +243,21 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
       return;
     }
 
+    // A new model gets a FRESH declaration — never inherit the previous file's
+    // count/side/length. Defaults: 1 shoe, right foot, length blank.
+    setModelShoeCount('1');
+    setModelSide('right');
+    setModelLengthCm('');
+
     setUploading(true);
     try {
       const { url } = await uploadFile(file, 'model');
       // Fail-fast AR validation: catch a bad model now, not at admin review.
-      // Pass the declared count/side/length so the notes match the declaration.
+      // Validate with the fresh defaults (state resets above haven't flushed yet).
       setValidatingModel(true);
       let result;
       try {
-        result = await validateModel(url, {
-          count: Number(modelShoeCount),
-          side: modelSide,
-          length: modelLengthCm ? Number(modelLengthCm) : undefined,
-        });
+        result = await validateModel(url, { count: 1, side: 'right' });
       } catch {
         result = { available: false };   // don't block on a validation hiccup
       } finally {
@@ -284,6 +286,10 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
     setModelUrl('');
     setModelName('');
     setModelWarnings([]);
+    // the declaration is per-model — clear it so the next upload starts fresh
+    setModelShoeCount('1');
+    setModelSide('right');
+    setModelLengthCm('');
     setTryOn(false);
   }
 
