@@ -397,31 +397,51 @@ def _count_clusters(mesh, overall_max):
 def _detect_count(mesh):
     """Guess 1 or 2 shoes when the supplier didn't declare it, with a confidence.
 
-    The reliable cue is the CONNECTED-COMPONENT count: two shoes in a file come
-    as two separate pieces, and a single shoe (even a tall boot) is ONE connected
-    mesh. So a single component == 1 shoe; two big components == a pair. The old
-    width/length ratio was unreliable — a boot's tall shaft reads as "wide" and
-    was wrongly called a pair — so it's now only a weak last resort when no graph
-    engine (scipy) is available. Returns (count, reason, confidence)."""
-    clusters = _count_clusters(mesh, float(mesh.extents.max()))
-    if clusters == 1:
-        return 1, "single connected mesh", 0.90
-    if clusters == 2:
-        return 2, "two separate meshes", 0.90
-    if clusters is not None and clusters > 2:
-        # >2 big parts: ambiguous (extra straps/soles, or more than a pair) — a
-        # supplier product is at most a pair, so lean to 2 but flag low confidence.
-        return 2, "%d separate meshes — verify" % clusters, 0.40
+    The reliable signature of a PAIR is a spatial GAP: two shoes sit side by side
+    with empty space between them, so along some axis there is a full-width empty
+    slab through the middle with substantial geometry on BOTH sides. A single
+    shoe — however many parts it has (upper, sole, laces, eyelets...) — is one
+    compact blob with no such separating gap. (Neither connected-component count
+    nor a width/length ratio works: a detailed single shoe has many pieces, and a
+    tall boot's shaft reads as "wide".) Returns (count, reason, confidence)."""
+    # orient sole-down so Y is height; a pair is separated along a HORIZONTAL
+    # axis (X or Z) into two roughly equal masses. Vertical gaps (sole vs upper
+    # vs collar) are ignored so a single multi-part shoe isn't mistaken for a pair.
+    # Use TRIANGLE CENTRES, not vertices: a hollow surface mesh has vertices only
+    # on its shell (sparse interior = false gaps), but its faces cover the whole
+    # body, so triangle centres fill the interior — only a real inter-shoe gap
+    # reads as empty.
+    oriented, _ = _orient_canonical(mesh)
+    P = np.asarray(oriented.triangles_center, dtype=np.float64)
+    n = len(P)
+    if n < 50:
+        return 1, "too few faces to assess", 0.40
 
-    # no graph engine: fall back to the PCA width/length ratio, but only a VERY
-    # wide footprint suggests a fused side-by-side pair (default to a single shoe).
-    aligned = _pca_align(mesh)
-    L = float(aligned.extents[2])
-    W = float(aligned.extents[0])
-    ratio = (W / L) if L > 1e-9 else 0.0
-    if ratio > 0.75:
-        return 2, "very wide footprint (w/l=%.2f, no mesh-split available)" % ratio, 0.40
-    return 1, "single shoe (w/l=%.2f, no mesh-split available)" % ratio, 0.50
+    bins = 48
+    empty_thresh = max(1, int(0.003 * n))   # a bin with <0.3% of faces is "empty"
+    best_gap = 0.0
+    for ax in (0, 2):   # X (width) and Z (length) only — skip Y (height)
+        hist, _ = np.histogram(P[:, ax], bins=bins)
+        empty = hist < empty_thresh
+        i = 0
+        while i < bins:
+            if empty[i]:
+                j = i
+                while j < bins and empty[j]:
+                    j += 1
+                if i > 0 and j < bins:
+                    left, right = hist[:i].sum(), hist[j:].sum()
+                    # a pair splits into two BALANCED masses (each >=35%)
+                    if left > 0.35 * n and right > 0.35 * n:
+                        best_gap = max(best_gap, (j - i) / bins)
+                i = j
+            else:
+                i += 1
+
+    if best_gap >= 0.15:   # a wide empty slab separating two balanced masses -> pair
+        return 2, "two balanced masses separated by a gap (%.0f%% empty)" % (best_gap * 100), \
+            round(min(1.0, best_gap / 0.25), 2)
+    return 1, "one compact shoe (no separating gap)", 0.85
 
 
 # --------------------------------------------------------------------------- #
