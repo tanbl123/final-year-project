@@ -396,29 +396,32 @@ def _count_clusters(mesh, overall_max):
 
 def _detect_count(mesh):
     """Guess 1 or 2 shoes when the supplier didn't declare it, with a confidence.
-    Two cues: connected-component count (2 big clusters -> a pair, high
-    confidence) and a PCA width/length ratio (a single shoe is ~0.35-0.45 wide
-    relative to its length; a side-by-side pair is ~0.6-0.8). Returns
-    (count, reason, confidence). Deterministic geometry, not ML."""
+
+    The reliable cue is the CONNECTED-COMPONENT count: two shoes in a file come
+    as two separate pieces, and a single shoe (even a tall boot) is ONE connected
+    mesh. So a single component == 1 shoe; two big components == a pair. The old
+    width/length ratio was unreliable — a boot's tall shaft reads as "wide" and
+    was wrongly called a pair — so it's now only a weak last resort when no graph
+    engine (scipy) is available. Returns (count, reason, confidence)."""
     clusters = _count_clusters(mesh, float(mesh.extents.max()))
+    if clusters == 1:
+        return 1, "single connected mesh", 0.90
+    if clusters == 2:
+        return 2, "two separate meshes", 0.90
+    if clusters is not None and clusters > 2:
+        # >2 big parts: ambiguous (extra straps/soles, or more than a pair) — a
+        # supplier product is at most a pair, so lean to 2 but flag low confidence.
+        return 2, "%d separate meshes — verify" % clusters, 0.40
+
+    # no graph engine: fall back to the PCA width/length ratio, but only a VERY
+    # wide footprint suggests a fused side-by-side pair (default to a single shoe).
     aligned = _pca_align(mesh)
     L = float(aligned.extents[2])
     W = float(aligned.extents[0])
     ratio = (W / L) if L > 1e-9 else 0.0
-
-    if clusters == 2:
-        return 2, "two separate meshes", 0.90
-    thr = 0.55
-    ratio_conf = min(1.0, abs(ratio - thr) / 0.15)   # distance from the boundary
-    if clusters == 1:
-        # one connected mesh, but a very wide footprint can still be a joined pair
-        if ratio > 0.60:
-            return 2, "wide footprint (w/l=%.2f)" % ratio, round(min(1.0, (ratio - 0.60) / 0.15), 2)
-        return 1, "single connected mesh (w/l=%.2f)" % ratio, round(max(0.6, ratio_conf), 2)
-    # no graph engine -> decide on the ratio alone (inherently less certain)
-    if ratio > 0.55:
-        return 2, "wide footprint (w/l=%.2f)" % ratio, round(ratio_conf, 2)
-    return 1, "narrow footprint (w/l=%.2f)" % ratio, round(ratio_conf, 2)
+    if ratio > 0.75:
+        return 2, "very wide footprint (w/l=%.2f, no mesh-split available)" % ratio, 0.40
+    return 1, "single shoe (w/l=%.2f, no mesh-split available)" % ratio, 0.50
 
 
 # --------------------------------------------------------------------------- #

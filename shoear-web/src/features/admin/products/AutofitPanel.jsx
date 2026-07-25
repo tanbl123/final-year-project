@@ -39,7 +39,7 @@ function AutofitPanel({ productId, modelUrl }) {
   const [fitted, setFitted] = useState(null);   // { url } of the combined pair glb
   const [generating, setGenerating] = useState(false);
   const [showFitted, setShowFitted] = useState(false);  // preview: original vs fitted pair
-  const [showPreview, setShowPreview] = useState(false); // 3D preview is OPT-IN (heavy)
+  const [showPreview, setShowPreview] = useState(true); // 3D preview shown by default (can Hide)
   const blobUrls = useRef([]);                    // track for revocation
 
   function revokeBlobs() {
