@@ -18,3 +18,6 @@ fast-simplification==0.1.13
 # Texture downscaling for mobile AR (autofit._optimize_textures). Ships with
 # trimesh's texture support; pinned here as autofit uses it directly.
 Pillow==10.4.0
+# Stable-pose auto-straighten (autofit._stable_align uses trimesh.poses, which
+# needs networkx). Optional: autofit falls back to PCA straightening without it.
+networkx==3.2.1

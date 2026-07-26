@@ -329,6 +329,114 @@ def _pca_align(mesh, trust_file=False):
     return m, axis_conf
 
 
+def _xz_footprint(tc, mask):
+    """Footprint spread (X x Z bbox area) of the triangle centres in a slab."""
+    p = tc[mask][:, [0, 2]]
+    if len(p) < 3:
+        return 0.0
+    return float((p[:, 0].max() - p[:, 0].min()) * (p[:, 1].max() - p[:, 1].min()))
+
+
+def _vertical_skew(m):
+    """Area-weighted |skewness| of the triangle centres along Y (up). High when
+    one Y-end carries much more material (the flat sole vs the open collar); low
+    for a shoe resting on its left-right-symmetric side."""
+    tc = np.asarray(m.triangles_center, dtype=np.float64)
+    aw = np.asarray(m.area_faces, dtype=np.float64)
+    w = float(aw.sum()) or 1.0
+    p = tc[:, 1] - float((tc[:, 1] * aw).sum() / w)
+    var = float(((p ** 2) * aw).sum() / w)
+    if var < 1e-12:
+        return 0.0
+    return abs(float(((p ** 3) * aw).sum() / w) / (var ** 1.5))
+
+
+def _stable_align(mesh):
+    """AUTO-STRAIGHTEN via STABLE RESTING POSE + sole disambiguation.
+
+    PCA tilts tall shoes (its largest-variance axis is the toe->collar diagonal),
+    and a raw "drop on a table" pose flops a high-top onto its big side face. So
+    we combine them:
+      1. compute_stable_poses enumerates the flat orientations the shoe could
+         rest in — this removes any tilt in the upload.
+      2. Among those, keep the one whose VERTICAL axis is most lop-sided
+         (area-weighted skewness): sole-down is bottom-heavy (high skew), while a
+         shoe on its side is left-right symmetric (low skew). This rejects the
+         side-resting pose a high-top otherwise prefers.
+      3. Fix sole-DOWN by footprint (the sole spreads over the whole foot) and
+         toe-forward by heel height, then set length->Z, width->X.
+
+    Returns (mesh, conf) matching _orient_canonical, or None if the pose engine
+    is unavailable / the computation fails (caller then falls back to PCA)."""
+    try:
+        import trimesh.poses as _poses          # needs networkx; optional dependency
+    except Exception:
+        return None
+    if len(mesh.faces) == 0 or len(mesh.vertices) < 4:
+        return None
+    try:
+        com = mesh.bounding_box.centroid          # bbox centre: robust for non-watertight
+        transforms, probs = _poses.compute_stable_poses(mesh, center_mass=com, n_samples=1)
+    except Exception:
+        return None
+    if transforms is None or len(transforms) == 0:
+        return None
+
+    z2y = trimesh.transformations.rotation_matrix(-np.pi / 2.0, [1, 0, 0])  # +Z up -> +Y up
+    cand = []
+    for t in transforms[:8]:                      # consider the most probable poses
+        m = mesh.copy()
+        m.apply_transform(t)
+        m.apply_transform(z2y)
+        if float(m.extents[1]) >= float(max(m.extents)) - 1e-9:
+            continue                              # standing on toe/heel — not a shoe pose
+        cand.append((_vertical_skew(m), m))
+    if not cand:
+        return None
+    sk, m = max(cand, key=lambda c: c[0])         # sole/collar axis vertical
+
+    tc = m.triangles_center
+    b = m.bounds
+    ymin, ymax = float(b[0][1]), float(b[1][1])
+    hy = ymax - ymin
+    fp_bot = _xz_footprint(tc, tc[:, 1] <= ymin + 0.25 * hy)
+    fp_top = _xz_footprint(tc, tc[:, 1] >= ymax - 0.25 * hy)
+    flipped = []
+    if fp_top > fp_bot:                           # sole ended up — flip it down
+        m.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
+        flipped.append("upside-down -> sole down")
+        fp_bot, fp_top = fp_top, fp_bot
+    sole_conf = min(1.0, abs(fp_bot - fp_top) / (fp_bot + fp_top + 1e-9) / 0.25)
+
+    if float(m.extents[0]) > float(m.extents[2]):  # length -> Z (yaw)
+        m.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2.0, [0, 1, 0]))
+
+    tc = m.triangles_center
+    b = m.bounds
+    z = tc[:, 2]
+    zmin, zmax = float(b[0][2]), float(b[1][2])
+    lz = zmax - zmin
+    toe_conf = 0.0
+    if lz > 1e-9:
+        fmask = z >= zmax - 0.30 * lz
+        bmask = z <= zmin + 0.30 * lz
+        hf = float(np.ptp(tc[fmask][:, 1])) if fmask.any() else 0.0
+        hb = float(np.ptp(tc[bmask][:, 1])) if bmask.any() else 0.0
+        if hf > hb:                               # heel (taller) on +Z -> flip toe forward
+            m.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [0, 1, 0]))
+            flipped.append("heel/toe -> toe forward")
+        denom = max(hf, hb)
+        toe_conf = (abs(hf - hb) / denom) if denom > 1e-9 else 0.0
+
+    b = m.bounds                                  # centre at origin (pipeline re-seats later)
+    m.apply_translation([-(b[0][0] + b[1][0]) / 2.0, -(b[0][1] + b[1][1]) / 2.0,
+                         -(b[0][2] + b[1][2]) / 2.0])
+    axis_conf = round(min(1.0, sk / 0.2), 2)
+    return m, {"sole": round(sole_conf, 2), "toe": round(toe_conf, 2),
+               "axis": axis_conf, "axisAgree": axis_conf >= 0.4,
+               "flipped": flipped, "trustedFile": False, "method": "stable-pose"}
+
+
 def _orient_canonical(mesh, straighten=True):
     """Align to canonical axes (length->Z, width->X, height->Y), then optionally
     resolve the sign ambiguities PCA can't (sole-down, toe-forward).
@@ -348,7 +456,15 @@ def _orient_canonical(mesh, straighten=True):
     if not straighten:
         m, axis_conf = _pca_align(mesh, trust_file=True)
         return m, {"sole": None, "toe": None, "axis": round(axis_conf, 2),
-                   "axisAgree": axis_conf >= 0.4, "flipped": [], "trustedFile": True}
+                   "axisAgree": axis_conf >= 0.4, "flipped": [], "trustedFile": True,
+                   "method": "trust-file"}
+
+    # AUTO-STRAIGHTEN: prefer stable-pose (handles tall shoes PCA tilts); if the
+    # pose engine is unavailable or fails, fall back to the PCA + footprint path.
+    stable = _stable_align(mesh)
+    if stable is not None:
+        return stable
+
     m, axis_conf = _pca_align(mesh)
     tc = m.triangles_center
     aw = m.area_faces
@@ -449,7 +565,7 @@ def _orient_canonical(mesh, straighten=True):
 
     return m, {"sole": round(sole_conf, 2), "toe": round(toe_conf, 2),
                "axis": round(axis_conf, 2), "axisAgree": axis_agree,
-               "flipped": flipped, "trustedFile": False}
+               "flipped": flipped, "trustedFile": False, "method": "pca"}
 
 
 # --------------------------------------------------------------------------- #
