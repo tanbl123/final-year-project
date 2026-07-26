@@ -235,6 +235,31 @@ def _pca_align(mesh, trust_file=False):
     if len(V) < 3:
         return m, 0.0
     c = V.mean(axis=0)
+
+    if trust_file:
+        # Trust the file's own orientation (assume +Y up — the glTF convention,
+        # and what the supplier sees in any viewer). We do NOT run PCA here: for a
+        # boot, PCA's largest-variance axis is the DIAGONAL from the toe up to the
+        # top of the shaft, so aligning to it tilts the shoe ~45° ("like a tick").
+        # Instead we read the AXIS-ALIGNED extents, call the longer horizontal axis
+        # the length, and rotate ONLY about Y (a yaw) to put length->Z, width->X.
+        # The model keeps the supplier's exact upright pose; we just tidy the axes
+        # so the length scale and side-by-side pairing are correct.
+        ext = V.max(axis=0) - V.min(axis=0)
+        axis_h = np.array([0.0, 1.0, 0.0])
+        if float(ext[0]) >= float(ext[2]):          # length runs along file X
+            axis_l = np.array([1.0, 0.0, 0.0]); axis_w = np.array([0.0, 0.0, 1.0])
+        else:                                        # length runs along file Z
+            axis_l = np.array([0.0, 0.0, 1.0]); axis_w = np.array([1.0, 0.0, 0.0])
+        P = np.column_stack([axis_w, axis_h, axis_l])
+        if np.linalg.det(P) < 0:
+            P[:, 0] = -P[:, 0]                      # proper rotation (width side is arbitrary)
+        T = np.eye(4)
+        T[:3, :3] = P.T
+        T[:3, 3] = -P.T @ c
+        m.apply_transform(T)
+        return m, 1.0
+
     cov = np.cov(V - c, rowvar=False)
     _, vecs = np.linalg.eigh(cov)          # eigenvalues ascending
     axis_l = vecs[:, 2]                     # largest spread -> length (Z)
@@ -293,19 +318,6 @@ def _pca_align(mesh, trust_file=False):
 
     axis_h = cand[up]
     axis_w = cand[1 - up]
-
-    # trust_file: we still CLEAN UP the axes (length->Z etc, needed for scaling
-    # and pairing), but we DON'T re-guess up/down or forward — we sign the axes
-    # to match the file's own orientation. The height axis is pointed the same
-    # way as the file's up (+Y), and the length axis toward whichever file
-    # horizontal axis it already lies along. So a shoe the supplier already
-    # modelled upright comes out upright, unchanged — no sole-flip guessing.
-    if trust_file:
-        if float(axis_h[1]) < 0.0:                  # point "up" like the file (+Y)
-            axis_h = -axis_h
-        keep = axis_l[0] if abs(axis_l[0]) >= abs(axis_l[2]) else axis_l[2]
-        if float(keep) < 0.0:                       # keep the file's forward direction
-            axis_l = -axis_l
 
     P = np.column_stack([axis_w, axis_h, axis_l])   # canonical -> principal
     if np.linalg.det(P) < 0:
