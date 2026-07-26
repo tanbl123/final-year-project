@@ -863,7 +863,7 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     if not (MIN_PLAUSIBLE_CM <= native_len_cm <= MAX_PLAUSIBLE_CM):
         meta["warnings"].append(
             "The model's built-in size is unusual (about %.0f cm). It's rescaled to the "
-            "length entered below, so check the preview looks right." % native_len_cm)
+            "entered real length, so check the preview looks right." % native_len_cm)
 
     # 4. auto-detect 1 vs 2 shoes when the supplier didn't declare it --------
     if declared_count is None:
