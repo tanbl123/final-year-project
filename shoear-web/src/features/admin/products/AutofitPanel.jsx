@@ -123,6 +123,19 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
   const facingOk = meta?.orientation && meta.orientation.sole >= 0.4 && meta.orientation.toe >= 0.4;
   const splitClean = meta?.split && meta.split.confidence >= 0.8;
 
+  // The warnings from the service mostly repeat facts already shown as rows
+  // (texture resize, "it's a boot", the mirror copy, orientation kept). Drop
+  // those and keep only notes that need the admin's eyes, so the report stays
+  // short instead of a wall of bullet points.
+  const REDUNDANT = [
+    /texture|downscal|shrunk|\d+\s*px/i,   // shown in "Textures"
+    /boot|high-top|ankle/i,                 // shown in "Ankle cover"
+    /mirror|reversed|other foot/i,          // shown in "Shoes in this model"
+    /kept your model'?s original orientation|faces forward and sits flat/i, // "Facing"
+    /decimat/i,                             // shown in "Detail"
+  ];
+  const checkNotes = (meta?.warnings || []).filter((w) => !REDUNDANT.some((re) => re.test(w)));
+
   return (
     <div className="mt-3">
       <div className="fw-semibold small text-uppercase text-muted mb-1">
@@ -218,91 +231,122 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
           </div>
         ) : (
           <>
-            <div className="text-muted small mb-2">What the auto-fit found, and what it prepared for Lens Studio:</div>
-            <div className="row g-3">
-              {/* report — plain labels, real numbers kept where the admin needs them */}
-              <div className="col-12">
-                <Row label="Shoes in this model">
-                  {meta.shoeCount === 2 ? 'A pair (2 shoes)' : '1 shoe (mirrored to the other foot)'}
-                  {meta.countDetection
-                    ? <span className="text-muted ms-1">· auto-detected<Conf value={meta.countDetection.confidence} /></span>
-                    : <span className="text-muted ms-1">· as the supplier declared</span>}
-                </Row>
-                {dims && (
-                  <Row label="Fitted size">
-                    {dims.length} × {dims.width} × {dims.height} cm <span className="text-muted">(length × width × height)</span>
-                  </Row>
-                )}
-                {meta.orientation && (
-                  <Row label="Facing (toe & sole)">
-                    {trustedFile
-                      ? <span className="text-muted">Kept your file's orientation — check the preview stands upright</span>
-                      : facingOk
-                        ? <span className="text-success">Looks correct</span>
-                        : <span className="text-warning">Please verify in Lens Studio</span>}
-                  </Row>
-                )}
-                {meta.split && (
-                  <Row label="Pair separated">
-                    {splitClean
-                      ? <span className="text-success">Cleanly (by named parts)</span>
-                      : <span className="text-warning">Roughly — please check the split</span>}
-                  </Row>
-                )}
-                {meta.textures && meta.textures.beforePx > 0 && (
-                  <Row label="Textures">
-                    {meta.textures.resized
-                      ? `Shrunk ${meta.textures.beforePx}px → ${meta.textures.afterPx}px for mobile`
-                      : meta.textures.willResize
-                        ? `Will shrink ${meta.textures.beforePx}px → ${meta.textures.afterPx}px when generated`
-                        : `${meta.textures.beforePx}px (fine)`}
-                  </Row>
-                )}
-                {meta.decimation && (
-                  <Row label="Detail (triangles)">
-                    {meta.decimation.applied
-                      ? `Reduced ${meta.decimation.before} → ${meta.decimation.after} for smooth AR`
-                      : meta.decimation.willDecimate
-                        ? `Will reduce ${meta.decimation.before} → ≤${meta.decimation.targetPerFoot} when generated`
-                        : `${meta.decimation.before} (fine as-is)`}
-                  </Row>
-                )}
-                {anchor && (
-                  <Row label="Place it at (Lens Studio, cm)">
-                    X {anchor.positionCm[0]}, Y {anchor.positionCm[1]}, Z {anchor.positionCm[2]}
-                  </Row>
-                )}
-                {meta.occluder && (
-                  <Row label="Ankle cover">
-                    Keep the template's foot cover
-                    {meta.occluder.highTop && <span className="badge text-bg-warning ms-1">boot — cover more ankle</span>}
-                  </Row>
-                )}
-              </div>
+            {/* status line */}
+            <div className="d-flex align-items-center gap-2 mb-2">
+              <span className="fw-semibold small">Analysis</span>
+              {checkNotes.length === 0
+                ? <span className="badge text-bg-success">Looks good</span>
+                : <span className="badge text-bg-warning">{checkNotes.length} to check</span>}
             </div>
 
-            {/* warnings */}
-            {meta.warnings?.length > 0 && (
-              <ul className="small text-muted mt-2 mb-0 ps-3">
-                {meta.warnings.map((w, i) => <li key={i}>{w}</li>)}
-              </ul>
+            {/* THE MODEL */}
+            <div className="text-muted text-uppercase fw-semibold mb-1" style={{ fontSize: '0.7rem' }}>The model</div>
+            <div className="row gx-3 mb-2">
+              <div className="col-md-6">
+                <Row label="Shoes">
+                  {meta.shoeCount === 2 ? 'A pair (2)' : '1 (mirrored)'}
+                  {meta.countDetection
+                    ? <span className="text-muted ms-1">detected<Conf value={meta.countDetection.confidence} /></span>
+                    : <span className="text-muted ms-1">· declared</span>}
+                </Row>
+              </div>
+              {dims && (
+                <div className="col-md-6">
+                  <Row label="Fitted size">
+                    <span className="fw-medium">{dims.length} × {dims.width} × {dims.height}</span>
+                    <span className="text-muted"> cm (L×W×H)</span>
+                  </Row>
+                </div>
+              )}
+              {meta.orientation && (
+                <div className="col-md-6">
+                  <Row label="Facing">
+                    {trustedFile
+                      ? <span className="text-muted">Kept from your file ⓘ</span>
+                      : facingOk
+                        ? <span className="text-success">✓ Looks correct</span>
+                        : <span className="text-warning">⚠ Verify</span>}
+                  </Row>
+                </div>
+              )}
+              {meta.split && (
+                <div className="col-md-6">
+                  <Row label="Pair split">
+                    {splitClean
+                      ? <span className="text-success">✓ Clean</span>
+                      : <span className="text-warning">⚠ Check split</span>}
+                  </Row>
+                </div>
+              )}
+            </div>
+
+            {/* PREPARED FOR AR */}
+            <div className="text-muted text-uppercase fw-semibold mb-1" style={{ fontSize: '0.7rem' }}>Prepared for AR</div>
+            <div className="row gx-3 mb-1">
+              {meta.textures && meta.textures.beforePx > 0 && (
+                <div className="col-md-6">
+                  <Row label="Textures">
+                    {meta.textures.resized || meta.textures.willResize
+                      ? <span><span className="text-success">✓</span> {meta.textures.beforePx} → {meta.textures.afterPx}px</span>
+                      : <span>{meta.textures.beforePx}px <span className="text-muted">(fine)</span></span>}
+                  </Row>
+                </div>
+              )}
+              {meta.decimation && (
+                <div className="col-md-6">
+                  <Row label="Detail">
+                    {meta.decimation.applied || meta.decimation.willDecimate
+                      ? <span><span className="text-success">✓</span> {meta.decimation.before} → ≤{meta.decimation.targetPerFoot} tris</span>
+                      : <span>{meta.decimation.before} tris <span className="text-muted">(fine)</span></span>}
+                  </Row>
+                </div>
+              )}
+              {meta.occluder && (
+                <div className="col-md-6">
+                  <Row label="Ankle cover">
+                    Keep foot cover
+                    {meta.occluder.highTop && <span className="badge text-bg-warning ms-1">boot</span>}
+                  </Row>
+                </div>
+              )}
+              {anchor && (
+                <div className="col-md-6">
+                  <Row label="Place at (cm)">
+                    <span className="font-monospace">X {anchor.positionCm[0]} · Y {anchor.positionCm[1]} · Z {anchor.positionCm[2]}</span>
+                  </Row>
+                </div>
+              )}
+            </div>
+
+            {/* only the notes that actually need attention */}
+            {checkNotes.length > 0 && (
+              <div className="alert alert-warning py-2 px-3 small mt-2 mb-0">
+                <div className="fw-semibold mb-1">Worth a quick check</div>
+                <ul className="mb-0 ps-3">{checkNotes.map((w, i) => <li key={i}>{w}</li>)}</ul>
+              </div>
             )}
 
             {/* generate + download */}
-            <div className="d-flex gap-2 mt-2">
-              <button type="button" className="btn btn-sm btn-outline-primary" onClick={generate} disabled={generating}>
-                {generating ? 'Generating…' : fitted ? 'Regenerate fitted model' : 'Generate fitted model (preview + download)'}
+            <div className="d-flex gap-2 mt-3">
+              <button type="button" className="btn btn-sm btn-primary" onClick={generate} disabled={generating}>
+                {generating ? 'Generating…' : fitted ? 'Regenerate' : 'Generate fitted model'}
               </button>
               {fitted?.url && (
                 <button type="button" className="btn btn-sm btn-outline-secondary" onClick={download}>
-                  Download fitted pair .glb
+                  Download .glb
                 </button>
               )}
             </div>
-            <div className="form-text">
-              One .glb with both shoes (Shoe_L + Shoe_R). Import it into Lens Studio, bind each named node to its
-              foot (keep the Foot Occluder), paste the suggested position, and publish to your lens group — then set the lens id below.
-            </div>
+
+            {/* Lens Studio steps tucked away — available, not in the way */}
+            <details className="mt-2">
+              <summary className="small text-primary" style={{ cursor: 'pointer' }}>How to use this in Lens Studio</summary>
+              <div className="form-text mt-1 mb-0">
+                One .glb with both shoes (Shoe_L + Shoe_R). Import it, bind each named node to its foot
+                (keep the Foot Occluder), paste the suggested position above, and publish to your lens group —
+                then set the lens id below.
+              </div>
+            </details>
           </>
         ))}
 
