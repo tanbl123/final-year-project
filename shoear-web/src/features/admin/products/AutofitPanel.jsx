@@ -255,7 +255,7 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
                 <div className="col-md-6">
                   <Row label="Facing">
                     {trustedFile
-                      ? <span className="text-muted">Kept from your file ⓘ</span>
+                      ? <span className="text-muted">Kept from the file ⓘ</span>
                       : facingOk
                         ? <span className="text-success">✓ Looks correct</span>
                         : <span className="text-warning">⚠ Verify</span>}
