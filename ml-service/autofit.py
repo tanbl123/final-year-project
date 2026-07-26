@@ -774,9 +774,14 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
 
     # 6. orientation / shape notes ------------------------------------------
     if orient_conf.get("trustedFile"):
+        # Audience note: the admin panel filters this line out (it has the
+        # Facing row + the Auto-straighten toggle right there), so in practice
+        # only the SUPPLIER reads it — keep it in supplier language: their fix is
+        # to re-export upright, not an admin-only toggle.
         meta["warnings"].append("We kept your model's original orientation. Please "
-                                "check the preview stands the right way up; if it "
-                                "doesn't, turn on “Auto-straighten”.")
+                                "check the preview stands upright — if it's lying "
+                                "down or upside-down, re-export it standing up and "
+                                "upload it again.")
     else:
         if orient_conf["flipped"]:
             meta["warnings"].append("We automatically adjusted the shoe so it faces "
