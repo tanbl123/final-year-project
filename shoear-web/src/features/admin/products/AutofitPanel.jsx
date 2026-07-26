@@ -117,24 +117,26 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
         {/* controls */}
         <div className="row g-2 align-items-end mb-2">
           <div className="col-auto">
-            <label className="form-label small mb-0">Shoes</label>
+            <label className="form-label small mb-0">Number of shoes</label>
             <select className="form-select form-select-sm" value={ctrl.count}
               onChange={(e) => setCtrl({ ...ctrl, count: e.target.value })}>
               <option value="auto">Auto-detect</option>
-              <option value="1">1 (mirror)</option>
-              <option value="2">2 (split)</option>
+              <option value="1">1 shoe (mirror)</option>
+              <option value="2">A pair (split)</option>
             </select>
           </div>
           <div className="col-auto">
-            <label className="form-label small mb-0">Single = </label>
+            <label className="form-label small mb-0">Which foot (if single)</label>
             <select className="form-select form-select-sm" value={ctrl.side}
+              disabled={ctrl.count === '2'}
+              title={ctrl.count === '2' ? 'Only applies to a single shoe' : ''}
               onChange={(e) => setCtrl({ ...ctrl, side: e.target.value })}>
               <option value="right">Right</option>
               <option value="left">Left</option>
             </select>
           </div>
           <div className="col-auto">
-            <label className="form-label small mb-0">Length (cm)</label>
+            <label className="form-label small mb-0">Real length (cm)</label>
             <input type="number" className="form-control form-control-sm" style={{ width: 90 }}
               placeholder="~26" value={ctrl.length}
               onChange={(e) => setCtrl({ ...ctrl, length: e.target.value })} />
