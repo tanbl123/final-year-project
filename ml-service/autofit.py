@@ -498,6 +498,25 @@ def _split_by_names(loaded):
     return None
 
 
+def _has_named_pair(loaded):
+    """True if the scene tags geometry for BOTH left and right, so we can assign
+    Shoe_L/Shoe_R from the supplier's own labels instead of a positional guess.
+    Cheap: reads node/geometry names only (no geometry copied), so it's safe to
+    call in the light analysis path before the textured scene is freed."""
+    if not isinstance(loaded, trimesh.Scene):
+        return False
+    sides = set()
+    try:
+        for node in loaded.graph.nodes_geometry:
+            _, gname = loaded.graph[node]
+            s = _classify_side(node, gname)
+            if s:
+                sides.add(s)
+    except Exception:
+        return False
+    return "left" in sides and "right" in sides
+
+
 def _split_by_components(mesh):
     """Separate a pair by connected components (two big disjoint meshes).
     Needs a graph engine (scipy); returns None if unavailable or not clearly
@@ -704,6 +723,10 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     # was choking on).
     tex_px = _max_texture_px(mesh)
     total_faces = int(len(mesh.faces))
+    # Does the file label both feet? (cheap name-only check) — decides whether a
+    # pair's left/right comes from the supplier's labels or a positional guess.
+    # Capture it now, before the textured scene is freed in the light path.
+    named_pair = _has_named_pair(loaded)
     geo = trimesh.Trimesh(vertices=np.asarray(mesh.vertices, dtype=np.float64),
                           faces=np.asarray(mesh.faces), process=False)
     if not build_files:
@@ -736,13 +759,21 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     if declared_count == 2:
         halves_geo, split_method, split_conf = _split_pair(loaded, geo)
         if halves_geo and len(halves_geo) >= 2:
-            meta["split"] = {"method": split_method, "confidence": split_conf}
+            meta["split"] = {"method": split_method, "confidence": split_conf,
+                             "lrFromNames": named_pair}
             measure = sorted(halves_geo, key=lambda c: float(c.centroid[0]))[0]
             if split_conf is not None and split_conf < 0.5:
                 meta["warnings"].append("We found two shoes and separated them "
                                         "automatically. Our team will double-check the "
                                         "split. Tip: name the parts Shoe_L and Shoe_R "
                                         "for a perfect result.")
+            elif not named_pair:
+                # split is clean, but without labels we can't be sure which half is
+                # the left foot vs the right — assigned by position; flag for QC.
+                meta["warnings"].append("We placed the two shoes as left and right by "
+                                        "their position, which could be swapped. Name the "
+                                        "parts Shoe_L and Shoe_R in your 3D tool to be sure "
+                                        "— otherwise please confirm each foot in Lens Studio.")
         else:
             meta["warnings"].append("We couldn't cleanly separate the two shoes, so "
                                     "we're treating the file as one. Tip: name the two "
@@ -853,12 +884,21 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             return d
 
         # re-split the TEXTURED mesh for the actual bake (analysis used geo)
-        build_halves = _split_pair(loaded, mesh)[0] if declared_count == 2 else None
+        build_halves = build_method = None
+        if declared_count == 2:
+            build_halves, build_method, _ = _split_pair(loaded, mesh)
         left_norm = right_norm = None
         if declared_count == 2 and build_halves and len(build_halves) >= 2:
-            ordered = sorted(build_halves, key=lambda c: float(c.centroid[0]))
-            left_norm = _normalise(_prep(ordered[0]), target_m, straighten=auto_orient)
-            right_norm = _normalise(_prep(ordered[-1]), target_m, straighten=auto_orient)
+            if build_method and "named" in build_method:
+                # supplier labelled the parts -> trust their left/right order
+                # (_split_by_names returns [left, right]); do NOT re-sort by position.
+                left_src, right_src = build_halves[0], build_halves[1]
+            else:
+                # no labels -> we can only guess left/right by position (flagged above)
+                ordered = sorted(build_halves, key=lambda c: float(c.centroid[0]))
+                left_src, right_src = ordered[0], ordered[-1]
+            left_norm = _normalise(_prep(left_src), target_m, straighten=auto_orient)
+            right_norm = _normalise(_prep(right_src), target_m, straighten=auto_orient)
         else:
             side = (declared_side or "right").lower()
             src = _prep(mesh)

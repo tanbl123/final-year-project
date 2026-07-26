@@ -121,6 +121,7 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
   const trustedFile = meta?.orientation?.trustedFile;
   const facingOk = meta?.orientation && meta.orientation.sole >= 0.4 && meta.orientation.toe >= 0.4;
   const splitClean = meta?.split && meta.split.confidence >= 0.8;
+  const lrFromNames = meta?.split?.lrFromNames;   // left/right came from Shoe_L/Shoe_R labels
 
   // The warnings from the service mostly repeat facts already shown as rows
   // (texture resize, "it's a boot", the mirror copy, orientation kept). Drop
@@ -132,6 +133,7 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
     /mirror|reversed|other foot/i,          // shown in "Shoes in this model"
     /kept your model'?s original orientation|faces forward and sits flat/i, // "Facing"
     /decimat/i,                             // shown in "Detail"
+    /placed the two shoes|left and right by their position/i,  // shown in "Pair split"
   ];
   const checkNotes = (meta?.warnings || []).filter((w) => !REDUNDANT.some((re) => re.test(w)));
 
@@ -262,9 +264,11 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
               {meta.split && (
                 <div className="col-md-6">
                   <Row label="Pair split">
-                    {splitClean
-                      ? <span className="text-success">✓ Clean</span>
-                      : <span className="text-warning">⚠ Check split</span>}
+                    {lrFromNames
+                      ? <span className="text-success">✓ L/R from labels</span>
+                      : splitClean
+                        ? <span className="text-warning">⚠ L/R by position — verify</span>
+                        : <span className="text-warning">⚠ Check split</span>}
                   </Row>
                 </div>
               )}

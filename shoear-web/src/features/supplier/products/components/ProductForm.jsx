@@ -671,9 +671,16 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
             </div>
             <div className="form-text">
               Required — this places the shoe accurately in AR. Pick the model's <b>UK size</b> to
-              auto-fill the length (you can fine-tune the cm). If it's a pair, name the two parts
-              <code> Shoe_L</code> and <code> Shoe_R</code> in your 3D tool for the best split.
+              auto-fill the length (you can fine-tune the cm).
             </div>
+            {modelShoeCount === '2' && (
+              <div className="alert alert-warning py-2 px-3 small mt-2 mb-0">
+                <b>For a pair, name the two parts <code>Shoe_L</code> and <code>Shoe_R</code></b>
+                {' '}(left and right) in your 3D tool before exporting. That's how we know which shoe
+                goes on which foot — without the names we have to guess by position, which can put them
+                on the wrong feet.
+              </div>
+            )}
           </div>
         </>
       ) : (
