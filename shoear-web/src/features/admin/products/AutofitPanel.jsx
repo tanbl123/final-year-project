@@ -299,7 +299,7 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
                 <div className="col-md-6">
                   <Row label="Ankle cover">
                     Keep foot cover
-                    {meta.occluder.highTop && <span className="badge text-bg-warning ms-1">boot</span>}
+                    {meta.occluder.highTop && <span className="badge text-bg-warning ms-1">high-top — extend</span>}
                   </Row>
                 </div>
               )}

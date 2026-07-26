@@ -843,9 +843,10 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     collar = meta["anchor"]["collarHeightCm"]
     high_top = collar > HIGH_TOP_CM
     meta["occluder"] = {"retainFromTemplate": True, "collarHeightCm": collar, "highTop": high_top}
-    if high_top:
-        meta["warnings"].append("This looks like a boot or high-top. That's fine, we'll "
-                                "make sure it covers the ankle correctly in AR.")
+    # NOTE: a high collar (high-top) needs the foot occluder extended up the ankle,
+    # but that's an ADMIN/Lens-Studio task the supplier can't act on — so we surface
+    # it via the structured occluder field for the admin panel, NOT as a supplier
+    # warning (which read oddly as "boot" on a sport-shoe platform).
 
     # 9. projected optimisation report (cheap: texture size + face count captured
     #    up front). The full build below overrides with actuals.
