@@ -204,45 +204,95 @@ def _decimate(mesh, target_faces):
 
 
 def _pca_align(mesh):
-    """Return a copy rotated to canonical axes: length -> Z, width -> X,
-    height -> Y, centred at the origin.
+    """Return (copy rotated to canonical axes, axis_conf).
+
+    Canonical: length -> Z, width -> X, height -> Y, centred at the origin.
 
     The LENGTH axis is the largest PCA spread (toe->heel). The other two (width
     and height) are NOT assigned by variance order — that laid tall boots on
     their side, because a boot's shaft spreads almost as much as its length. We
-    instead pick the HEIGHT (up) axis as the more LOP-SIDED one: every shoe has a
-    flat sole, so its up-axis has mass bunched to one end (thick sole low, thin/
-    open top) while the width-axis is left-right symmetric. Area-weighted
-    skewness measures that lop-sidedness, so it works for sneakers AND boots.
-    Deterministic geometry, not ML. Signs (toe/heel, sole down) come later."""
+    decide which of the two is UP with TWO INDEPENDENT cues and cross-check them:
+
+      1. LOP-SIDEDNESS (skewness). Every shoe has a flat sole, so along its up
+         axis the mass is bunched to one end (thick sole low, thin/open top),
+         while the width axis is left-right balanced. Higher |skewness| -> up.
+      2. MIRROR SYMMETRY (voxel overlap). A shoe is left-right symmetric, so a
+         coarse occupancy grid mirrored across the WIDTH plane lands almost on
+         top of itself (high overlap); mirrored across the HEIGHT plane it does
+         NOT (the flat sole is nothing like the open collar). Lower overlap ->
+         up. This uses SHAPE OCCUPANCY, not mass, so it's independent of cue 1.
+
+    These attack the problem from opposite ends (cue 1 finds "up" by mass, cue 2
+    finds "the symmetric side" by shape). When they AGREE we're confident; DISAGREE
+    (a near-cubic / unusual model) we keep the skewness pick but report a LOW
+    axis_conf so the orientation is flagged for a human instead of trusted.
+    Deterministic geometry, not ML. Signs (toe/heel, sole down) come later.
+
+    axis_conf is 0..1: >=0.6 means the two cues agree (trust the up axis); <0.4
+    means they conflict (verify)."""
     m = mesh.copy()
     V = np.asarray(m.vertices, dtype=np.float64)
     if len(V) < 3:
-        return m
+        return m, 0.0
     c = V.mean(axis=0)
     cov = np.cov(V - c, rowvar=False)
     _, vecs = np.linalg.eigh(cov)          # eigenvalues ascending
     axis_l = vecs[:, 2]                     # largest spread -> length (Z)
     cand = [vecs[:, 0], vecs[:, 1]]         # the two smaller: width & height (order TBD)
 
-    # area-weighted |skewness| of the triangle centres along an axis: high for the
-    # up-axis (flat sole makes the mass lop-sided), ~0 for the symmetric width.
-    tc = np.asarray(m.triangles_center, dtype=np.float64)
+    tc = np.asarray(m.triangles_center, dtype=np.float64) - c
     aw = np.asarray(m.area_faces, dtype=np.float64)
     wsum = float(aw.sum()) if aw.sum() > 1e-12 else 1.0
 
+    # cue 1 — area-weighted |skewness| of the triangle centres along an axis:
+    # high for the up-axis (flat sole makes the mass lop-sided), ~0 for width.
     def _skew(axis):
-        p = (tc - c) @ axis
+        p = tc @ axis
         mean = float((p * aw).sum() / wsum)
         var = float(((p - mean) ** 2 * aw).sum() / wsum)
         if var < 1e-12:
             return 0.0
         return abs(float(((p - mean) ** 3 * aw).sum() / wsum) / (var ** 1.5))
 
-    if _skew(cand[0]) >= _skew(cand[1]):
-        axis_h, axis_w = cand[0], cand[1]   # more lop-sided one is the height/up axis
+    # cue 2 — mirror symmetry via a coarse voxel occupancy grid (robust to mesh
+    # sampling, unlike point-to-point distances). Points are expressed in the
+    # (cand0, cand1, length) frame, binned into an occupancy grid, and compared
+    # to the grid mirrored along cand-axis k. IoU ~1 => that axis is a symmetry
+    # plane (the width side); low IoU => the asymmetric (height) side.
+    pts_all = np.vstack([V, np.asarray(m.triangles_center, dtype=np.float64)]) - c
+    frame = np.column_stack([cand[0], cand[1], axis_l])
+    coords = pts_all @ frame
+
+    def _sym_iou(k, nbins=24):
+        mins = coords.min(axis=0)
+        span = coords.max(axis=0) - mins
+        span[span < 1e-9] = 1.0
+        idx = np.clip(((coords - mins) / span * (nbins - 1e-6)).astype(int), 0, nbins - 1)
+        grid = np.zeros((nbins, nbins, nbins), dtype=bool)
+        grid[idx[:, 0], idx[:, 1], idx[:, 2]] = True
+        mir = np.flip(grid, axis=k)
+        union = int((grid | mir).sum())
+        return (int((grid & mir).sum()) / union) if union else 1.0
+
+    s0, s1 = _skew(cand[0]), _skew(cand[1])
+    io0, io1 = _sym_iou(0), _sym_iou(1)              # symmetry of cand0, cand1
+
+    def _margin(x0, x1):                             # 0 (tied) .. 1 (one dominates)
+        return abs(x0 - x1) / (abs(x0) + abs(x1) + 1e-12)
+
+    skew_pick = 0 if s0 >= s1 else 1                 # higher skew    => up (height)
+    sym_pick = 0 if io0 <= io1 else 1                # lower symmetry => up (height)
+    agree = (skew_pick == sym_pick)
+    sm, im = _margin(s0, s1), _margin(io0, io1)
+    if agree:
+        up = skew_pick
+        axis_conf = round(0.6 + 0.4 * min(1.0, max(sm, im) / 0.25), 2)   # 0.6 .. 1.0
     else:
-        axis_h, axis_w = cand[1], cand[0]
+        up = skew_pick if sm >= im else sym_pick     # trust the more decisive cue
+        axis_conf = round(0.25 + 0.14 * min(1.0, max(sm, im) / 0.25), 2)  # stays < 0.4
+
+    axis_h = cand[up]
+    axis_w = cand[1 - up]
 
     P = np.column_stack([axis_w, axis_h, axis_l])   # canonical -> principal
     if np.linalg.det(P) < 0:
@@ -251,32 +301,68 @@ def _pca_align(mesh):
     T[:3, :3] = P.T                                 # principal -> canonical
     T[:3, 3] = -P.T @ c                             # centre at origin
     m.apply_transform(T)
-    return m
+    return m, axis_conf
 
 
 def _orient_canonical(mesh):
     """PCA-align, then resolve the sign ambiguities PCA can't (sole-down,
     toe-forward) from cross-sectional geometry. Returns (mesh, conf) where conf
-    is {'sole': 0..1, 'toe': 0..1, 'flipped': [..]}. Convention: sole on -Y,
-    heel on -Z, toe on +Z. Deterministic geometry, not ML — but each cue is a
-    heuristic, so its strength is reported as a confidence rather than trusted
-    blindly."""
-    m = _pca_align(mesh)
+    is {'sole': 0..1, 'toe': 0..1, 'axis': 0..1, 'axisAgree': bool,
+    'flipped': [..]}. Convention: sole on -Y, heel on -Z, toe on +Z.
+    Deterministic geometry, not ML — but each cue is a heuristic, so its strength
+    is reported as a confidence rather than trusted blindly."""
+    m, axis_conf = _pca_align(mesh)
     tc = m.triangles_center
     aw = m.area_faces
     total = float(aw.sum()) if aw.sum() > 1e-12 else 1.0
     b = m.bounds
 
-    # --- sole-down: a real shoe carries more material low (thick sole + upper)
-    #     than high (thin collar), so the area-weighted centroid sits below the
-    #     mid-height when the sole is down. If it sits high, the model is upside
-    #     down. Confidence = how far the centroid is from the mid-plane.
+    # --- sole-down. PRIMARY cue = FOOTPRINT SIZE: the sole end spreads over the
+    #     whole foot (toe->heel), while the far end is small (a boot's ankle
+    #     opening, a shoe's toe tip). So the end with the LARGER footprint is the
+    #     sole. This works for tall boots, where the old "mass sits low" rule
+    #     FAILED — a boot's heavy shaft pulls the centroid high and flipped a
+    #     correctly-standing boot upside down. The centroid is kept only as a
+    #     confirming SECONDARY cue (it can't override the footprint).
     ymin, ymax = float(b[0][1]), float(b[1][1])
     hy = ymax - ymin
-    cy = float((tc[:, 1] * aw).sum() / total)
-    frac_y = (cy - (ymin + ymax) / 2.0) / hy if hy > 1e-9 else 0.0
-    flip_y = frac_y > 0.0                       # mass sits high -> upside down
-    sole_conf = min(1.0, abs(frac_y) / 0.08)    # ~8% offset -> full confidence
+
+    def _footprint(mask):
+        """Scale-free spread of the triangle centres in the (width, length) plane
+        for the given height-slab mask: occupied fraction x bbox area. Bigger =
+        more of the foot's outline sits in that slab (the sole)."""
+        pts = tc[mask][:, [0, 2]]
+        if len(pts) < 3:
+            return 0.0
+        mn = pts.min(axis=0)
+        sp = pts.max(axis=0) - mn
+        sp[sp < 1e-9] = 1.0
+        nb = 20
+        idx = np.clip(((pts - mn) / sp * (nb - 1e-6)).astype(int), 0, nb - 1)
+        occ = len(np.unique(idx[:, 0] * nb + idx[:, 1]))
+        return (occ / (nb * nb)) * float(sp[0] * sp[1])
+
+    if hy > 1e-9:
+        yy = tc[:, 1]
+        fp_bottom = _footprint(yy <= ymin + 0.25 * hy)   # lowest quarter
+        fp_top = _footprint(yy >= ymax - 0.25 * hy)       # highest quarter
+        xs_margin = abs(fp_bottom - fp_top) / (fp_bottom + fp_top + 1e-9)
+        flip_y = fp_top > fp_bottom                       # bigger footprint on top -> upside down
+        # secondary: area-weighted centroid below mid -> sole down (sneakers)
+        cy = float((yy * aw).sum() / total)
+        cen_flip = (cy - (ymin + ymax) / 2.0) > 0.0
+        cen_margin = min(1.0, abs(cy - (ymin + ymax) / 2.0) / hy / 0.08)
+        sole_conf = min(1.0, xs_margin / 0.25)
+        if cen_flip == flip_y:                            # both cues agree -> boost
+            sole_conf = min(1.0, sole_conf + 0.15)
+        else:                                             # disagree -> trust footprint, cap conf
+            sole_conf = min(sole_conf, 0.8)
+        if xs_margin < 0.05:                              # footprint too flat to call -> centroid
+            flip_y = cen_flip
+            sole_conf = min(sole_conf, cen_margin)
+    else:
+        flip_y = False
+        sole_conf = 0.0
 
     # --- toe-forward: the heel end is taller (ankle collar) than the toe end,
     #     which tapers low. Compare the Y-extent of the front vs back quartile
@@ -312,7 +398,20 @@ def _orient_canonical(mesh):
         flipped.append("upside-down -> sole down")
     if flip_z:
         flipped.append("heel/toe -> toe forward")
-    return m, {"sole": round(sole_conf, 2), "toe": round(toe_conf, 2), "flipped": flipped}
+
+    # Cross-check: sole-down and toe-forward both assume we picked the up axis
+    # correctly. If the two independent up-axis cues DISAGREED (axis_conf < 0.4),
+    # that assumption is shaky, so cap the sign confidences to it — the report
+    # then honestly asks for a human check instead of reporting a confident-but-
+    # possibly-sideways fit.
+    axis_agree = axis_conf >= 0.4
+    if not axis_agree:
+        sole_conf = min(sole_conf, axis_conf)
+        toe_conf = min(toe_conf, axis_conf)
+
+    return m, {"sole": round(sole_conf, 2), "toe": round(toe_conf, 2),
+               "axis": round(axis_conf, 2), "axisAgree": axis_agree,
+               "flipped": flipped}
 
 
 # --------------------------------------------------------------------------- #
