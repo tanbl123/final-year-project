@@ -37,6 +37,7 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
     count: declared.count ? String(declared.count) : 'auto',
     side: declared.side || 'right',
     length: declared.length != null ? String(declared.length) : '',
+    straighten: false,   // default: trust the supplier's orientation (don't re-guess)
   });
   const [meta, setMeta] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -71,6 +72,7 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
       count: ctrl.count,
       side: ctrl.side,
       length: ctrl.length ? Number(ctrl.length) : undefined,
+      straighten: ctrl.straighten,
       ...extra,
     };
   }
@@ -117,6 +119,7 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
   const dims = meta?.dimensionsCm;
   const anchor = meta?.anchor;
   // plain-English verdicts for the report
+  const trustedFile = meta?.orientation?.trustedFile;
   const facingOk = meta?.orientation && meta.orientation.sole >= 0.4 && meta.orientation.toe >= 0.4;
   const splitClean = meta?.split && meta.split.confidence >= 0.8;
 
@@ -157,6 +160,19 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
             <button type="button" className="btn btn-sm btn-primary" onClick={run} disabled={loading}>
               {loading ? 'Analysing…' : meta ? 'Re-run' : 'Run auto-fit'}
             </button>
+          </div>
+          <div className="col-12">
+            <div className="form-check form-switch">
+              <input className="form-check-input" type="checkbox" role="switch" id="straightenSwitch"
+                checked={ctrl.straighten}
+                onChange={(e) => setCtrl({ ...ctrl, straighten: e.target.checked })} />
+              <label className="form-check-label small" htmlFor="straightenSwitch">
+                Auto-straighten the model
+                <span className="text-muted">
+                  {' '}— off keeps the supplier's original orientation (recommended); turn on only if the model is uploaded lying down or upside-down.
+                </span>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -219,9 +235,11 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
                 )}
                 {meta.orientation && (
                   <Row label="Facing (toe & sole)">
-                    {facingOk
-                      ? <span className="text-success">Looks correct</span>
-                      : <span className="text-warning">Please verify in Lens Studio</span>}
+                    {trustedFile
+                      ? <span className="text-muted">Kept your file's orientation — check the preview stands upright</span>
+                      : facingOk
+                        ? <span className="text-success">Looks correct</span>
+                        : <span className="text-warning">Please verify in Lens Studio</span>}
                   </Row>
                 )}
                 {meta.split && (

@@ -203,7 +203,7 @@ def _decimate(mesh, target_faces):
     return simplified, before, after, True
 
 
-def _pca_align(mesh):
+def _pca_align(mesh, trust_file=False):
     """Return (copy rotated to canonical axes, axis_conf).
 
     Canonical: length -> Z, width -> X, height -> Y, centred at the origin.
@@ -294,6 +294,19 @@ def _pca_align(mesh):
     axis_h = cand[up]
     axis_w = cand[1 - up]
 
+    # trust_file: we still CLEAN UP the axes (length->Z etc, needed for scaling
+    # and pairing), but we DON'T re-guess up/down or forward — we sign the axes
+    # to match the file's own orientation. The height axis is pointed the same
+    # way as the file's up (+Y), and the length axis toward whichever file
+    # horizontal axis it already lies along. So a shoe the supplier already
+    # modelled upright comes out upright, unchanged — no sole-flip guessing.
+    if trust_file:
+        if float(axis_h[1]) < 0.0:                  # point "up" like the file (+Y)
+            axis_h = -axis_h
+        keep = axis_l[0] if abs(axis_l[0]) >= abs(axis_l[2]) else axis_l[2]
+        if float(keep) < 0.0:                       # keep the file's forward direction
+            axis_l = -axis_l
+
     P = np.column_stack([axis_w, axis_h, axis_l])   # canonical -> principal
     if np.linalg.det(P) < 0:
         P[:, 0] = -P[:, 0]                          # keep a proper rotation (no mirror)
@@ -304,13 +317,26 @@ def _pca_align(mesh):
     return m, axis_conf
 
 
-def _orient_canonical(mesh):
-    """PCA-align, then resolve the sign ambiguities PCA can't (sole-down,
-    toe-forward) from cross-sectional geometry. Returns (mesh, conf) where conf
-    is {'sole': 0..1, 'toe': 0..1, 'axis': 0..1, 'axisAgree': bool,
-    'flipped': [..]}. Convention: sole on -Y, heel on -Z, toe on +Z.
-    Deterministic geometry, not ML — but each cue is a heuristic, so its strength
-    is reported as a confidence rather than trusted blindly."""
+def _orient_canonical(mesh, straighten=True):
+    """Align to canonical axes (length->Z, width->X, height->Y), then optionally
+    resolve the sign ambiguities PCA can't (sole-down, toe-forward).
+
+    straighten=True  — AUTO-STRAIGHTEN: guess sole-down / toe-forward from the
+                       geometry (footprint + heel height). Use when a model is
+                       uploaded mis-oriented.
+    straighten=False — TRUST THE FILE (default): only tidy the axes for scaling
+                       and pairing; keep the supplier's own up/forward. A model
+                       already modelled upright stays upright — no sole-flip
+                       guessing (which is what wrongly inverted some boots).
+
+    Returns (mesh, conf). conf = {'sole','toe','axis','axisAgree','flipped',
+    'trustedFile'}. In trust mode sole/toe are None (we didn't guess them).
+    Convention: sole on -Y, heel on -Z, toe on +Z. Deterministic geometry, not
+    ML — each cue is a heuristic, so its strength is reported as a confidence."""
+    if not straighten:
+        m, axis_conf = _pca_align(mesh, trust_file=True)
+        return m, {"sole": None, "toe": None, "axis": round(axis_conf, 2),
+                   "axisAgree": axis_conf >= 0.4, "flipped": [], "trustedFile": True}
     m, axis_conf = _pca_align(mesh)
     tc = m.triangles_center
     aw = m.area_faces
@@ -411,7 +437,7 @@ def _orient_canonical(mesh):
 
     return m, {"sole": round(sole_conf, 2), "toe": round(toe_conf, 2),
                "axis": round(axis_conf, 2), "axisAgree": axis_agree,
-               "flipped": flipped}
+               "flipped": flipped, "trustedFile": False}
 
 
 # --------------------------------------------------------------------------- #
@@ -570,14 +596,14 @@ def _detect_count(mesh):
 # --------------------------------------------------------------------------- #
 #  Baking
 # --------------------------------------------------------------------------- #
-def _normalise(mesh, target_length_m, mirror=False, auto_orient=True):
-    """Return a copy: (canonically oriented if auto_orient), uniform-scaled so
-    its length == target, optionally mirrored across X, then seated (X/Z centred,
-    sole on Y=0) — ready to drop into the foot rig."""
-    if auto_orient:
-        m, _ = _orient_canonical(mesh)
-    else:
-        m = mesh.copy()
+def _normalise(mesh, target_length_m, mirror=False, straighten=True):
+    """Return a copy: axes tidied to canonical (length->Z etc), auto-straightened
+    if `straighten` else kept in the file's own up/forward, uniform-scaled so its
+    length == target, optionally mirrored across X, then seated (X/Z centred,
+    sole on Y=0) — ready to drop into the foot rig. Axes are ALWAYS aligned (so
+    the length scale and side-by-side pairing are correct); `straighten` only
+    controls whether we re-guess sole-down / toe-forward."""
+    m, _ = _orient_canonical(mesh, straighten=straighten)
     length_now = float(m.extents[2])
     m.apply_scale(target_length_m / length_now if length_now > 1e-9 else 1.0)
     if mirror:
@@ -719,11 +745,11 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                                 "mirror-image copy for the other foot. Any text or "
                                 "logos will look reversed on the copy — upload both "
                                 "shoes if the left and right differ.")
-    if auto_orient:
-        aligned, orient_conf = _orient_canonical(measure)
-        meta["orientation"] = orient_conf
-    else:
-        aligned, orient_conf = measure, None
+    # Axes are ALWAYS tidied (needed for a correct length scale + pairing); the
+    # auto_orient flag only decides whether we re-guess sole-down/toe-forward
+    # (True) or keep the supplier's own orientation (False, the default).
+    aligned, orient_conf = _orient_canonical(measure, straighten=auto_orient)
+    meta["orientation"] = orient_conf
     size = aligned.extents
     length_n, width_n, height_n = float(size[2]), float(size[0]), float(size[1])
     scale = (target_m / length_n) if length_n > 1e-9 else 1.0
@@ -735,7 +761,11 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     }
 
     # 6. orientation / shape notes ------------------------------------------
-    if auto_orient and orient_conf is not None:
+    if orient_conf.get("trustedFile"):
+        meta["warnings"].append("We kept your model's original orientation. Please "
+                                "check the preview stands the right way up; if it "
+                                "doesn't, turn on “Auto-straighten”.")
+    else:
         if orient_conf["flipped"]:
             meta["warnings"].append("We automatically adjusted the shoe so it faces "
                                     "forward and sits flat.")
@@ -743,12 +773,6 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             meta["warnings"].append(
                 "We're not fully sure which way the shoe faces (toe direction / which "
                 "side is the sole). Our team will double-check this before it goes live.")
-    elif not auto_orient:
-        if not (length_n >= width_n >= height_n):
-            meta["warnings"].append("Unusual proportions (expected length >= width "
-                                    ">= height); model may be mis-oriented.")
-        if height_n > 1e-9 and abs(measure.bounds[0][1]) > 0.5 * height_n:
-            meta["warnings"].append("Sole is not near Y=0; check the sole-down rule.")
 
     # 7. count sanity (best-effort; warning only) ---------------------------
     detected = _count_clusters(geo, float(geo.extents.max()))
@@ -764,7 +788,7 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
 
     # 8. anchor + occluder (cheap: scale+seat ONE already-oriented shoe in
     #    memory, no export). Runs in both the light and full paths.
-    seated = aligned if auto_orient else aligned.copy()   # aligned is a fresh copy when auto_orient
+    seated = aligned.copy()                               # aligned is a fresh oriented copy
     seated.apply_scale(scale)
     sb = seated.bounds
     seated.apply_translation([-(sb[0][0] + sb[1][0]) / 2.0, -sb[0][1], -(sb[0][2] + sb[1][2]) / 2.0])
@@ -816,13 +840,13 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         left_norm = right_norm = None
         if declared_count == 2 and build_halves and len(build_halves) >= 2:
             ordered = sorted(build_halves, key=lambda c: float(c.centroid[0]))
-            left_norm = _normalise(_prep(ordered[0]), target_m, auto_orient=auto_orient)
-            right_norm = _normalise(_prep(ordered[-1]), target_m, auto_orient=auto_orient)
+            left_norm = _normalise(_prep(ordered[0]), target_m, straighten=auto_orient)
+            right_norm = _normalise(_prep(ordered[-1]), target_m, straighten=auto_orient)
         else:
             side = (declared_side or "right").lower()
             src = _prep(mesh)
-            base = _normalise(src, target_m, auto_orient=auto_orient)
-            opp = _normalise(src, target_m, mirror=True, auto_orient=auto_orient) if mirror_single else None
+            base = _normalise(src, target_m, straighten=auto_orient)
+            opp = _normalise(src, target_m, mirror=True, straighten=auto_orient) if mirror_single else None
             if side == "left":
                 left_norm, right_norm = base, opp
             else:

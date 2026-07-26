@@ -116,8 +116,10 @@ export function setProductArLens(productId, arLensId) {
 // note, warnings). Pass { files: true } to also get the fitted per-foot .glb
 // files as base64 (heavier — only when previewing/downloading). count is
 // 'auto' | 1 | 2; side is 'left' | 'right'; length is the real shoe length (cm).
-export function getProductAutofit(productId, { count = 'auto', side = 'right', length, files = false } = {}) {
-  const qs = new URLSearchParams({ count: String(count), side, files: files ? '1' : '0' });
+// straighten=true auto-straightens the model (guess sole-down/toe-forward);
+// default false keeps the supplier's original orientation.
+export function getProductAutofit(productId, { count = 'auto', side = 'right', length, files = false, straighten = false } = {}) {
+  const qs = new URLSearchParams({ count: String(count), side, files: files ? '1' : '0', orient: straighten ? '1' : '0' });
   if (length) { qs.set('length', String(length)); }
   return apiGet(`/admin/products/${productId}/autofit?${qs}`, getToken());
 }

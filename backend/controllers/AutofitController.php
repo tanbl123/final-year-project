@@ -72,7 +72,8 @@ function handleValidateSupplierModel(PDO $pdo, array $auth, array $config): void
 
   // Honour the supplier's DECLARED count/side/length (authoritative — the notes
   // reflect their choice, we don't auto-detect over it). Missing -> auto-detect.
-  $payload = ['modelUrl' => $modelUrl, 'returnFiles' => false];
+  // Trust the file's orientation (don't re-guess it) — matches the admin default.
+  $payload = ['modelUrl' => $modelUrl, 'returnFiles' => false, 'autoOrient' => false];
   $c = (int) ($body['count'] ?? 0);
   if ($c === 1 || $c === 2) { $payload['count'] = $c; }
   $side = strtolower(trim((string) ($body['side'] ?? '')));
@@ -130,12 +131,16 @@ function handleAdminProductAutofit(PDO $pdo, string $id, array $config): void {
   $files    = ((string) ($_GET['files'] ?? '0')) === '1';
   $lengthCm = isset($_GET['length']) && is_numeric($_GET['length']) ? (float) $_GET['length'] : null;
   if ($lengthCm === null && $modelRow['modelLengthCm'] !== null) { $lengthCm = (float) $modelRow['modelLengthCm']; }
+  // Orientation: default to TRUSTING the supplier's file (auto-straighten OFF),
+  // since uploads are usually already upright and re-guessing can flip them.
+  // The admin opts in to auto-straightening with ?orient=1 for a mis-oriented model.
+  $straighten = ((string) ($_GET['orient'] ?? '0')) === '1';
 
   $payload = [
     'modelUrl'     => $modelUrl,
     'side'         => in_array($side, ['left', 'right'], true) ? $side : 'right',
     'mirrorSingle' => true,
-    'autoOrient'   => true,
+    'autoOrient'   => $straighten,
     'returnFiles'  => $files,
   ];
   if ($countRaw === '1' || $countRaw === '2') { $payload['count'] = (int) $countRaw; }  // else auto-detect
