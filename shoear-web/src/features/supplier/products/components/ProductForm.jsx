@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { fetchCategories, uploadFile, validateModel } from '../productService';
 import ConfirmDialog from '../../../../components/ConfirmDialog';
 import ClearableInput from '../../../../components/ClearableInput';
@@ -95,6 +95,18 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
   const [uploading, setUploading] = useState(false);  // an upload is in flight
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');             // server / upload errors
+
+  // 3D preview: ref + a "reset view" that snaps the camera back to its default
+  // framing after the supplier drags the model around (moves the CAMERA only).
+  const mvRef = useRef(null);
+  function resetView() {
+    const mv = mvRef.current;
+    if (!mv) return;
+    mv.cameraOrbit = '0deg 75deg auto';
+    mv.cameraTarget = 'auto';
+    mv.fieldOfView = 'auto';
+    if (typeof mv.jumpCameraToGoal === 'function') mv.jumpCameraToGoal();
+  }
 
   // Per-field validation state. `touched` decides when an error is shown
   // (after the field is blurred, or once submit is attempted).
@@ -587,11 +599,18 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
           {/* live WebGL preview so the supplier can verify their 3D model
               (drag to rotate) before saving — matches the admin review preview */}
           <model-viewer
+            ref={mvRef}
             src={modelUrl}
             camera-controls
             loading="lazy"
             style={{ width: '100%', height: '260px', background: '#f8f9fa', borderRadius: '0.5rem', marginTop: '0.5rem' }}
           ></model-viewer>
+          <div className="mt-1">
+            <button type="button" className="btn btn-sm btn-outline-secondary"
+              onClick={resetView} title="Snap the camera back to the default view">
+              Reset view
+            </button>
+          </div>
 
           {/* Submission spec: the facts geometry can't reliably read, so the
               supplier declares them once. The AR auto-fit uses these as the

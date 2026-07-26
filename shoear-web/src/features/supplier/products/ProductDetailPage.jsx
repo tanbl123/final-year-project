@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useNavigate, Link } from 'react-router-dom';
 import { fetchProductById } from './productService';
 import { replyToReview, deleteReviewReply } from '../../admin/reviewService';
@@ -12,6 +12,17 @@ const LOW_STOCK = 5;   // at or below this (but > 0) we flag a size as running l
 
 function ProductDetailPage() {
   const { id } = useParams();          // 👈 read the :id from the URL
+  // 3D preview: ref + a "reset view" that snaps the camera back to its default
+  // framing after dragging the model around (moves the CAMERA only).
+  const mvRef = useRef(null);
+  function resetView() {
+    const mv = mvRef.current;
+    if (!mv) return;
+    mv.cameraOrbit = '0deg 75deg auto';
+    mv.cameraTarget = 'auto';
+    mv.fieldOfView = 'auto';
+    if (typeof mv.jumpCameraToGoal === 'function') mv.jumpCameraToGoal();
+  }
   const [product, setProduct] = useState(null);
   const [activeImage, setActiveImage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -277,11 +288,18 @@ function ProductDetailPage() {
           <div className="card-header bg-white fw-semibold">3D model (AR virtual try-on)</div>
           <div className="card-body">
             <model-viewer
+              ref={mvRef}
               src={product.modelUrl}
               camera-controls
               loading="lazy"
               style={{ width: '100%', height: '420px', background: '#f8f9fa', borderRadius: '0.5rem' }}
             ></model-viewer>
+            <div className="mt-2">
+              <button type="button" className="btn btn-sm btn-outline-secondary"
+                onClick={resetView} title="Snap the camera back to the default view">
+                Reset view
+              </button>
+            </div>
           </div>
         </div>
       )}
