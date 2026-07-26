@@ -763,7 +763,7 @@ def _normalise(mesh, target_length_m, mirror=False, straighten=True):
     return m
 
 
-def _combine_pair(left_mesh, right_mesh):
+def _combine_pair(left_mesh, right_mesh, lr_known=True):
     """Pack both fitted shoes into ONE .glb as two named nodes (Shoe_L / Shoe_R),
     laid out side by side as a pair. This is what Lens Studio wants at publish:
     import a single file, bind each named node to its foot, publish the pair to
@@ -771,15 +771,21 @@ def _combine_pair(left_mesh, right_mesh):
     (so the suggested anchor still applies); the side-by-side offset is a node
     transform for a clean pair preview and is reset when binding to a foot.
 
-    Layout convention: the preview is seen from the front (toes toward the
-    viewer), so — as if the shoes were worn by someone facing you — the LEFT
-    shoe sits on the viewer's RIGHT (+X) and the right shoe on the left. This is
-    cosmetic only; each foot still binds by its named node."""
+    Layout depends on whether we actually KNOW which shoe is left vs right:
+      lr_known=True  — named parts, or a single shoe mirrored from a declared
+        side. Show it as worn facing the viewer: the LEFT shoe on the viewer's
+        RIGHT (+X), the right shoe on the left.
+      lr_known=False — an unnamed pair whose left/right was only GUESSED by
+        position. Don't impose the facing convention (it would mirror the pair
+        vs the upload and look wrong); keep the file's own left-right order and
+        let the "verify" flag prompt a human. Cosmetic only either way — each
+        foot binds by its named node."""
     scene = trimesh.Scene()
     w = float(max(left_mesh.extents[0], right_mesh.extents[0]))
     off = w / 2.0 + 0.02                      # 2 cm gap so they don't touch
-    t_left = np.eye(4); t_left[0, 3] = off    # left shoe -> viewer's right (as worn, facing you)
-    t_right = np.eye(4); t_right[0, 3] = -off
+    left_x = off if lr_known else -off        # known L/R -> as-worn (left on viewer's right)
+    t_left = np.eye(4); t_left[0, 3] = left_x
+    t_right = np.eye(4); t_right[0, 3] = -left_x
     scene.add_geometry(left_mesh, node_name="Shoe_L", geom_name="Shoe_L", transform=t_left)
     scene.add_geometry(right_mesh, node_name="Shoe_R", geom_name="Shoe_R", transform=t_right)
     return scene.export(file_type="glb")
@@ -1006,19 +1012,22 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         if declared_count == 2:
             build_halves, build_method, _ = _split_pair(loaded, mesh)
         left_norm = right_norm = None
+        lr_known = True                            # do we truly know which shoe is left vs right?
         if declared_count == 2 and build_halves and len(build_halves) >= 2:
             if build_method and "named" in build_method:
                 # supplier labelled the parts -> trust their left/right order
                 # (_split_by_names returns [left, right]); do NOT re-sort by position.
                 left_src, right_src = build_halves[0], build_halves[1]
+                lr_known = True
             else:
                 # no labels -> we can only guess left/right by position (flagged above)
                 ordered = sorted(build_halves, key=lambda c: float(c.centroid[0]))
                 left_src, right_src = ordered[0], ordered[-1]
+                lr_known = False
             left_norm = _normalise(_prep(left_src), target_m, straighten=auto_orient)
             right_norm = _normalise(_prep(right_src), target_m, straighten=auto_orient)
         else:
-            side = (declared_side or "right").lower()
+            side = (declared_side or "right").lower()   # single shoe: side is declared
             src = _prep(mesh)
             base = _normalise(src, target_m, straighten=auto_orient)
             opp = _normalise(src, target_m, mirror=True, straighten=auto_orient) if mirror_single else None
@@ -1030,7 +1039,7 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         primary_norm = right_norm or left_norm
         fitted = {}
         if left_norm is not None and right_norm is not None:
-            fitted["combined"] = _combine_pair(left_norm, right_norm)
+            fitted["combined"] = _combine_pair(left_norm, right_norm, lr_known=lr_known)
         elif primary_norm is not None:
             fitted["combined"] = primary_norm.export(file_type="glb")
 
