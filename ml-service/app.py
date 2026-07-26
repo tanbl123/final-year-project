@@ -105,6 +105,7 @@ def autofit_endpoint():
             declared_side=(body.get('side') or 'right'),
             mirror_single=bool(body.get('mirrorSingle', True)),
             auto_orient=bool(body.get('autoOrient', True)),
+            count_declared=bool(body.get('countDeclared', True)),  # supplier sets False pre-choice
             build_files=want_files,   # skip the heavy bake/export for analysis-only
         )
     except Exception as e:

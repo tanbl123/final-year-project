@@ -75,6 +75,10 @@ function handleValidateSupplierModel(PDO $pdo, array $auth, array $config): void
   // Trust the file's orientation (don't re-guess it) — matches the admin default.
   $payload = ['modelUrl' => $modelUrl, 'returnFiles' => false, 'autoOrient' => false];
   $c = (int) ($body['count'] ?? 0);
+  // Before the supplier picks 1 vs a pair, suppress the count-specific notes
+  // (they'd be a premature guess). The count is still auto-detected for the
+  // summary; only the notes wait until a choice is made.
+  $payload['countDeclared'] = ($c === 1 || $c === 2);
   if ($c === 1 || $c === 2) { $payload['count'] = $c; }
   $side = strtolower(trim((string) ($body['side'] ?? '')));
   if (in_array($side, ['left', 'right'], true)) { $payload['side'] = $side; }

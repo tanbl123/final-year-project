@@ -650,17 +650,54 @@ def _split_by_components(mesh):
     return sorted(big, key=lambda c: float(c.centroid[0]))
 
 
-def _split_two_by_x(mesh):
-    """Fallback: split by the median X of the face centres. Least reliable — a
-    joined pair rarely divides cleanly at the midline — so callers report low
-    confidence. Needs no graph engine."""
-    tc = mesh.triangles_center
-    med = float(np.median(tc[:, 0]))
-    out = []
-    for face_idx in (np.where(tc[:, 0] <= med)[0], np.where(tc[:, 0] > med)[0]):
-        if len(face_idx):
-            out.append(mesh.submesh([face_idx], append=True))
-    return out
+def _split_two_by_gap(mesh):
+    """Fallback split: cut where the two shoes are actually separated.
+
+    Scans EACH axis for the widest interior empty slab that divides the faces
+    into two balanced masses (a genuine gap between two shoes) and cuts at the
+    middle of that gap. So it works whether the pair is side-by-side (gap along
+    width), staggered front-to-back (gap along length), or even stacked (gap
+    along height) — not just left-right like the old median-X cut. When no clear
+    gap exists (the shoes overlap), it falls back to the median X. Returns
+    (halves, found_gap): found_gap is False when it had to use the median so the
+    caller can report low confidence. Needs no graph engine."""
+    tc = np.asarray(mesh.triangles_center, dtype=np.float64)
+    n = len(tc)
+    best = None                                  # (gap_width_frac, axis, cut_coord)
+    if n >= 50:
+        bins = 48
+        empty_thresh = max(1, int(0.003 * n))    # a bin with <0.3% of faces is "empty"
+        for ax in (0, 1, 2):
+            hist, edges = np.histogram(tc[:, ax], bins=bins)
+            empty = hist < empty_thresh
+            i = 0
+            while i < bins:
+                if empty[i]:
+                    j = i
+                    while j < bins and empty[j]:
+                        j += 1
+                    if i > 0 and j < bins:        # an INTERIOR empty slab (not an edge)
+                        left, right = int(hist[:i].sum()), int(hist[j:].sum())
+                        if left > 0.35 * n and right > 0.35 * n:   # two balanced masses
+                            width = (j - i) / bins
+                            if best is None or width > best[0]:
+                                best = (width, ax, float((edges[i] + edges[j]) / 2.0))
+                    i = j
+                else:
+                    i += 1
+
+    def _cut(ax, coord):
+        out = []
+        for face_idx in (np.where(tc[:, ax] <= coord)[0], np.where(tc[:, ax] > coord)[0]):
+            if len(face_idx):
+                out.append(mesh.submesh([face_idx], append=True))
+        return out
+
+    if best is not None and best[0] >= 0.04:      # a real gap (>=~2 empty bins)
+        halves = _cut(best[1], best[2])
+        if len(halves) == 2:
+            return halves, True
+    return _cut(0, float(np.median(tc[:, 0]))), False   # no gap -> median X (unreliable)
 
 
 def _split_pair(loaded, combined):
@@ -672,9 +709,11 @@ def _split_pair(loaded, combined):
     comps = _split_by_components(combined)
     if comps:
         return comps, "connected components", 0.85
-    halves = _split_two_by_x(combined)
+    halves, found_gap = _split_two_by_gap(combined)
     ordered = sorted(halves, key=lambda c: float(c.centroid[0])) if len(halves) >= 2 else halves
-    return ordered, "geometric X-median (unreliable — verify in QC)", 0.35
+    if found_gap:
+        return ordered, "geometric gap (verify in QC)", 0.55
+    return ordered, "geometric median (unreliable — verify in QC)", 0.35
 
 
 def _count_clusters(mesh, overall_max):
@@ -793,8 +832,15 @@ def _combine_pair(left_mesh, right_mesh, lr_known=True):
 
 def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                     declared_side="right", mirror_single=True, auto_orient=True,
-                    build_files=True):
+                    build_files=True, count_declared=True):
     """Validate + auto-fit a shoe model.
+
+    count_declared: whether the caller has actually chosen the number of shoes.
+    True (default, and for the admin's Auto-detect) -> emit the count-specific
+    notes (mirror copy, pair-split, count-mismatch). False (supplier upload
+    before they pick 1 vs a pair) -> suppress those notes (they'd be a premature
+    guess) and instead prompt for the count. The count itself is still
+    auto-detected so shoeCount is populated; only the notes wait.
 
     build_files=False does only the (light) analysis — validation, dimensions,
     orientation, count, anchor + a projection of what texture/triangle
@@ -899,7 +945,7 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             measure = geo
     else:
         measure = geo
-    if declared_count == 1 and mirror_single:
+    if count_declared and declared_count == 1 and mirror_single:
         meta["warnings"].append("Only one shoe was uploaded; a mirror-image copy is "
                                 "generated for the other foot. Text or logos will look "
                                 "reversed on the copy, so upload both shoes if left and "
@@ -949,29 +995,36 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     #     two shoes overlap or are joined. We report the SYMPTOM (unusual shape)
     #     and the likely causes rather than asserting a single cause, because a
     #     tilted shoe in trust-file mode can also read wide.
-    if declared_count == 2 and meta.get("split") and not named_pair:
-        suspect = (width_n > 0.55 * length_n) or (height_n > 0.95 * length_n)
-        fused = detected is not None and detected < 2
-        if suspect or fused:
-            meta["split"]["suspect"] = True
-            meta["split"]["confidence"] = min(meta["split"].get("confidence") or 0.3, 0.2)
-            meta["warnings"].append("The separated shoe looks unusually wide or tall for its "
-                                    "length, so the two shoes may overlap or the split isn't "
-                                    "clean. Name the parts Shoe_L and Shoe_R, or place the two "
-                                    "shoes flat and apart, then re-upload.")
-        elif split_conf is not None and split_conf < 0.5:
-            meta["warnings"].append("Two shoes were found and separated automatically. For the "
-                                    "cleanest split, name the two parts Shoe_L and Shoe_R when "
-                                    "exporting.")
-        else:
-            meta["warnings"].append("Left and right were assigned by position, so the two shoes "
-                                    "may be swapped. Name the two parts Shoe_L and Shoe_R to "
-                                    "place each on the correct foot.")
+    # Count-specific notes are shown only once the count is actually chosen. Before
+    # that (supplier upload, count not declared) they'd be a premature guess (and
+    # can contradict each other), so we suppress them and prompt for the count.
+    if not count_declared:
+        meta["warnings"].append("Select the number of shoes (1 or a pair) to finish the "
+                                "AR check.")
+    else:
+        if declared_count == 2 and meta.get("split") and not named_pair:
+            suspect = (width_n > 0.55 * length_n) or (height_n > 0.95 * length_n)
+            fused = detected is not None and detected < 2
+            if suspect or fused:
+                meta["split"]["suspect"] = True
+                meta["split"]["confidence"] = min(meta["split"].get("confidence") or 0.3, 0.2)
+                meta["warnings"].append("The separated shoe looks unusually wide or tall for its "
+                                        "length, so the two shoes may overlap or the split isn't "
+                                        "clean. Name the parts Shoe_L and Shoe_R, or place the two "
+                                        "shoes flat and apart, then re-upload.")
+            elif split_conf is not None and split_conf < 0.5:
+                meta["warnings"].append("Two shoes were found and separated automatically. For the "
+                                        "cleanest split, name the two parts Shoe_L and Shoe_R when "
+                                        "exporting.")
+            else:
+                meta["warnings"].append("Left and right were assigned by position, so the two shoes "
+                                        "may be swapped. Name the two parts Shoe_L and Shoe_R to "
+                                        "place each on the correct foot.")
 
-    if detected is not None and declared_count == 1 and detected >= 2:
-        meta["warnings"].append("This is marked as one shoe, but the file has %d separate "
-                                "pieces. Confirm whether it's a pair or includes extra "
-                                "parts." % detected)
+        if detected is not None and declared_count == 1 and detected >= 2:
+            meta["warnings"].append("This is marked as one shoe, but the file has %d separate "
+                                    "pieces. Confirm whether it's a pair or includes extra "
+                                    "parts." % detected)
 
     # 8. anchor + occluder (cheap: scale+seat ONE already-oriented shoe in
     #    memory, no export). Runs in both the light and full paths.
