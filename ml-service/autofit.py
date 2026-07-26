@@ -769,14 +769,19 @@ def _combine_pair(left_mesh, right_mesh):
     import a single file, bind each named node to its foot, publish the pair to
     the lens group. Each node's geometry stays centred/seated at its own origin
     (so the suggested anchor still applies); the side-by-side offset is a node
-    transform for a clean pair preview and is reset when binding to a foot."""
+    transform for a clean pair preview and is reset when binding to a foot.
+
+    Layout convention: the preview is seen from the front (toes toward the
+    viewer), so — as if the shoes were worn by someone facing you — the LEFT
+    shoe sits on the viewer's RIGHT (+X) and the right shoe on the left. This is
+    cosmetic only; each foot still binds by its named node."""
     scene = trimesh.Scene()
     w = float(max(left_mesh.extents[0], right_mesh.extents[0]))
     off = w / 2.0 + 0.02                      # 2 cm gap so they don't touch
-    tl = np.eye(4); tl[0, 3] = -off
-    tr = np.eye(4); tr[0, 3] = off
-    scene.add_geometry(left_mesh, node_name="Shoe_L", geom_name="Shoe_L", transform=tl)
-    scene.add_geometry(right_mesh, node_name="Shoe_R", geom_name="Shoe_R", transform=tr)
+    t_left = np.eye(4); t_left[0, 3] = off    # left shoe -> viewer's right (as worn, facing you)
+    t_right = np.eye(4); t_right[0, 3] = -off
+    scene.add_geometry(left_mesh, node_name="Shoe_L", geom_name="Shoe_L", transform=t_left)
+    scene.add_geometry(right_mesh, node_name="Shoe_R", geom_name="Shoe_R", transform=t_right)
     return scene.export(file_type="glb")
 
 
