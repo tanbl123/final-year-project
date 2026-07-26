@@ -104,6 +104,9 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
   const rejected = meta?.rejected;
   const dims = meta?.dimensionsCm;
   const anchor = meta?.anchor;
+  // plain-English verdicts for the report
+  const facingOk = meta?.orientation && meta.orientation.sole >= 0.4 && meta.orientation.toe >= 0.4;
+  const splitClean = meta?.split && meta.split.confidence >= 0.8;
 
   return (
     <div className="mt-3">
@@ -182,56 +185,62 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
           </div>
         ) : (
           <>
+            <div className="text-muted small mb-2">What the auto-fit found, and what it prepared for Lens Studio:</div>
             <div className="row g-3">
-              {/* report */}
+              {/* report — plain labels, real numbers kept where the admin needs them */}
               <div className="col-12">
-                <Row label="Shoes detected">
-                  {meta.shoeCount}
-                  {meta.countDetection && <Conf value={meta.countDetection.confidence} />}
+                <Row label="Shoes in this model">
+                  {meta.shoeCount === 2 ? 'A pair (2 shoes)' : '1 shoe (mirrored to the other foot)'}
+                  {meta.countDetection
+                    ? <span className="text-muted ms-1">· auto-detected<Conf value={meta.countDetection.confidence} /></span>
+                    : <span className="text-muted ms-1">· as the supplier declared</span>}
                 </Row>
                 {dims && (
-                  <Row label="Fitted size (L×W×H)">
-                    {dims.length} × {dims.width} × {dims.height} cm
+                  <Row label="Fitted size">
+                    {dims.length} × {dims.width} × {dims.height} cm <span className="text-muted">(length × width × height)</span>
                   </Row>
                 )}
-                <Row label="Native units">{meta.nativeUnit} (~{meta.nativeLengthCm} cm)</Row>
-                <Row label="Applied scale">×{meta.appliedScale}</Row>
                 {meta.orientation && (
-                  <Row label="Orientation">
-                    sole<Conf value={meta.orientation.sole} /> toe<Conf value={meta.orientation.toe} />
+                  <Row label="Facing (toe & sole)">
+                    {facingOk
+                      ? <span className="text-success">Looks correct</span>
+                      : <span className="text-warning">Please verify in Lens Studio</span>}
                   </Row>
                 )}
                 {meta.split && (
-                  <Row label="Pair split">
-                    {meta.split.method}<Conf value={meta.split.confidence} />
+                  <Row label="Pair separated">
+                    {splitClean
+                      ? <span className="text-success">Cleanly (by named parts)</span>
+                      : <span className="text-warning">Roughly — please check the split</span>}
                   </Row>
                 )}
-                {meta.textures && (
+                {meta.textures && meta.textures.beforePx > 0 && (
                   <Row label="Textures">
                     {meta.textures.resized
-                      ? `${meta.textures.beforePx}px → ${meta.textures.afterPx}px`
+                      ? `Shrunk ${meta.textures.beforePx}px → ${meta.textures.afterPx}px for mobile`
                       : meta.textures.willResize
-                        ? `${meta.textures.beforePx}px → ${meta.textures.afterPx}px (on generate)`
-                        : `${meta.textures.beforePx}px (ok)`}
+                        ? `Will shrink ${meta.textures.beforePx}px → ${meta.textures.afterPx}px when generated`
+                        : `${meta.textures.beforePx}px (fine)`}
                   </Row>
                 )}
                 {meta.decimation && (
-                  <Row label="Triangles">
+                  <Row label="Detail (triangles)">
                     {meta.decimation.applied
-                      ? `${meta.decimation.before} → ${meta.decimation.after}`
+                      ? `Reduced ${meta.decimation.before} → ${meta.decimation.after} for smooth AR`
                       : meta.decimation.willDecimate
-                        ? `${meta.decimation.before} → ≤${meta.decimation.targetPerFoot} (on generate)`
-                        : `${meta.decimation.before} (kept)`}
+                        ? `Will reduce ${meta.decimation.before} → ≤${meta.decimation.targetPerFoot} when generated`
+                        : `${meta.decimation.before} (fine as-is)`}
                   </Row>
                 )}
                 {anchor && (
-                  <Row label="Suggested position (cm)">
-                    [{anchor.positionCm.join(', ')}]
+                  <Row label="Place it at (Lens Studio, cm)">
+                    X {anchor.positionCm[0]}, Y {anchor.positionCm[1]}, Z {anchor.positionCm[2]}
                   </Row>
                 )}
                 {meta.occluder && (
-                  <Row label="Occluder">
-                    keep template occluder{meta.occluder.highTop && <span className="badge text-bg-warning ms-1">high-top</span>}
+                  <Row label="Ankle cover">
+                    Keep the template's foot cover
+                    {meta.occluder.highTop && <span className="badge text-bg-warning ms-1">boot — cover more ankle</span>}
                   </Row>
                 )}
               </div>
