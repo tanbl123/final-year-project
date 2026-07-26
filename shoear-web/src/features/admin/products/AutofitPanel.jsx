@@ -47,12 +47,24 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
   const [showFitted, setShowFitted] = useState(false);  // preview: original vs fitted pair
   const [showPreview, setShowPreview] = useState(true); // 3D preview shown by default (can Hide)
   const blobUrls = useRef([]);                    // track for revocation
+  const mvRef = useRef(null);                     // the <model-viewer> element
 
   function revokeBlobs() {
     blobUrls.current.forEach((u) => URL.revokeObjectURL(u));
     blobUrls.current = [];
   }
   useEffect(() => revokeBlobs, []);              // revoke on unmount
+
+  // Snap the camera back to the default framing after the admin has orbited the
+  // model with the mouse (resets the CAMERA only — the model isn't moved).
+  function resetView() {
+    const mv = mvRef.current;
+    if (!mv) return;
+    mv.cameraOrbit = '0deg 75deg auto';
+    mv.cameraTarget = 'auto';
+    mv.fieldOfView = 'auto';
+    if (typeof mv.jumpCameraToGoal === 'function') mv.jumpCameraToGoal();
+  }
 
   function opts(extra = {}) {
     return {
@@ -166,9 +178,12 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
               <button type="button" className={`btn btn-outline-secondary${showFitted ? ' active' : ''}`}
                 onClick={() => fitted && setShowFitted(true)} disabled={!fitted}>Fitted pair</button>
               <button type="button" className="btn btn-outline-secondary"
+                onClick={resetView} title="Snap the camera back to the default view">Reset view</button>
+              <button type="button" className="btn btn-outline-secondary"
                 onClick={() => setShowPreview(false)}>Hide</button>
             </div>
             <model-viewer
+              ref={mvRef}
               src={showFitted && fitted ? fitted.url : modelUrl}
               camera-controls loading="lazy"
               style={{ width: '100%', height: '260px', background: '#f8f9fa', borderRadius: '0.5rem' }}
