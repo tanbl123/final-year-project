@@ -122,6 +122,7 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
   const facingOk = meta?.orientation && meta.orientation.sole >= 0.4 && meta.orientation.toe >= 0.4;
   const splitClean = meta?.split && meta.split.confidence >= 0.8;
   const lrFromNames = meta?.split?.lrFromNames;   // left/right came from Shoe_L/Shoe_R labels
+  const splitSuspect = meta?.split?.suspect;      // separated shoe has odd proportions — likely overlap/bad split
 
   // The warnings from the service mostly repeat facts already shown as rows
   // (texture resize, "it's a boot", the mirror copy, orientation kept). Drop
@@ -267,9 +268,11 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
                   <Row label="Pair split">
                     {lrFromNames
                       ? <span className="text-success">✓ L/R from labels</span>
-                      : splitClean
-                        ? <span className="text-warning">⚠ L/R by position — verify</span>
-                        : <span className="text-warning">⚠ Check split</span>}
+                      : splitSuspect
+                        ? <span className="text-danger">⚠ Odd shape — likely overlap</span>
+                        : splitClean
+                          ? <span className="text-warning">⚠ L/R by position — verify</span>
+                          : <span className="text-warning">⚠ Check split</span>}
                   </Row>
                 </div>
               )}

@@ -888,16 +888,8 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             meta["split"] = {"method": split_method, "confidence": split_conf,
                              "lrFromNames": named_pair}
             measure = sorted(halves_geo, key=lambda c: float(c.centroid[0]))[0]
-            if split_conf is not None and split_conf < 0.5:
-                meta["warnings"].append("Two shoes were found and separated automatically. "
-                                        "For the cleanest split, name the two parts Shoe_L "
-                                        "and Shoe_R when exporting.")
-            elif not named_pair:
-                # split is clean, but without labels we can't be sure which half is
-                # the left foot vs the right; assigned by position, so flag for QC.
-                meta["warnings"].append("Left and right were assigned by position, so the "
-                                        "two shoes may be swapped. Name the two parts Shoe_L "
-                                        "and Shoe_R to place each on the correct foot.")
+            # the split-quality note is deferred to step 7 so it can also use the
+            # measured shoe's proportions + the cluster count (overlap detection).
         else:
             meta["warnings"].append("The two shoes couldn't be separated cleanly, so the "
                                     "file is treated as one. Name the two parts Shoe_L and "
@@ -945,17 +937,41 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                 "The facing (toe direction and which side is the sole) is uncertain. "
                 "Verify it before publishing.")
 
-    # 7. count sanity (best-effort; warning only) ---------------------------
+    # 7. count sanity + pair-split quality (best-effort; warning only) -------
     detected = _count_clusters(geo, float(geo.extents.max()))
-    if detected is not None:
-        if declared_count == 2 and detected < 2:
-            meta["warnings"].append("This is marked as a pair, but the two shoes appear "
-                                    "joined. Name them Shoe_L and Shoe_R to split them "
-                                    "cleanly.")
-        if declared_count == 1 and detected >= 2:
-            meta["warnings"].append("This is marked as one shoe, but the file has %d "
-                                    "separate pieces. Confirm whether it's a pair or "
-                                    "includes extra parts." % detected)
+
+    # Pair-split note, decided once here so it can use the measured shoe's
+    # PROPORTIONS + the cluster count. Skipped for a named pair (that split is
+    # reliable regardless of how the shoes sit).
+    #   * "suspect" = the separated shoe is implausibly wide/tall for its length
+    #     (a real shoe is long and slim), OR the pair didn't separate into >=2
+    #     pieces. Either way the split/orientation is likely off — commonly the
+    #     two shoes overlap or are joined. We report the SYMPTOM (unusual shape)
+    #     and the likely causes rather than asserting a single cause, because a
+    #     tilted shoe in trust-file mode can also read wide.
+    if declared_count == 2 and meta.get("split") and not named_pair:
+        suspect = (width_n > 0.55 * length_n) or (height_n > 0.95 * length_n)
+        fused = detected is not None and detected < 2
+        if suspect or fused:
+            meta["split"]["suspect"] = True
+            meta["split"]["confidence"] = min(meta["split"].get("confidence") or 0.3, 0.2)
+            meta["warnings"].append("The separated shoe looks unusually wide or tall for its "
+                                    "length, so the two shoes may overlap or the split isn't "
+                                    "clean. Name the parts Shoe_L and Shoe_R, or place the two "
+                                    "shoes flat and apart, then re-upload.")
+        elif split_conf is not None and split_conf < 0.5:
+            meta["warnings"].append("Two shoes were found and separated automatically. For the "
+                                    "cleanest split, name the two parts Shoe_L and Shoe_R when "
+                                    "exporting.")
+        else:
+            meta["warnings"].append("Left and right were assigned by position, so the two shoes "
+                                    "may be swapped. Name the two parts Shoe_L and Shoe_R to "
+                                    "place each on the correct foot.")
+
+    if detected is not None and declared_count == 1 and detected >= 2:
+        meta["warnings"].append("This is marked as one shoe, but the file has %d separate "
+                                "pieces. Confirm whether it's a pair or includes extra "
+                                "parts." % detected)
 
     # 8. anchor + occluder (cheap: scale+seat ONE already-oriented shoe in
     #    memory, no export). Runs in both the light and full paths.
