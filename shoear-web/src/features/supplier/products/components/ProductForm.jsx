@@ -21,6 +21,20 @@ const UK_SIZES = ['3', '3.5', '4', '4.5', '5', '5.5', '6', '6.5', '7', '7.5', '8
                   '8.5', '9', '9.5', '10', '10.5', '11', '11.5', '12', '12.5', '13'];
 const ukToCm = (uk) => Math.round(((Number(uk) + 25) / 3) * 2.54 * 10) / 10;
 
+// Validate a real-shoe-length entry (cm) and return a SPECIFIC reason, or '' if
+// OK. A real shoe outsole is roughly 15–35 cm; we accept a generous 5–60 cm to
+// allow kids' and outsize shoes, and explain exactly what's wrong otherwise (so
+// e.g. a negative value doesn't get the vague "enter the shoe length").
+function lengthProblem(v) {
+  const s = String(v ?? '').trim();
+  if (!s) return 'Enter the shoe length in cm.';
+  const n = Number(s);
+  if (!Number.isFinite(n)) return 'Enter the length as a number (e.g. 27).';
+  if (n <= 0) return 'Length must be a positive number (e.g. 27).';
+  if (n < 5 || n > 60) return 'That length looks off — enter a real shoe length, about 5–60 cm.';
+  return '';
+}
+
 // Build the form's starting state from an existing product (edit) or blanks
 // (create). `init` is also used as the baseline for the "unsaved changes" check.
 function makeInit(initialValues) {
@@ -374,7 +388,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
   const showModelSpec = submitAttempted && !!modelUrl;
   const countError  = showModelSpec && !modelShoeCount ? 'Select the number of shoes.' : '';
   const sideError   = showModelSpec && modelShoeCount === '1' && !modelSide ? 'Select left or right.' : '';
-  const lengthError = showModelSpec && (!modelLengthCm || Number(modelLengthCm) <= 0) ? 'Enter the shoe length in cm.' : '';
+  const lengthError = showModelSpec ? lengthProblem(modelLengthCm) : '';
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -410,7 +424,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
     const noImages = images.length === 0;
     // if a 3D model is uploaded, its submission spec (count/side/length) is required
     const modelSpecIncomplete = !!modelUrl &&
-      (!modelShoeCount || (modelShoeCount === '1' && !modelSide) || !modelLengthCm || Number(modelLengthCm) <= 0);
+      (!modelShoeCount || (modelShoeCount === '1' && !modelSide) || !!lengthProblem(modelLengthCm));
 
     // inline field errors already explain what to fix — no summary banner
     if (hasBaseError || hasSizeError || noSizes || noImages || modelSpecIncomplete) {
