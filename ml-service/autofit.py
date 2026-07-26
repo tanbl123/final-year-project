@@ -516,7 +516,8 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     # 1. size ---------------------------------------------------------------
     if len(glb_bytes) > MAX_BYTES:
         meta["rejected"] = True
-        meta["rejectReason"] = "File exceeds the %d MB limit." % (MAX_BYTES // (1024 * 1024))
+        meta["rejectReason"] = ("This file is too large (over %d MB). Please export a "
+                                "lighter model." % (MAX_BYTES // (1024 * 1024)))
         return meta, None
 
     # 2. parse (Draco / corrupt raise here) ---------------------------------
@@ -524,14 +525,15 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         loaded = trimesh.load(io.BytesIO(glb_bytes), file_type="glb", process=False)
     except Exception:
         meta["rejected"] = True
-        meta["rejectReason"] = ("Could not read the .glb (corrupt, or uses Draco "
-                                "compression, which is not supported).")
+        meta["rejectReason"] = ("We couldn't open this 3D file — it may be damaged or use "
+                                "a compression format we don't support. Please re-export "
+                                "it as a standard .glb.")
         return meta, None
 
     mesh = _combined(loaded)
     if mesh is None or len(mesh.faces) == 0:
         meta["rejected"] = True
-        meta["rejectReason"] = "No 3D mesh found in the file."
+        meta["rejectReason"] = "This file doesn't contain a 3D model."
         return meta, None
 
     # Geometry-only working copy for the ANALYSIS (PCA, count, orient, anchor).
@@ -555,9 +557,9 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     meta["nativeLengthCm"] = round(native_len_cm, 1)
     if not (MIN_PLAUSIBLE_CM <= native_len_cm <= MAX_PLAUSIBLE_CM):
         meta["warnings"].append(
-            "Native size ~%.1f cm (read as %s) is outside the %g-%g cm range for a "
-            "real shoe — check the model's units/scale." %
-            (native_len_cm, unit_name, MIN_PLAUSIBLE_CM, MAX_PLAUSIBLE_CM))
+            "The model's own size looks unusual (about %.0f cm). That's okay — we "
+            "resize it to the length you enter — but please check the preview looks "
+            "right." % native_len_cm)
 
     # 4. auto-detect 1 vs 2 shoes when the supplier didn't declare it --------
     if declared_count is None:
@@ -576,19 +578,24 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             meta["split"] = {"method": split_method, "confidence": split_conf}
             measure = sorted(halves_geo, key=lambda c: float(c.centroid[0]))[0]
             if split_conf is not None and split_conf < 0.5:
-                meta["warnings"].append("Two shoes separated by %s — verify the "
-                                        "split in QC." % split_method)
+                meta["warnings"].append("We found two shoes and separated them "
+                                        "automatically. Our team will double-check the "
+                                        "split. Tip: name the parts Shoe_L and Shoe_R "
+                                        "for a perfect result.")
         else:
-            meta["warnings"].append("Could not separate two shoes; treating as one.")
+            meta["warnings"].append("We couldn't cleanly separate the two shoes, so "
+                                    "we're treating the file as one. Tip: name the two "
+                                    "parts Shoe_L and Shoe_R in your 3D tool.")
             declared_count = 1
             meta["shoeCount"] = 1
             measure = geo
     else:
         measure = geo
     if declared_count == 1 and mirror_single:
-        meta["warnings"].append("Single shoe mirrored for the other foot — "
-                                "branding on the mirrored side is reversed. "
-                                "Upload both shoes for accurate left/right designs.")
+        meta["warnings"].append("You've uploaded one shoe, so we'll create a "
+                                "mirror-image copy for the other foot. Any text or "
+                                "logos will look reversed on the copy — upload both "
+                                "shoes if the left and right differ.")
     if auto_orient:
         aligned, orient_conf = _orient_canonical(measure)
         meta["orientation"] = orient_conf
@@ -607,12 +614,12 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     # 6. orientation / shape notes ------------------------------------------
     if auto_orient and orient_conf is not None:
         if orient_conf["flipped"]:
-            meta["warnings"].append("Auto-oriented (%s)." % "; ".join(orient_conf["flipped"]))
+            meta["warnings"].append("We automatically adjusted the shoe so it faces "
+                                    "forward and sits flat.")
         if orient_conf["sole"] < 0.4 or orient_conf["toe"] < 0.4:
             meta["warnings"].append(
-                "Low orientation confidence (sole %.2f, toe %.2f) — verify "
-                "toe/heel and sole-down direction during QC." %
-                (orient_conf["sole"], orient_conf["toe"]))
+                "We're not fully sure which way the shoe faces (toe direction / which "
+                "side is the sole). Our team will double-check this before it goes live.")
     elif not auto_orient:
         if not (length_n >= width_n >= height_n):
             meta["warnings"].append("Unusual proportions (expected length >= width "
@@ -624,11 +631,13 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     detected = _count_clusters(geo, float(geo.extents.max()))
     if detected is not None:
         if declared_count == 2 and detected < 2:
-            meta["warnings"].append("Declared 2 shoes but only one cluster "
-                                    "detected — parts may be joined.")
+            meta["warnings"].append("You marked this as a pair, but the two shoes look "
+                                    "joined together. Naming them Shoe_L and Shoe_R "
+                                    "helps us split them cleanly.")
         if declared_count == 1 and detected >= 2:
-            meta["warnings"].append("Declared 1 shoe but %d clusters detected — "
-                                    "extra parts, or is this a pair?" % detected)
+            meta["warnings"].append("You marked this as one shoe, but the file has %d "
+                                    "separate pieces — is it actually a pair, or does it "
+                                    "include extra parts?" % detected)
 
     # 8. anchor + occluder (cheap: scale+seat ONE already-oriented shoe in
     #    memory, no export). Runs in both the light and full paths.
@@ -641,9 +650,8 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     high_top = collar > HIGH_TOP_CM
     meta["occluder"] = {"retainFromTemplate": True, "collarHeightCm": collar, "highTop": high_top}
     if high_top:
-        meta["warnings"].append("High-top/boot (collar ~%.1f cm) — extend the foot "
-                                "occluder up the ankle so the shoe doesn't clip or "
-                                "float." % collar)
+        meta["warnings"].append("This looks like a boot or high-top. Our team will make "
+                                "sure it wraps the ankle correctly in AR.")
 
     # 9. projected optimisation report (cheap: texture size + face count captured
     #    up front). The full build below overrides with actuals.
