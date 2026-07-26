@@ -204,22 +204,46 @@ def _decimate(mesh, target_faces):
 
 
 def _pca_align(mesh):
-    """Return a copy rotated so its natural axes are canonical: length -> Z,
-    width -> X, height -> Y, centred at the origin. Uses PCA (eigenvectors of the
-    vertex covariance), so it straightens an arbitrarily-rotated model.
-    Deterministic geometry, not ML. Only the AXES are aligned here; the sign of
-    each axis (toe/heel, sole/top) is fixed later by _orient_canonical."""
+    """Return a copy rotated to canonical axes: length -> Z, width -> X,
+    height -> Y, centred at the origin.
+
+    The LENGTH axis is the largest PCA spread (toe->heel). The other two (width
+    and height) are NOT assigned by variance order — that laid tall boots on
+    their side, because a boot's shaft spreads almost as much as its length. We
+    instead pick the HEIGHT (up) axis as the more LOP-SIDED one: every shoe has a
+    flat sole, so its up-axis has mass bunched to one end (thick sole low, thin/
+    open top) while the width-axis is left-right symmetric. Area-weighted
+    skewness measures that lop-sidedness, so it works for sneakers AND boots.
+    Deterministic geometry, not ML. Signs (toe/heel, sole down) come later."""
     m = mesh.copy()
     V = np.asarray(m.vertices, dtype=np.float64)
     if len(V) < 3:
         return m
     c = V.mean(axis=0)
     cov = np.cov(V - c, rowvar=False)
-    # eigh -> eigenvalues ascending; columns are the principal directions.
-    _, vecs = np.linalg.eigh(cov)
-    axis_h = vecs[:, 0]   # smallest spread -> height (Y)
-    axis_w = vecs[:, 1]   # middle spread  -> width  (X)
-    axis_l = vecs[:, 2]   # largest spread -> length (Z)
+    _, vecs = np.linalg.eigh(cov)          # eigenvalues ascending
+    axis_l = vecs[:, 2]                     # largest spread -> length (Z)
+    cand = [vecs[:, 0], vecs[:, 1]]         # the two smaller: width & height (order TBD)
+
+    # area-weighted |skewness| of the triangle centres along an axis: high for the
+    # up-axis (flat sole makes the mass lop-sided), ~0 for the symmetric width.
+    tc = np.asarray(m.triangles_center, dtype=np.float64)
+    aw = np.asarray(m.area_faces, dtype=np.float64)
+    wsum = float(aw.sum()) if aw.sum() > 1e-12 else 1.0
+
+    def _skew(axis):
+        p = (tc - c) @ axis
+        mean = float((p * aw).sum() / wsum)
+        var = float(((p - mean) ** 2 * aw).sum() / wsum)
+        if var < 1e-12:
+            return 0.0
+        return abs(float(((p - mean) ** 3 * aw).sum() / wsum) / (var ** 1.5))
+
+    if _skew(cand[0]) >= _skew(cand[1]):
+        axis_h, axis_w = cand[0], cand[1]   # more lop-sided one is the height/up axis
+    else:
+        axis_h, axis_w = cand[1], cand[0]
+
     P = np.column_stack([axis_w, axis_h, axis_l])   # canonical -> principal
     if np.linalg.det(P) < 0:
         P[:, 0] = -P[:, 0]                          # keep a proper rotation (no mirror)
