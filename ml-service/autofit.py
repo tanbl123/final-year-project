@@ -705,9 +705,9 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         loaded = trimesh.load(io.BytesIO(glb_bytes), file_type="glb", process=False)
     except Exception:
         meta["rejected"] = True
-        meta["rejectReason"] = ("We couldn't open this 3D file — it may be damaged or use "
-                                "a compression format we don't support. Please re-export "
-                                "it as a standard .glb.")
+        meta["rejectReason"] = ("This 3D file couldn't be opened. It may be damaged or use "
+                                "a compression format that isn't supported. Re-export it as "
+                                "a standard .glb.")
         return meta, None
 
     mesh = _combined(loaded)
@@ -741,9 +741,8 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     meta["nativeLengthCm"] = round(native_len_cm, 1)
     if not (MIN_PLAUSIBLE_CM <= native_len_cm <= MAX_PLAUSIBLE_CM):
         meta["warnings"].append(
-            "The model's built-in size looks unusual (about %.0f cm), but that's okay. "
-            "We resize it to the length you enter, so please just check the preview "
-            "looks right." % native_len_cm)
+            "The model's built-in size is unusual (about %.0f cm). It's rescaled to the "
+            "length entered below, so check the preview looks right." % native_len_cm)
 
     # 4. auto-detect 1 vs 2 shoes when the supplier didn't declare it --------
     if declared_count is None:
@@ -763,30 +762,29 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                              "lrFromNames": named_pair}
             measure = sorted(halves_geo, key=lambda c: float(c.centroid[0]))[0]
             if split_conf is not None and split_conf < 0.5:
-                meta["warnings"].append("We found two shoes and separated them "
-                                        "automatically. For the cleanest split, name the "
-                                        "two parts Shoe_L and Shoe_R in your 3D tool.")
+                meta["warnings"].append("Two shoes were found and separated automatically. "
+                                        "For the cleanest split, name the two parts Shoe_L "
+                                        "and Shoe_R when exporting.")
             elif not named_pair:
                 # split is clean, but without labels we can't be sure which half is
                 # the left foot vs the right; assigned by position, so flag for QC.
-                meta["warnings"].append("We set left and right by their position, so the "
-                                        "two shoes might be swapped. Name the two parts "
-                                        "Shoe_L and Shoe_R in your 3D tool so each one goes "
-                                        "on the correct foot.")
+                meta["warnings"].append("Left and right were assigned by position, so the "
+                                        "two shoes may be swapped. Name the two parts Shoe_L "
+                                        "and Shoe_R to place each on the correct foot.")
         else:
-            meta["warnings"].append("We couldn't cleanly separate the two shoes, so "
-                                    "we're treating the file as one. Tip: name the two "
-                                    "parts Shoe_L and Shoe_R in your 3D tool.")
+            meta["warnings"].append("The two shoes couldn't be separated cleanly, so the "
+                                    "file is treated as one. Name the two parts Shoe_L and "
+                                    "Shoe_R when exporting.")
             declared_count = 1
             meta["shoeCount"] = 1
             measure = geo
     else:
         measure = geo
     if declared_count == 1 and mirror_single:
-        meta["warnings"].append("You've uploaded one shoe, so we'll create a "
-                                "mirror-image copy for the other foot. Any text or "
-                                "logos will look reversed on the copy, so upload both "
-                                "shoes if the left and right differ.")
+        meta["warnings"].append("Only one shoe was uploaded; a mirror-image copy is "
+                                "generated for the other foot. Text or logos will look "
+                                "reversed on the copy, so upload both shoes if left and "
+                                "right differ.")
     # Axes are ALWAYS tidied (needed for a correct length scale + pairing); the
     # auto_orient flag only decides whether we re-guess sole-down/toe-forward
     # (True) or keep the supplier's own orientation (False, the default).
@@ -808,30 +806,29 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         # Facing row + the Auto-straighten toggle right there), so in practice
         # only the SUPPLIER reads it — keep it in supplier language: their fix is
         # to re-export upright, not an admin-only toggle.
-        meta["warnings"].append("We kept your model's original orientation. Please "
-                                "check the preview stands upright. If it's lying down "
-                                "or upside-down, re-export it standing up and upload "
-                                "it again.")
+        meta["warnings"].append("Orientation was kept from the file. Check the preview "
+                                "stands upright; if it's lying down or upside-down, "
+                                "re-export it upright and upload again.")
     else:
         if orient_conf["flipped"]:
-            meta["warnings"].append("We automatically adjusted the shoe so it faces "
-                                    "forward and sits flat.")
+            meta["warnings"].append("The shoe was automatically adjusted to face forward "
+                                    "and sit flat.")
         if orient_conf["sole"] < 0.4 or orient_conf["toe"] < 0.4:
             meta["warnings"].append(
-                "We're not fully sure which way the shoe faces (toe direction / which "
-                "side is the sole). Our team will double-check this before it goes live.")
+                "The facing (toe direction and which side is the sole) is uncertain. "
+                "Verify it before publishing.")
 
     # 7. count sanity (best-effort; warning only) ---------------------------
     detected = _count_clusters(geo, float(geo.extents.max()))
     if detected is not None:
         if declared_count == 2 and detected < 2:
-            meta["warnings"].append("You marked this as a pair, but the two shoes look "
-                                    "joined together. Naming them Shoe_L and Shoe_R "
-                                    "helps us split them cleanly.")
+            meta["warnings"].append("This is marked as a pair, but the two shoes appear "
+                                    "joined. Name them Shoe_L and Shoe_R to split them "
+                                    "cleanly.")
         if declared_count == 1 and detected >= 2:
-            meta["warnings"].append("You marked this as one shoe, but the file has %d "
-                                    "separate pieces. Is it actually a pair, or does it "
-                                    "include extra parts?" % detected)
+            meta["warnings"].append("This is marked as one shoe, but the file has %d "
+                                    "separate pieces. Confirm whether it's a pair or "
+                                    "includes extra parts." % detected)
 
     # 8. anchor + occluder (cheap: scale+seat ONE already-oriented shoe in
     #    memory, no export). Runs in both the light and full paths.

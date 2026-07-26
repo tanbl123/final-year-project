@@ -131,9 +131,9 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
     /texture|downscal|shrunk|\d+\s*px/i,   // shown in "Textures"
     /boot|high-top|ankle/i,                 // shown in "Ankle cover"
     /mirror|reversed|other foot/i,          // shown in "Shoes in this model"
-    /kept your model'?s original orientation|faces forward and sits flat/i, // "Facing"
+    /orientation was kept|face forward and sit flat/i, // shown in "Facing"
     /decimat/i,                             // shown in "Detail"
-    /placed the two shoes|left and right by their position/i,  // shown in "Pair split"
+    /assigned by position/i,                // shown in "Pair split"
   ];
   const checkNotes = (meta?.warnings || []).filter((w) => !REDUNDANT.some((re) => re.test(w)));
 

@@ -677,8 +677,8 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
               <div className="alert alert-warning py-2 px-3 small mt-2 mb-0">
                 <b>For a pair, name the two parts <span className="font-monospace">Shoe_L</span> and{' '}
                 <span className="font-monospace">Shoe_R</span></b> (left and right) in your 3D tool
-                before exporting. That's how we know which shoe goes on which foot. Without the names
-                we have to guess by position, which can put them on the wrong feet.
+                before exporting. The names tell the auto-fit which shoe goes on which foot. Without
+                them, left and right are guessed by position, which can put them on the wrong feet.
               </div>
             )}
           </div>
