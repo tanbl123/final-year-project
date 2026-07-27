@@ -263,6 +263,12 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
                         : facingOk
                           ? <span className="text-success">✓ Looks correct</span>
                           : <span className="text-warning">⚠ Verify</span>}
+                    {!trustedFile && meta.orientation.flatSole != null && (
+                      <span className="text-muted ms-2" style={{ fontSize: '0.75rem' }}>
+                        sole flatness {meta.orientation.flatSole}
+                        {meta.orientation.axisFlat === false && ' — no flat sole found'}
+                      </span>
+                    )}
                   </Row>
                 </div>
               )}

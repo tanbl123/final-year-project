@@ -396,6 +396,25 @@ def _surface_flatness(m):
     return flat_bottom, flat_top
 
 
+def _axis_flatness(m):
+    """Up-axis sanity signal. ONLY the sole<->upper axis has a FLAT end (the
+    outsole) — the heel/toe ends and the medial/lateral sides are all curved. So
+    once oriented, the FLATTER Y-end should be clearly flat; if NEITHER end is
+    flat, the model may be resting on its side / at an angle (wrong up-axis).
+
+    Returns (axis_flat, flat_sole): flat_sole is the flatter end's roughness (0 =
+    a perfect flat sole), axis_flat is a PROVISIONAL call at a threshold that still
+    needs calibration on real models. This is used ONLY to sharpen the message when
+    the trusted cues (skewness + symmetry) already flag the facing uncertain — it
+    does NOT lower confidence on its own, because its absolute threshold isn't
+    calibrated yet (a wrong number would false-alarm on good uploads)."""
+    fl = _surface_flatness(m)
+    if fl is None:
+        return True, None
+    flat_sole = min(fl[0], fl[1])                 # the flatter end should be the outsole
+    return (flat_sole <= 0.45), round(flat_sole, 2)   # 0.45 provisional, pending calibration
+
+
 def _stable_align(mesh):
     """AUTO-STRAIGHTEN via STABLE RESTING POSE + sole disambiguation.
 
@@ -504,9 +523,11 @@ def _stable_align(mesh):
     m.apply_translation([-(b[0][0] + b[1][0]) / 2.0, -(b[0][1] + b[1][1]) / 2.0,
                          -(b[0][2] + b[1][2]) / 2.0])
     axis_conf = round(min(1.0, sk / 0.2), 2)
+    axis_flat, flat_sole = _axis_flatness(m)
     return m, {"sole": round(sole_conf, 2), "toe": round(toe_conf, 2),
-               "axis": axis_conf, "axisAgree": axis_conf >= 0.4,
-               "flipped": flipped, "trustedFile": False, "method": "stable-pose"}
+               "axis": axis_conf, "axisAgree": axis_conf >= 0.4, "axisFlat": axis_flat,
+               "flatSole": flat_sole, "flipped": flipped, "trustedFile": False,
+               "method": "stable-pose"}
 
 
 def _orient_canonical(mesh, straighten=True):
@@ -528,8 +549,8 @@ def _orient_canonical(mesh, straighten=True):
     if not straighten:
         m, axis_conf = _pca_align(mesh, trust_file=True)
         return m, {"sole": None, "toe": None, "axis": round(axis_conf, 2),
-                   "axisAgree": axis_conf >= 0.4, "flipped": [], "trustedFile": True,
-                   "method": "trust-file"}
+                   "axisAgree": axis_conf >= 0.4, "axisFlat": True, "flatSole": None,
+                   "flipped": [], "trustedFile": True, "method": "trust-file"}
 
     # AUTO-STRAIGHTEN: prefer stable-pose (handles tall shoes PCA tilts); if the
     # pose engine is unavailable or fails, fall back to the PCA + footprint path.
@@ -659,9 +680,11 @@ def _orient_canonical(mesh, straighten=True):
         sole_conf = min(sole_conf, axis_conf)
         toe_conf = min(toe_conf, axis_conf)
 
+    axis_flat, flat_sole = _axis_flatness(m)
     return m, {"sole": round(sole_conf, 2), "toe": round(toe_conf, 2),
-               "axis": round(axis_conf, 2), "axisAgree": axis_agree,
-               "flipped": flipped, "trustedFile": False, "method": "pca"}
+               "axis": round(axis_conf, 2), "axisAgree": axis_agree, "axisFlat": axis_flat,
+               "flatSole": flat_sole, "flipped": flipped, "trustedFile": False,
+               "method": "pca"}
 
 
 # --------------------------------------------------------------------------- #
@@ -1154,9 +1177,18 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             meta["warnings"].append("The shoe was automatically adjusted to face forward "
                                     "and sit flat.")
         if orient_conf["sole"] < 0.4 or orient_conf["toe"] < 0.4:
-            meta["warnings"].append(
-                "The facing (toe direction and which side is the sole) is uncertain. "
-                "Verify it before publishing.")
+            # The trusted cues already flagged the facing uncertain. If flatness ALSO
+            # found no clearly-flat end, the likely cause is a wrong up-axis (the
+            # model is lying on its side / at an angle) -> give that sharper message.
+            if orient_conf.get("axisFlat") is False:
+                meta["warnings"].append(
+                    "The model doesn't appear to have a flat sole facing down, so it may "
+                    "be lying on its side or at an angle. Re-export it standing upright on "
+                    "its sole and upload again.")
+            else:
+                meta["warnings"].append(
+                    "The facing (toe direction and which side is the sole) is uncertain. "
+                    "Verify it before publishing.")
 
     # 7. count sanity + pair-split quality (best-effort; warning only) -------
     detected = _count_clusters(geo, float(geo.extents.max()))
