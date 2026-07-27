@@ -634,20 +634,74 @@ def _has_named_pair(loaded):
 
 
 def _split_by_components(mesh):
-    """Separate a pair by connected components (two big disjoint meshes).
-    Needs a graph engine (scipy); returns None if unavailable or not clearly
-    two. Halves are ordered left (smaller X centroid) then right."""
+    """Separate a pair by CLUSTERING its parts into two groups.
+
+    A shoe is often many connected pieces (sole, upper, laces, eyelets), so a
+    pair is two spatial CLUMPS of pieces. We take every piece's centroid and
+    cluster them into 2 groups by proximity (area-weighted 2-means), then merge
+    each group into one shoe. This beats the old 'exactly two big pieces' rule:
+    it keeps ALL parts (that rule dropped small ones like laces) and it works
+    even when the pair is placed at an angle — it groups by nearness, not a
+    straight cut. Returns [left, right] ordered by X, or None if it can't find
+    two balanced, separated groups (then the caller uses the gap split, which is
+    flagged for QC). Needs a graph engine (scipy) for mesh.split."""
     if len(mesh.faces) > SPLIT_MAX_FACES:   # too heavy — fall back to geometric
         return None
     try:
-        comps = mesh.split(only_watertight=False)
+        comps = [c for c in mesh.split(only_watertight=False) if len(c.faces) > 0]
     except Exception:
         return None
-    overall = float(mesh.extents.max())
-    big = [c for c in comps if float(c.extents.max()) > 0.15 * overall]
-    if len(big) != 2:
+    if len(comps) < 2:
         return None
-    return sorted(big, key=lambda c: float(c.centroid[0]))
+
+    cents = np.array([c.centroid for c in comps], dtype=np.float64)
+    areas = np.array([max(float(c.area), 1e-9) for c in comps], dtype=np.float64)
+
+    if len(comps) == 2:
+        labels = np.array([0, 1])
+        centers = cents.copy()
+    else:
+        # 2-means seeded by the two farthest-apart centroids; area-weighted so
+        # big parts (sole/upper) anchor each cluster and small parts follow.
+        mean = cents.mean(axis=0)
+        a = cents[int(np.argmax(((cents - mean) ** 2).sum(1)))]
+        b = cents[int(np.argmax(((cents - a) ** 2).sum(1)))]
+        centers = np.array([a, b], dtype=np.float64)
+        labels = np.zeros(len(comps), dtype=int)
+        for _ in range(15):
+            dist = ((cents[:, None, :] - centers[None, :, :]) ** 2).sum(2)
+            new_labels = dist.argmin(1)
+            new_centers = np.array([
+                (cents[new_labels == k] * areas[new_labels == k, None]).sum(0)
+                / areas[new_labels == k].sum() if (new_labels == k).any() else centers[k]
+                for k in (0, 1)])
+            done = np.array_equal(new_labels, labels) and np.allclose(new_centers, centers)
+            labels, centers = new_labels, new_centers
+            if done:
+                break
+
+    g0 = [comps[i] for i in range(len(comps)) if labels[i] == 0]
+    g1 = [comps[i] for i in range(len(comps)) if labels[i] == 1]
+    if not g0 or not g1:
+        return None
+    a0, a1 = float(areas[labels == 0].sum()), float(areas[labels == 1].sum())
+    if min(a0, a1) < 0.15 * (a0 + a1):          # lop-sided groups -> not two shoes
+        return None
+
+    left = trimesh.util.concatenate(g0)
+    right = trimesh.util.concatenate(g1)
+    # the two groups must actually sit APART along the axis that separates them;
+    # if they overlap heavily it isn't a clean pair -> let the gap split try and
+    # the 'verify' flag catch it.
+    axis = int(np.argmax(np.abs(centers[0] - centers[1])))
+    lo = max(float(left.bounds[0][axis]), float(right.bounds[0][axis]))
+    hi = min(float(left.bounds[1][axis]), float(right.bounds[1][axis]))
+    overlap = max(0.0, hi - lo)
+    span = (max(float(left.bounds[1][axis]), float(right.bounds[1][axis]))
+            - min(float(left.bounds[0][axis]), float(right.bounds[0][axis])))
+    if span > 1e-9 and overlap / span > 0.35:
+        return None
+    return sorted([left, right], key=lambda c: float(c.centroid[0]))
 
 
 def _split_two_by_gap(mesh):
