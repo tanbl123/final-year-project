@@ -710,6 +710,73 @@ def _orient_canonical(mesh, straighten=True):
                "method": "pca"}
 
 
+# Convention for this pipeline's oriented frame (sole -Y, heel -Z, toe +Z, width X),
+# a right-handed system: the MEDIAL (big-toe) side of a right foot ends up on +X.
+# So medial-on-+X => RIGHT shoe, medial-on--X => LEFT. If a real L/R-known test shows
+# the guess inverted, flip this one constant (do not touch the cue maths).
+_MEDIAL_POS_X_IS = "right"
+
+
+def _lr_from_geometry(m):
+    """Guess LEFT vs RIGHT from an already-oriented shoe (sole -Y, toe +Z, width X).
+
+    Only meaningful when the orientation is resolved (auto-straighten), because L/R
+    depends on knowing toe-forward and sole-down. Two soft, foot-anatomy cues, both
+    pointing at the MEDIAL (big-toe) side; the medial side then maps to a side via
+    the convention above:
+
+      1. ARCH TILT (primary) — the arch sits on the medial side, so at the MIDFOOT
+         the outsole rides HIGHER on the medial side than the lateral side.
+      2. TOE-APEX OFFSET (backup) — the toe's forward-most point leans toward the
+         medial (big-toe) side of the centre line.
+
+    Deliberately conservative: returns (None, 0.0) when the sole is flat/symmetric
+    (no arch, centred toe) — many AR models simplify the sole to a flat slab, and a
+    wrong guess must never override the supplier. Otherwise returns (side, conf)."""
+    tc = np.asarray(m.triangles_center, dtype=np.float64)
+    if len(tc) < 12:
+        return None, 0.0
+    b = m.bounds
+    ymin, ymax = float(b[0][1]), float(b[1][1])
+    zmin, zmax = float(b[0][2]), float(b[1][2])
+    xmin, xmax = float(b[0][0]), float(b[1][0])
+    hy, lz, wx = ymax - ymin, zmax - zmin, xmax - xmin
+    if hy < 1e-9 or lz < 1e-9 or wx < 1e-9:
+        return None, 0.0
+    x, y, z = tc[:, 0], tc[:, 1], tc[:, 2]
+    xmid, zmid = (xmin + xmax) / 2.0, (zmin + zmax) / 2.0
+
+    def _medial_to_side(medial_pos_x):
+        if _MEDIAL_POS_X_IS == "right":
+            return "right" if medial_pos_x else "left"
+        return "left" if medial_pos_x else "right"
+
+    votes = {"left": 0.0, "right": 0.0}
+
+    # 1. arch tilt: midfoot, lower (outsole) band; higher mean height side = medial
+    band = (y <= ymin + 0.35 * hy) & (np.abs(z - zmid) <= 0.20 * lz)
+    neg, pos = band & (x < xmid), band & (x > xmid)
+    if neg.sum() > 3 and pos.sum() > 3:
+        d = (float(np.mean(y[pos])) - float(np.mean(y[neg]))) / hy   # >0 => +X higher
+        conf = min(1.0, abs(d) / 0.05)
+        if conf > 0.0:
+            votes[_medial_to_side(d > 0)] += 1.0 * conf
+
+    # 2. toe-apex offset: forward-most slice; mean X offset leans toward medial
+    toe = z >= zmax - 0.12 * lz
+    if toe.sum() > 3:
+        ax = float(np.mean(x[toe])) - xmid
+        conf = min(1.0, abs(ax) / (0.5 * wx) / 0.30)
+        if conf > 0.0:
+            votes[_medial_to_side(ax > 0)] += 0.5 * conf
+
+    side = max(votes, key=votes.get)
+    net = votes[side] - votes["left" if side == "right" else "right"]
+    if net < 0.15:                                   # too weak / symmetric -> don't guess
+        return None, 0.0
+    return side, round(min(1.0, net), 2)
+
+
 # --------------------------------------------------------------------------- #
 #  Pair separation (structure-first) + count detection
 # --------------------------------------------------------------------------- #
@@ -1153,6 +1220,19 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     # (True) or keep the supplier's own orientation (False, the default).
     aligned, orient_conf = _orient_canonical(measure, straighten=auto_orient)
     meta["orientation"] = orient_conf
+    # L/R VERIFY (soft, geometry-assist). Only when the orientation is RESOLVED and
+    # confident (auto-straighten, not trust-file, sole/toe both solid) — L/R depends
+    # on knowing toe-forward + sole-down, so a shaky frame can't support it. We only
+    # EXPOSE the guess for now (lrGuess/lrConf); the automatic "side may be reversed"
+    # flag stays off until the +X<->side sign is confirmed on a known-side shoe (see
+    # _MEDIAL_POS_X_IS). Geometry never overrides the supplier's declared side.
+    if (auto_orient and not orient_conf.get("trustedFile")
+            and (orient_conf.get("sole") or 0.0) >= 0.4
+            and (orient_conf.get("toe") or 0.0) >= 0.4):
+        lr_side, lr_conf = _lr_from_geometry(aligned)
+        orient_conf["lrGuess"] = lr_side
+        orient_conf["lrConf"] = lr_conf
+        orient_conf["lrDeclared"] = declared_side if declared_count == 1 else None
     size = aligned.extents
     length_n, width_n, height_n = float(size[2]), float(size[0]), float(size[1])
     scale = (target_m / length_n) if length_n > 1e-9 else 1.0

@@ -269,6 +269,15 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
                         {meta.orientation.axisFlat === false && ' — no flat sole found'}
                       </span>
                     )}
+                    {meta.orientation.lrGuess && (
+                      <span className="text-muted ms-2" style={{ fontSize: '0.75rem' }}>
+                        · geometry looks {meta.orientation.lrGuess} ({meta.orientation.lrConf})
+                        {meta.orientation.lrDeclared
+                          && meta.orientation.lrGuess !== meta.orientation.lrDeclared
+                          && meta.orientation.lrConf >= 0.4
+                          && <span className="text-warning"> — declared {meta.orientation.lrDeclared}?</span>}
+                      </span>
+                    )}
                   </Row>
                 </div>
               )}
