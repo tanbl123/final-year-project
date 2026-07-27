@@ -272,7 +272,7 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
                     {!trustedFile && meta.orientation.lrConf != null && (
                       <span className="text-muted ms-2" style={{ fontSize: '0.75rem' }}>
                         {meta.orientation.lrGuess
-                          ? <>· geometry looks {meta.orientation.lrGuess} ({meta.orientation.lrConf})
+                          ? <>· geometry looks {meta.orientation.lrGuess} ({Math.round(meta.orientation.lrConf * 100)}%)
                               {meta.orientation.lrDeclared
                                 && meta.orientation.lrGuess !== meta.orientation.lrDeclared
                                 && meta.orientation.lrConf >= 0.4
