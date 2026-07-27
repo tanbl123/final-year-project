@@ -119,6 +119,7 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
   const anchor = meta?.anchor;
   // plain-English verdicts for the report
   const trustedFile = meta?.orientation?.trustedFile;
+  const pairMismatch = meta?.orientation?.pairMismatch;   // the two shoes oriented differently
   const facingOk = meta?.orientation && meta.orientation.sole >= 0.4 && meta.orientation.toe >= 0.4;
   const splitClean = meta?.split && meta.split.confidence >= 0.8;
   const lrFromNames = meta?.split?.lrFromNames;   // left/right came from Shoe_L/Shoe_R labels
@@ -255,11 +256,13 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
               {meta.orientation && (
                 <div className="col-md-6">
                   <Row label="Facing">
-                    {trustedFile
-                      ? <span className="text-muted">Kept from the file ⓘ</span>
-                      : facingOk
-                        ? <span className="text-success">✓ Looks correct</span>
-                        : <span className="text-warning">⚠ Verify</span>}
+                    {pairMismatch
+                      ? <span className="text-danger">⚠ Shoes differ — verify</span>
+                      : trustedFile
+                        ? <span className="text-muted">Kept from the file ⓘ</span>
+                        : facingOk
+                          ? <span className="text-success">✓ Looks correct</span>
+                          : <span className="text-warning">⚠ Verify</span>}
                   </Row>
                 </div>
               )}

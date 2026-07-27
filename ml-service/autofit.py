@@ -982,12 +982,14 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     #    mode, so it uses components/geometric, not named nodes — fine for a
     #    measurement). The build path re-splits the textured mesh below.
     split_method = split_conf = None
+    pair_halves = None                          # both oriented-independently later, for the consistency check
     if declared_count == 2:
         halves_geo, split_method, split_conf = _split_pair(loaded, geo)
         if halves_geo and len(halves_geo) >= 2:
             meta["split"] = {"method": split_method, "confidence": split_conf,
                              "lrFromNames": named_pair}
-            measure = sorted(halves_geo, key=lambda c: float(c.centroid[0]))[0]
+            pair_halves = sorted(halves_geo, key=lambda c: float(c.centroid[0]))
+            measure = pair_halves[0]
             # the split-quality note is deferred to step 7 so it can also use the
             # measured shoe's proportions + the cluster count (overlap detection).
         else:
@@ -1018,6 +1020,29 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         "width":  round(width_n * scale * 100, 1),
         "height": round(height_n * scale * 100, 1),
     }
+
+    # 5b. PAIR CONSISTENCY — the two shoes of a pair are the same size, so once
+    #     oriented their box dimensions should match. If the OTHER shoe orients to
+    #     a very different shape, one of them landed in a wrong pose (e.g. lying on
+    #     its side while the other stands) — that's the mismatched-pair result. We
+    #     flag it so the admin doesn't ship a shoe-standing / shoe-lying pair.
+    if count_declared and pair_halves is not None and len(pair_halves) >= 2:
+        other, _ = _orient_canonical(pair_halves[1], straighten=auto_orient)
+        # compare the ORIENTED extents component-wise (width vs width, height vs
+        # height, length vs length) — NOT sorted: a pair is two same-size mirror
+        # shoes, so consistently-oriented they share (w,h,l). A shoe left on its
+        # side has a different HEIGHT even though its sorted dims are identical, so
+        # sorting would hide the very mismatch we want to catch.
+        a = np.asarray(aligned.extents, dtype=np.float64)   # (width, height, length)
+        b = np.asarray(other.extents, dtype=np.float64)
+        rel = float(np.max(np.abs(a - b) / (np.maximum(a, b) + 1e-9)))
+        if rel > 0.35:                                # the two shoes came out different shapes
+            orient_conf["pairMismatch"] = True
+            orient_conf["sole"] = min(orient_conf.get("sole") or 0.0, 0.3)  # force "verify"
+            meta["warnings"].append("The two shoes came out in different orientations (one "
+                                    "may be lying on its side while the other stands). Re-export "
+                                    "both shoes upright and the same way, or name them Shoe_L and "
+                                    "Shoe_R, then re-upload.")
 
     # 6. orientation / shape notes ------------------------------------------
     if orient_conf.get("trustedFile"):
