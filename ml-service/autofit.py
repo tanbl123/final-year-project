@@ -351,7 +351,7 @@ def _vertical_skew(m):
     return abs(float(((p ** 3) * aw).sum() / w) / (var ** 1.5))
 
 
-def _surface_flatness(m):
+def _surface_flatness(m, contact_frac=0.6):
     """Roughness of the OUTER surface on each Y-end, as (flat_bottom, flat_top).
 
     Grid the footprint (X x Z) into cells; in each occupied cell take the lowest
@@ -362,6 +362,14 @@ def _surface_flatness(m):
     the sole. This is the "flat cluster = base, shaped cluster = upper" cue, and it
     is independent of the footprint-size and centroid cues (it survives tall boots
     whose shaft pulls mass high but whose outsole is still the flat face).
+
+    ARCH-TOLERANT: a real outsole is not a perfect plane — it touches the ground at
+    the heel and forefoot and LIFTS in the midfoot (the arch, strongest on the
+    medial side), and heeled shoes lift even more. That lift is a MINORITY of the
+    surface. So on each side we keep only the outermost `contact_frac` of the cells
+    (the band nearest the extreme = the ground-contact band for the sole) and ignore
+    the inward-curving arch tail. This makes the number mean the same thing across a
+    flat sneaker, an arched shoe and a heel, so one threshold can actually work.
 
     Returns (flat_bottom, flat_top) with smaller = flatter, or None if too sparse."""
     tc = np.asarray(m.triangles_center, dtype=np.float64)
@@ -390,9 +398,14 @@ def _surface_flatness(m):
         return None
     lo = np.asarray(lows, dtype=np.float64)
     hi = np.asarray(highs, dtype=np.float64)
-    # 10-90 percentile range: robust to a few stray triangles, normalised by height
-    flat_bottom = float(np.percentile(lo, 90) - np.percentile(lo, 10)) / hy
-    flat_top = float(np.percentile(hi, 90) - np.percentile(hi, 10)) / hy
+    pf = max(0.1, min(1.0, contact_frac)) * 100.0
+    # Bottom skin: the ground-contact band is the LOWEST cells; its thickness is the
+    # range from the very bottom up to the contact_frac percentile (the arch, in the
+    # upper tail of the lows, is dropped). p2 rather than the raw min ignores strays.
+    flat_bottom = float(np.percentile(lo, pf) - np.percentile(lo, 2)) / hy
+    # Top skin: mirror image — keep the HIGHEST cells (from the (100-frac) percentile
+    # up to the top), so if this end were the sole its arch dip is dropped too.
+    flat_top = float(np.percentile(hi, 98) - np.percentile(hi, 100.0 - pf)) / hy
     return flat_bottom, flat_top
 
 
