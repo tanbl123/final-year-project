@@ -409,23 +409,33 @@ def _surface_flatness(m, contact_frac=0.6):
     return flat_bottom, flat_top
 
 
-def _axis_flatness(m):
-    """Up-axis sanity signal. ONLY the sole<->upper axis has a FLAT end (the
-    outsole) — the heel/toe ends and the medial/lateral sides are all curved. So
-    once oriented, the FLATTER Y-end should be clearly flat; if NEITHER end is
-    flat, the model may be resting on its side / at an angle (wrong up-axis).
+FLAT_SOLE_MAX = 0.35   # a real, arch-tolerant outsole reads at/below this
 
-    Returns (axis_flat, flat_sole): flat_sole is the flatter end's roughness (0 =
-    a perfect flat sole), axis_flat is a PROVISIONAL call at a threshold that still
-    needs calibration on real models. This is used ONLY to sharpen the message when
-    the trusted cues (skewness + symmetry) already flag the facing uncertain — it
-    does NOT lower confidence on its own, because its absolute threshold isn't
-    calibrated yet (a wrong number would false-alarm on good uploads)."""
+def _axis_flatness(m, sole_conf, toe_conf):
+    """Up-axis sanity GATE. ONLY the sole<->upper axis has a FLAT end (the outsole)
+    — the heel/toe ends and the medial/lateral sides are all curved. So once
+    oriented, the FLATTER Y-end should be clearly flat; if NEITHER end is flat, the
+    model is likely resting on its side / at an angle (a wrong up-axis) and the
+    facing we'd report is meaningless.
+
+    Threshold FLAT_SOLE_MAX = 0.35 is calibrated on real uploads: correctly-oriented
+    soles read ~0.01-0.04 across a flat sneaker, a high-top, a running pair and a
+    heeled boot (the arch-tolerant measure keeps the arch from inflating it). 0.35
+    sits ~9x above that cluster, so it cannot false-alarm on a good upload, while a
+    mis-oriented model with no flat sole reads far higher. When no flat end is found,
+    cap the sole/toe confidence so the report flags the facing for a human check
+    (and the 'lying on its side' message fires).
+
+    Returns (sole_conf, toe_conf, axis_flat, flat_sole)."""
     fl = _surface_flatness(m)
     if fl is None:
-        return True, None
+        return sole_conf, toe_conf, True, None
     flat_sole = min(fl[0], fl[1])                 # the flatter end should be the outsole
-    return (flat_sole <= 0.45), round(flat_sole, 2)   # 0.45 provisional, pending calibration
+    axis_flat = flat_sole <= FLAT_SOLE_MAX
+    if not axis_flat:
+        sole_conf = min(sole_conf, 0.3)
+        toe_conf = min(toe_conf, 0.3)
+    return sole_conf, toe_conf, axis_flat, round(flat_sole, 2)
 
 
 def _stable_align(mesh):
@@ -536,7 +546,7 @@ def _stable_align(mesh):
     m.apply_translation([-(b[0][0] + b[1][0]) / 2.0, -(b[0][1] + b[1][1]) / 2.0,
                          -(b[0][2] + b[1][2]) / 2.0])
     axis_conf = round(min(1.0, sk / 0.2), 2)
-    axis_flat, flat_sole = _axis_flatness(m)
+    sole_conf, toe_conf, axis_flat, flat_sole = _axis_flatness(m, sole_conf, toe_conf)
     return m, {"sole": round(sole_conf, 2), "toe": round(toe_conf, 2),
                "axis": axis_conf, "axisAgree": axis_conf >= 0.4, "axisFlat": axis_flat,
                "flatSole": flat_sole, "flipped": flipped, "trustedFile": False,
@@ -693,7 +703,7 @@ def _orient_canonical(mesh, straighten=True):
         sole_conf = min(sole_conf, axis_conf)
         toe_conf = min(toe_conf, axis_conf)
 
-    axis_flat, flat_sole = _axis_flatness(m)
+    sole_conf, toe_conf, axis_flat, flat_sole = _axis_flatness(m, sole_conf, toe_conf)
     return m, {"sole": round(sole_conf, 2), "toe": round(toe_conf, 2),
                "axis": round(axis_conf, 2), "axisAgree": axis_agree, "axisFlat": axis_flat,
                "flatSole": flat_sole, "flipped": flipped, "trustedFile": False,
