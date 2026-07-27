@@ -202,4 +202,9 @@ if __name__ == '__main__':
         print(f'[recommender] serving on http://127.0.0.1:{config.PORT} (waitress)')
         serve(app, host='127.0.0.1', port=config.PORT)
     except ImportError:
-        app.run(host='127.0.0.1', port=config.PORT, debug=False)
+        # threaded=True so a slow request (e.g. an autofit downloading a model from
+        # its URL) can't block every other request on a single worker — without it
+        # the fallback serialises requests and a cold/slow fetch shows up to the
+        # caller as a 90s "0 bytes received" timeout, then works on retry.
+        print(f'[recommender] serving on http://127.0.0.1:{config.PORT} (flask, threaded)')
+        app.run(host='127.0.0.1', port=config.PORT, debug=False, threaded=True)
