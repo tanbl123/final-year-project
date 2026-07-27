@@ -1239,6 +1239,17 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         orient_conf["lrGuess"] = lr_side
         orient_conf["lrConf"] = lr_conf
         orient_conf["lrDeclared"] = declared_side if declared_count == 1 else None
+        # Automatic L/R verify flag: a CONFIDENT geometry guess that DISAGREES with
+        # the supplier's declared side (single shoe only) raises a checklist note so
+        # the admin verifies which foot before publishing. Soft: it never flips or
+        # relabels the shoe and never blocks approval — geometry only assists, the
+        # declared side stays authoritative.
+        if (count_declared and declared_count == 1 and lr_side is not None
+                and lr_conf >= 0.4 and lr_side != declared_side):
+            orient_conf["lrMismatch"] = True
+            meta["warnings"].append(
+                "The shape looks like a %s shoe, but it's marked as the %s foot. "
+                "Verify left / right before publishing." % (lr_side, declared_side))
     size = aligned.extents
     length_n, width_n, height_n = float(size[2]), float(size[0]), float(size[1])
     scale = (target_m / length_n) if length_n > 1e-9 else 1.0
