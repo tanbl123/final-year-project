@@ -269,13 +269,16 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
                         {meta.orientation.axisFlat === false && ' — no flat sole found'}
                       </span>
                     )}
-                    {meta.orientation.lrGuess && (
+                    {!trustedFile && meta.orientation.lrConf != null && (
                       <span className="text-muted ms-2" style={{ fontSize: '0.75rem' }}>
-                        · geometry looks {meta.orientation.lrGuess} ({meta.orientation.lrConf})
-                        {meta.orientation.lrDeclared
-                          && meta.orientation.lrGuess !== meta.orientation.lrDeclared
-                          && meta.orientation.lrConf >= 0.4
-                          && <span className="text-warning"> — declared {meta.orientation.lrDeclared}?</span>}
+                        {meta.orientation.lrGuess
+                          ? <>· geometry looks {meta.orientation.lrGuess} ({meta.orientation.lrConf})
+                              {meta.orientation.lrDeclared
+                                && meta.orientation.lrGuess !== meta.orientation.lrDeclared
+                                && meta.orientation.lrConf >= 0.4
+                                && <span className="text-warning"> — declared {meta.orientation.lrDeclared}?</span>}
+                            </>
+                          : '· no clear L/R signal'}
                       </span>
                     )}
                   </Row>
