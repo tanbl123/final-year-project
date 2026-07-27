@@ -1057,7 +1057,13 @@ def _normalise(mesh, target_length_m, mirror=False, straighten=True):
     m.apply_scale(target_length_m / length_now if length_now > 1e-9 else 1.0)
     if mirror:
         m.apply_transform(np.diag([-1.0, 1.0, 1.0, 1.0]))   # reflect across X
-        m.faces = np.fliplr(m.faces).copy()                 # restore winding
+        # A reflection reverses triangle winding. Flipping the face order by hand
+        # (np.fliplr) fixed the winding but left the normals pointing INWARD after
+        # GLB export (trimesh re-derives normals from winding on export), so the
+        # mirrored foot rendered inside-out — you saw its interior/lining instead
+        # of the outer material. fix_normals re-orients the winding OUTWARD per
+        # body (multibody: a shoe is many separate pieces) and that survives export.
+        m.fix_normals(multibody=True)
     b = m.bounds
     cx = (b[0][0] + b[1][0]) / 2.0
     cz = (b[0][2] + b[1][2]) / 2.0
