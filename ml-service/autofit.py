@@ -351,6 +351,51 @@ def _vertical_skew(m):
     return abs(float(((p ** 3) * aw).sum() / w) / (var ** 1.5))
 
 
+def _surface_flatness(m):
+    """Roughness of the OUTER surface on each Y-end, as (flat_bottom, flat_top).
+
+    Grid the footprint (X x Z) into cells; in each occupied cell take the lowest
+    surface point (traces the bottom skin) and the highest (traces the top skin).
+    The spread of those per-cell heights, normalised by shoe height, is SMALL for
+    a flat continuous sheet (the outsole / midsole / feather edge) and LARGE for a
+    shaped upper (topline opening, tongue, eyestay, laces). So the flatter Y-end is
+    the sole. This is the "flat cluster = base, shaped cluster = upper" cue, and it
+    is independent of the footprint-size and centroid cues (it survives tall boots
+    whose shaft pulls mass high but whose outsole is still the flat face).
+
+    Returns (flat_bottom, flat_top) with smaller = flatter, or None if too sparse."""
+    tc = np.asarray(m.triangles_center, dtype=np.float64)
+    if len(tc) < 8:
+        return None
+    b = m.bounds
+    hy = float(b[1][1] - b[0][1])
+    if hy < 1e-9:
+        return None
+    xz = tc[:, [0, 2]]
+    mn = xz.min(axis=0)
+    sp = xz.max(axis=0) - mn
+    sp[sp < 1e-9] = 1.0
+    nb = 12
+    idx = np.clip(((xz - mn) / sp * (nb - 1e-6)).astype(int), 0, nb - 1)
+    key = idx[:, 0] * nb + idx[:, 1]
+    y = tc[:, 1]
+    order = np.argsort(key, kind="stable")
+    key_s, y_s = key[order], y[order]
+    bounds = np.flatnonzero(np.diff(key_s)) + 1
+    lows, highs = [], []
+    for grp in np.split(y_s, bounds):
+        lows.append(grp.min())
+        highs.append(grp.max())
+    if len(lows) < 4:
+        return None
+    lo = np.asarray(lows, dtype=np.float64)
+    hi = np.asarray(highs, dtype=np.float64)
+    # 10-90 percentile range: robust to a few stray triangles, normalised by height
+    flat_bottom = float(np.percentile(lo, 90) - np.percentile(lo, 10)) / hy
+    flat_top = float(np.percentile(hi, 90) - np.percentile(hi, 10)) / hy
+    return flat_bottom, flat_top
+
+
 def _stable_align(mesh):
     """AUTO-STRAIGHTEN via STABLE RESTING POSE + sole disambiguation.
 
@@ -401,12 +446,29 @@ def _stable_align(mesh):
     hy = ymax - ymin
     fp_bot = _xz_footprint(tc, tc[:, 1] <= ymin + 0.25 * hy)
     fp_top = _xz_footprint(tc, tc[:, 1] >= ymax - 0.25 * hy)
+    flip_fp = fp_top > fp_bot                     # footprint says the sole ended up
+    fp_margin = abs(fp_bot - fp_top) / (fp_bot + fp_top + 1e-9)
+    # Second, independent cue: FLATNESS. The outsole is a flat sheet, the upper is
+    # shaped (tongue/collar/laces). The flatter Y-end is the sole.
+    flat = _surface_flatness(m)
+    flip_flat, flat_margin = flip_fp, 0.0
+    if flat is not None:
+        flat_bot, flat_top = flat                 # smaller = flatter = sole
+        flip_flat = flat_bot > flat_top           # flatter end is up -> sole up -> flip
+        flat_margin = abs(flat_bot - flat_top) / (flat_bot + flat_top + 1e-9)
+    flip_y = flip_fp if fp_margin >= 0.02 else flip_flat
+    sole_conf = min(1.0, fp_margin / 0.25)
+    if flat is not None:
+        if flip_flat == flip_fp:                  # both cues agree -> more sure
+            sole_conf = min(1.0, sole_conf + 0.2 * min(1.0, flat_margin / 0.2))
+        else:                                     # cues disagree -> less sure
+            sole_conf = min(sole_conf, 0.7)
+        if fp_margin < 0.02:                      # footprint too even to call -> trust flatness
+            sole_conf = min(1.0, flat_margin / 0.2)
     flipped = []
-    if fp_top > fp_bot:                           # sole ended up — flip it down
+    if flip_y:                                    # sole ended up — flip it down
         m.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))
         flipped.append("upside-down -> sole down")
-        fp_bot, fp_top = fp_top, fp_bot
-    sole_conf = min(1.0, abs(fp_bot - fp_top) / (fp_bot + fp_top + 1e-9) / 0.25)
 
     if float(m.extents[0]) > float(m.extents[2]):  # length -> Z (yaw)
         m.apply_transform(trimesh.transformations.rotation_matrix(np.pi / 2.0, [0, 1, 0]))
@@ -422,11 +484,21 @@ def _stable_align(mesh):
         bmask = z <= zmin + 0.30 * lz
         hf = float(np.ptp(tc[fmask][:, 1])) if fmask.any() else 0.0
         hb = float(np.ptp(tc[bmask][:, 1])) if bmask.any() else 0.0
-        if hf > hb:                               # heel (taller) on +Z -> flip toe forward
-            m.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [0, 1, 0]))
-            flipped.append("heel/toe -> toe forward")
+        flip_toe = hf > hb                        # heel (taller) on +Z -> flip toe forward
         denom = max(hf, hb)
         toe_conf = (abs(hf - hb) / denom) if denom > 1e-9 else 0.0
+        if toe_conf < 0.12 and fmask.any() and bmask.any():
+            # height is ambiguous -> WIDTH TAPER tie-breaker: the toe box is narrower
+            # than the heel, so the wider end is the heel (put it on -Z).
+            wf = float(np.ptp(tc[fmask][:, 0]))
+            wb = float(np.ptp(tc[bmask][:, 0]))
+            wd = max(wf, wb)
+            if wd > 1e-9:
+                flip_toe = wf > wb
+                toe_conf = min(0.5, abs(wf - wb) / wd)
+        if flip_toe:
+            m.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [0, 1, 0]))
+            flipped.append("heel/toe -> toe forward")
 
     b = m.bounds                                  # centre at origin (pipeline re-seats later)
     m.apply_translation([-(b[0][0] + b[1][0]) / 2.0, -(b[0][1] + b[1][1]) / 2.0,
@@ -501,19 +573,34 @@ def _orient_canonical(mesh, straighten=True):
         fp_bottom = _footprint(yy <= ymin + 0.25 * hy)   # lowest quarter
         fp_top = _footprint(yy >= ymax - 0.25 * hy)       # highest quarter
         xs_margin = abs(fp_bottom - fp_top) / (fp_bottom + fp_top + 1e-9)
-        flip_y = fp_top > fp_bottom                       # bigger footprint on top -> upside down
+        flip_fp = fp_top > fp_bottom                      # bigger footprint on top -> upside down
         # secondary: area-weighted centroid below mid -> sole down (sneakers)
         cy = float((yy * aw).sum() / total)
         cen_flip = (cy - (ymin + ymax) / 2.0) > 0.0
         cen_margin = min(1.0, abs(cy - (ymin + ymax) / 2.0) / hy / 0.08)
+        # third cue: FLATNESS — the outsole is a flat sheet, the upper is shaped
+        # (tongue/collar/laces). The flatter Y-end is the sole. Independent of the
+        # footprint-size and centroid cues.
+        flat = _surface_flatness(m)
+        flat_flip, flat_margin = flip_fp, 0.0
+        if flat is not None:
+            flat_bot, flat_top = flat                     # smaller = flatter = sole
+            flat_flip = flat_bot > flat_top               # flatter end up -> sole up -> flip
+            flat_margin = abs(flat_bot - flat_top) / (flat_bot + flat_top + 1e-9)
+        flip_y = flip_fp
         sole_conf = min(1.0, xs_margin / 0.25)
-        if cen_flip == flip_y:                            # both cues agree -> boost
-            sole_conf = min(1.0, sole_conf + 0.15)
-        else:                                             # disagree -> trust footprint, cap conf
-            sole_conf = min(sole_conf, 0.8)
-        if xs_margin < 0.05:                              # footprint too flat to call -> centroid
-            flip_y = cen_flip
-            sole_conf = min(sole_conf, cen_margin)
+        agree = sum(1 for v in (cen_flip, flat_flip) if v == flip_fp)  # confirmations
+        if agree == 2:                                    # footprint + both cues agree -> boost
+            sole_conf = min(1.0, sole_conf + 0.2)
+        elif agree == 0:                                  # both cues dissent -> less sure
+            sole_conf = min(sole_conf, 0.7)
+        if xs_margin < 0.05:                              # footprint too flat to call
+            if flat is not None and flat_margin >= 0.03:  # -> trust flatness first
+                flip_y = flat_flip
+                sole_conf = min(1.0, flat_margin / 0.2)
+            else:                                         # -> else centroid
+                flip_y = cen_flip
+                sole_conf = min(sole_conf, cen_margin)
     else:
         flip_y = False
         sole_conf = 0.0
@@ -532,6 +619,15 @@ def _orient_canonical(mesh, straighten=True):
         flip_z = h_front > h_back                 # heel is on +Z -> flip so it's -Z
         denom = max(h_front, h_back)
         toe_conf = (abs(h_front - h_back) / denom) if denom > 1e-9 else 0.0
+        if toe_conf < 0.12 and len(front) and len(back):
+            # height is ambiguous -> WIDTH TAPER tie-breaker: the toe box is
+            # narrower than the heel, so the wider end is the heel (put it on -Z).
+            w_front = float(np.ptp(front[:, 0]))
+            w_back = float(np.ptp(back[:, 0]))
+            wd = max(w_front, w_back)
+            if wd > 1e-9:
+                flip_z = w_front > w_back
+                toe_conf = min(0.5, abs(w_front - w_back) / wd)
     else:
         flip_z = False
         toe_conf = 0.0
