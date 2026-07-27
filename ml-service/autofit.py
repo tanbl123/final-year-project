@@ -409,6 +409,62 @@ def _surface_flatness(m, contact_frac=0.6):
     return flat_bottom, flat_top
 
 
+def _cavity_wells(m, nb=14):
+    """(well_bottom, well_top): how much each Y-face has a CENTRAL DEPRESSION — the
+    foot opening (collar/tongue cavity) — vs a raised rim. Grid the footprint; per
+    cell take the top surface (max Y) and bottom surface (min Y). At the OPENING end
+    the centre of the shoe sinks well below the rim (you're looking into the hole),
+    giving a large 'well'; a solid face (the sole) has centre ~ rim, so ~0. This is
+    the "which end is the mouth of the shoe" cue — the opposite end is the sole.
+    numpy only (no rtree). Returns None if too sparse to judge."""
+    tc = np.asarray(m.triangles_center, dtype=np.float64)
+    if len(tc) < 20:
+        return None
+    b = m.bounds
+    ymin, ymax = float(b[0][1]), float(b[1][1])
+    hy = ymax - ymin
+    if hy < 1e-9:
+        return None
+    xz = tc[:, [0, 2]]
+    mn = xz.min(axis=0)
+    sp = xz.max(axis=0) - mn
+    sp[sp < 1e-9] = 1.0
+    gi = np.clip(((xz - mn) / sp * (nb - 1e-6)).astype(int), 0, nb - 1)
+    key = gi[:, 0] * nb + gi[:, 1]
+    y = tc[:, 1]
+    order = np.argsort(key, kind="stable")
+    ks, ys, gis = key[order], y[order], gi[order]
+    bounds = np.flatnonzero(np.diff(ks)) + 1
+    lo, hi, cx, cz = [], [], [], []
+    for grp, gg in zip(np.split(ys, bounds), np.split(gis, bounds)):
+        lo.append(grp.min()); hi.append(grp.max()); cx.append(gg[0, 0]); cz.append(gg[0, 1])
+    lo = np.asarray(lo); hi = np.asarray(hi)
+    c = (nb - 1) / 2.0
+    rad = np.sqrt((np.asarray(cx) - c) ** 2 + (np.asarray(cz) - c) ** 2) / (c if c > 0 else 1.0)
+    centre = rad < 0.45
+    rim = rad > 0.6
+    if centre.sum() < 3 or rim.sum() < 3:
+        return None
+    well_top = float(np.median(hi[rim]) - np.median(hi[centre])) / hy   # centre sinks below rim
+    well_bot = float(np.median(lo[centre]) - np.median(lo[rim])) / hy   # centre lifts above rim
+    return well_bot, well_top
+
+
+def _cavity_flip(m):
+    """Opening-cavity vote for sole-down. Returns (flip_pref, conf): flip_pref True
+    if the shoe's OPENING points DOWN (so the sole is up and we must flip), None if
+    no real cavity is detected (solid/closed model -> no opinion). conf scales with
+    how decisively one end is the mouth."""
+    r = _cavity_wells(m)
+    if r is None:
+        return None, 0.0
+    well_bot, well_top = r
+    if max(well_bot, well_top) < 0.15:            # neither end is a real cavity -> silent
+        return None, 0.0
+    denom = abs(well_bot) + abs(well_top) + 1e-9
+    return (well_bot > well_top), min(1.0, abs(well_top - well_bot) / denom)
+
+
 FLAT_SOLE_MAX = 0.35   # a real, arch-tolerant outsole reads at/below this
 
 def _axis_flatness(m, sole_conf, toe_conf):
@@ -490,22 +546,36 @@ def _stable_align(mesh):
     fp_top = _xz_footprint(tc, tc[:, 1] >= ymax - 0.25 * hy)
     flip_fp = fp_top > fp_bot                     # footprint says the sole ended up
     fp_margin = abs(fp_bot - fp_top) / (fp_bot + fp_top + 1e-9)
-    # Second, independent cue: FLATNESS. The outsole is a flat sheet, the upper is
-    # shaped (tongue/collar/laces). The flatter Y-end is the sole.
+    # Second cue: FLATNESS. The outsole is a flat sheet, the upper is shaped
+    # (tongue/collar/laces). The flatter Y-end is the sole.
     flat = _surface_flatness(m)
     flip_flat, flat_margin = flip_fp, 0.0
     if flat is not None:
         flat_bot, flat_top = flat                 # smaller = flatter = sole
         flip_flat = flat_bot > flat_top           # flatter end is up -> sole up -> flip
         flat_margin = abs(flat_bot - flat_top) / (flat_bot + flat_top + 1e-9)
+    # Third cue: OPENING CAVITY. The foot goes in the top, so the mouth (a central
+    # depression) marks the TOP; the sole is the opposite, solid end. Silent on a
+    # solid/closed model. Strong and semantic when present.
+    cav_flip, cav_conf = _cavity_flip(m)
     flip_y = flip_fp if fp_margin >= 0.02 else flip_flat
     sole_conf = min(1.0, fp_margin / 0.25)
     if flat is not None:
-        if flip_flat == flip_fp:                  # both cues agree -> more sure
+        if flip_flat == flip_fp:                  # footprint + flatness agree -> more sure
             sole_conf = min(1.0, sole_conf + 0.2 * min(1.0, flat_margin / 0.2))
-        else:                                     # cues disagree -> less sure
+        else:                                     # disagree -> less sure
             sole_conf = min(sole_conf, 0.7)
-        if fp_margin < 0.02:                      # footprint too even to call -> trust flatness
+    if cav_flip is not None:                      # cavity present: strong confirm/tiebreak
+        if cav_flip == flip_fp:
+            sole_conf = min(1.0, sole_conf + 0.2 * cav_conf)
+        else:
+            sole_conf = min(sole_conf, 0.6)
+    if fp_margin < 0.02:                          # footprint can't call -> cavity, then flatness
+        if cav_flip is not None and cav_conf >= 0.3:
+            flip_y = cav_flip
+            sole_conf = min(1.0, cav_conf)
+        elif flat is not None:
+            flip_y = flip_flat
             sole_conf = min(1.0, flat_margin / 0.2)
     flipped = []
     if flip_y:                                    # sole ended up — flip it down
@@ -631,15 +701,22 @@ def _orient_canonical(mesh, straighten=True):
             flat_bot, flat_top = flat                     # smaller = flatter = sole
             flat_flip = flat_bot > flat_top               # flatter end up -> sole up -> flip
             flat_margin = abs(flat_bot - flat_top) / (flat_bot + flat_top + 1e-9)
+        # fourth cue: OPENING CAVITY — the foot's mouth (a central depression) marks
+        # the TOP; the sole is the solid opposite end. Silent on solid/closed models.
+        cav_flip, cav_conf = _cavity_flip(m)
         flip_y = flip_fp
         sole_conf = min(1.0, xs_margin / 0.25)
-        agree = sum(1 for v in (cen_flip, flat_flip) if v == flip_fp)  # confirmations
-        if agree == 2:                                    # footprint + both cues agree -> boost
+        voters = [cen_flip, flat_flip] + ([cav_flip] if cav_flip is not None else [])
+        n_agree = sum(1 for v in voters if v == flip_fp)  # confirmations of footprint
+        if n_agree == len(voters):                        # everyone agrees -> boost
             sole_conf = min(1.0, sole_conf + 0.2)
-        elif agree == 0:                                  # both cues dissent -> less sure
+        elif n_agree == 0:                                # all cues dissent -> less sure
             sole_conf = min(sole_conf, 0.7)
         if xs_margin < 0.05:                              # footprint too flat to call
-            if flat is not None and flat_margin >= 0.03:  # -> trust flatness first
+            if cav_flip is not None and cav_conf >= 0.3:  # -> cavity is the strongest cue
+                flip_y = cav_flip
+                sole_conf = min(1.0, cav_conf)
+            elif flat is not None and flat_margin >= 0.03:  # -> then flatness
                 flip_y = flat_flip
                 sole_conf = min(1.0, flat_margin / 0.2)
             else:                                         # -> else centroid
