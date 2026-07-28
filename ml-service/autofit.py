@@ -43,6 +43,7 @@ runtime auto-generation isn't possible — see ar-lens-prototype/README.md).
 
 import io
 import gc
+import os
 import sys
 import time
 import numpy as np
@@ -50,9 +51,12 @@ import trimesh
 
 
 def _blog(msg):
-    """Timing/diagnostic line for the build path, flushed immediately so it shows
-    in the running `python app.py` console even if the very next step hangs — this
-    is how we pinpoint which build step is slow on a problem model."""
+    """Build-path timing line. OFF by default (quiet in normal runs); set the env
+    var AUTOFIT_DEBUG=1 to enable — diag_build.py does this automatically. Flushed
+    immediately so it shows in the console even if the next step hangs, which is
+    how we pinpoint a slow/stuck build step."""
+    if not os.environ.get("AUTOFIT_DEBUG"):
+        return
     print("[autofit build] %s" % msg, file=sys.stderr, flush=True)
 
 try:

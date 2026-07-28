@@ -16,8 +16,10 @@ Watch the [autofit build] lines. The LAST one before it stalls is the culprit:
 Press Ctrl+C to stop instead of waiting for a crash.
 """
 import argparse
+import os
 import time
 
+os.environ.setdefault("AUTOFIT_DEBUG", "1")   # turn on the [autofit build] timing lines
 import autofit as A
 
 
