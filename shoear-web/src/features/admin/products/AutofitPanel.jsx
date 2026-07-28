@@ -27,6 +27,37 @@ function Row({ label, children }) {
   );
 }
 
+// One foot's transform, laid out like a Lens Studio Transform inspector so the
+// admin can copy it straight across. pos/rot/scale are [x, y, z].
+function TransformCard({ title, pos, rot, scale }) {
+  const rows = [['Position', pos], ['Rotation', rot], ['Scale', scale]];
+  return (
+    <div className="col-6">
+      <div className="small fw-semibold mb-1">{title}</div>
+      <table className="table table-sm table-borderless mb-0" style={{ fontSize: '0.78rem' }}>
+        <thead>
+          <tr className="text-muted">
+            <th className="fw-normal"> </th>
+            <th className="text-end fw-normal">X</th>
+            <th className="text-end fw-normal">Y</th>
+            <th className="text-end fw-normal">Z</th>
+          </tr>
+        </thead>
+        <tbody className="font-monospace">
+          {rows.map(([label, v]) => (
+            <tr key={label}>
+              <td className="text-muted">{label}</td>
+              <td className="text-end">{v[0]}</td>
+              <td className="text-end">{v[1]}</td>
+              <td className="text-end">{v[2]}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // Admin AR auto-fit panel. Runs the product's uploaded 3D model through the ML
 // auto-fit service and shows the analysis + a before/after preview, so the admin
 // can QC it and download the fitted, half-tuned model to drop into Lens Studio.
@@ -383,49 +414,18 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
               {anchor && (
                 <div className="col-12 mt-1">
                   <div className="text-muted small mb-1">
-                    Suggested Lens Studio transform — match the object's Transform panel
+                    Suggested Lens Studio transform — match each shoe's Transform panel
                   </div>
-                  <table className="table table-sm table-borderless mb-1"
-                         style={{ maxWidth: 340, fontSize: '0.8rem' }}>
-                    <thead>
-                      <tr className="text-muted">
-                        <th className="fw-normal"> </th>
-                        <th className="text-end fw-normal">X</th>
-                        <th className="text-end fw-normal">Y</th>
-                        <th className="text-end fw-normal">Z</th>
-                      </tr>
-                    </thead>
-                    <tbody className="font-monospace">
-                      <tr>
-                        <td className="text-muted">Position · Shoe_L <span className="text-secondary">(cm)</span></td>
-                        <td className="text-end">{lPos[0]}</td>
-                        <td className="text-end">{lPos[1]}</td>
-                        <td className="text-end">{lPos[2]}</td>
-                      </tr>
-                      <tr>
-                        <td className="text-muted">Position · Shoe_R <span className="text-secondary">(cm)</span></td>
-                        <td className="text-end">{rPos[0]}</td>
-                        <td className="text-end">{rPos[1]}</td>
-                        <td className="text-end">{rPos[2]}</td>
-                      </tr>
-                      <tr>
-                        <td className="text-muted">Rotation <span className="text-secondary">(both, °)</span></td>
-                        <td className="text-end">{anchor.rotationDeg[0]}</td>
-                        <td className="text-end">{anchor.rotationDeg[1]}</td>
-                        <td className="text-end">{anchor.rotationDeg[2]}</td>
-                      </tr>
-                      <tr>
-                        <td className="text-muted">Scale <span className="text-secondary">(both)</span></td>
-                        <td className="text-end">{anchor.scale[0]}</td>
-                        <td className="text-end">{anchor.scale[1]}</td>
-                        <td className="text-end">{anchor.scale[2]}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                  <div className="row g-2">
+                    <TransformCard title="Shoe_L (left foot)" pos={lPos}
+                                   rot={anchor.rotationDeg} scale={anchor.scale} />
+                    <TransformCard title="Shoe_R (right foot)" pos={rPos}
+                                   rot={anchor.rotationDeg} scale={anchor.scale} />
+                  </div>
                   <div className="text-muted" style={{ fontSize: '0.72rem' }}>
-                    Each foot uses its own Position row above (they differ only in X — the left
-                    shoe is the right one mirrored). Rotation &amp; scale are baked into the model,
-                    so leave them at their Lens Studio defaults. Assumes a centimetre import.
+                    Position is in centimetres; rotation in degrees. The two feet differ only in
+                    Position X (the left shoe is the right one mirrored). Rotation &amp; scale are
+                    baked into the model — leave them at their Lens Studio defaults.
                   </div>
                 </div>
               )}
