@@ -162,6 +162,13 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
   const rejected = meta?.rejected;
   const dims = meta?.dimensionsCm;
   const anchor = meta?.anchor;
+  // Both feet share rotation & scale; only the Position X flips (the left shoe is
+  // the right one mirrored across X). The anchor was measured on the base shoe,
+  // whose side is meta.side — so give each foot its own position, no manual negate.
+  const posBaseSide = (meta?.side || 'right').toLowerCase();
+  const posMirror = anchor ? [-anchor.positionCm[0], anchor.positionCm[1], anchor.positionCm[2]] : null;
+  const rPos = anchor ? (posBaseSide === 'right' ? anchor.positionCm : posMirror) : null;
+  const lPos = anchor ? (posBaseSide === 'left' ? anchor.positionCm : posMirror) : null;
   // plain-English verdicts for the report
   const trustedFile = meta?.orientation?.trustedFile;
   const pairMismatch = meta?.orientation?.pairMismatch;   // the two shoes oriented differently
@@ -390,19 +397,25 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                     </thead>
                     <tbody className="font-monospace">
                       <tr>
-                        <td className="text-muted">Position <span className="text-secondary">(cm)</span></td>
-                        <td className="text-end">{anchor.positionCm[0]}</td>
-                        <td className="text-end">{anchor.positionCm[1]}</td>
-                        <td className="text-end">{anchor.positionCm[2]}</td>
+                        <td className="text-muted">Position · Shoe_L <span className="text-secondary">(cm)</span></td>
+                        <td className="text-end">{lPos[0]}</td>
+                        <td className="text-end">{lPos[1]}</td>
+                        <td className="text-end">{lPos[2]}</td>
                       </tr>
                       <tr>
-                        <td className="text-muted">Rotation <span className="text-secondary">(°)</span></td>
+                        <td className="text-muted">Position · Shoe_R <span className="text-secondary">(cm)</span></td>
+                        <td className="text-end">{rPos[0]}</td>
+                        <td className="text-end">{rPos[1]}</td>
+                        <td className="text-end">{rPos[2]}</td>
+                      </tr>
+                      <tr>
+                        <td className="text-muted">Rotation <span className="text-secondary">(both, °)</span></td>
                         <td className="text-end">{anchor.rotationDeg[0]}</td>
                         <td className="text-end">{anchor.rotationDeg[1]}</td>
                         <td className="text-end">{anchor.rotationDeg[2]}</td>
                       </tr>
                       <tr>
-                        <td className="text-muted">Scale</td>
+                        <td className="text-muted">Scale <span className="text-secondary">(both)</span></td>
                         <td className="text-end">{anchor.scale[0]}</td>
                         <td className="text-end">{anchor.scale[1]}</td>
                         <td className="text-end">{anchor.scale[2]}</td>
@@ -410,9 +423,9 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                     </tbody>
                   </table>
                   <div className="text-muted" style={{ fontSize: '0.72rem' }}>
-                    Rotation &amp; scale are already baked into the model — you normally leave them
-                    at their Lens Studio defaults and only set the Position. {anchor.note} Assumes
-                    the model is imported in centimetres.
+                    Each foot uses its own Position row above (they differ only in X — the left
+                    shoe is the right one mirrored). Rotation &amp; scale are baked into the model,
+                    so leave them at their Lens Studio defaults. Assumes a centimetre import.
                   </div>
                 </div>
               )}
