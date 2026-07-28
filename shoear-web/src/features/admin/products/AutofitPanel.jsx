@@ -242,7 +242,9 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
           {/* only relevant for a single shoe — hidden for a pair to avoid confusion */}
           {ctrl.count !== '2' && (
             <div className="col-auto">
-              <label className="form-label small mb-0">Which foot (if single)</label>
+              <label className="form-label small mb-0">
+                Which foot {ctrl.count === 'auto' ? '(used only if a single)' : ''}
+              </label>
               <select className="form-select form-select-sm" value={ctrl.side}
                 onChange={(e) => setCtrl({ ...ctrl, side: e.target.value })}>
                 <option value="right">Right</option>
@@ -261,6 +263,14 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
               {loading ? 'Analysing…' : meta ? 'Re-run' : 'Run auto-fit'}
             </button>
           </div>
+          {ctrl.count === 'auto' && (
+            <div className="col-12">
+              <div className="form-text small mt-0">
+                Auto-detect decides <strong>single vs pair</strong> only — not left/right.
+                If it resolves to a single shoe, the “Which foot” value above is used; for a pair it's ignored.
+              </div>
+            </div>
+          )}
           <div className="col-12">
             <div className="form-check form-switch">
               <input className="form-check-input" type="checkbox" role="switch" id="straightenSwitch"
