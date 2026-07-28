@@ -45,6 +45,7 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
 
   const [fitted, setFitted] = useState(null);   // { url } of the combined pair glb
   const [generating, setGenerating] = useState(false);
+  const [savingOrig, setSavingOrig] = useState(false);  // fetching the raw upload for download
   const [showFitted, setShowFitted] = useState(false);  // preview: original vs fitted pair
   const blobUrls = useRef([]);                    // track for revocation
   const mvRef = useRef(null);                     // the <model-viewer> element
@@ -112,6 +113,28 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
     a.href = fitted.url;
     a.download = `${productId}_fitted_pair.glb`;
     a.click();
+  }
+
+  // Download the supplier's RAW upload the same way as the fitted file: fetch it
+  // into a blob and save directly (no new tab), keeping the URL's own filename.
+  async function downloadOriginal() {
+    if (!modelUrl || savingOrig) return;
+    setSavingOrig(true);
+    try {
+      const resp = await fetch(modelUrl);
+      if (!resp.ok) throw new Error('fetch failed');
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      blobUrls.current.push(url);                        // revoked on unmount
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (modelUrl.split('/').pop() || 'original').split('?')[0] || 'original.glb';
+      a.click();
+    } catch {
+      window.open(modelUrl, '_blank', 'noopener');        // fallback if fetch/CORS blocked
+    } finally {
+      setSavingOrig(false);
+    }
   }
 
   const rejected = meta?.rejected;
@@ -365,11 +388,11 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
                 </button>
               )}
               {modelUrl && (
-                <a className="btn btn-sm btn-outline-secondary" href={modelUrl}
-                   download target="_blank" rel="noreferrer"
-                   title="The supplier's raw upload — not scaled/oriented/optimized. Use only if you'll prep it yourself in Lens Studio.">
-                  Download original
-                </a>
+                <button type="button" className="btn btn-sm btn-outline-secondary"
+                        onClick={downloadOriginal} disabled={savingOrig}
+                        title="The supplier's raw upload — not scaled/oriented/optimized. Use only if you'll prep it yourself in Lens Studio.">
+                  {savingOrig ? 'Downloading…' : 'Download original'}
+                </button>
               )}
             </div>
 
