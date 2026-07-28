@@ -374,18 +374,45 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                 </div>
               )}
               {anchor && (
-                <div className="col-md-6">
-                  <Row label="Place at (cm)">
-                    <span className="font-monospace">X {anchor.positionCm[0]} · Y {anchor.positionCm[1]} · Z {anchor.positionCm[2]}</span>
-                  </Row>
-                  <Row label="Rotation · Scale">
-                    <span className="font-monospace">
-                      rot {anchor.rotationDeg[0]}·{anchor.rotationDeg[1]}·{anchor.rotationDeg[2]}° · scale {anchor.scale[0]}×
-                    </span>
-                  </Row>
+                <div className="col-12 mt-1">
+                  <div className="text-muted small mb-1">
+                    Suggested Lens Studio transform — match the object's Transform panel
+                  </div>
+                  <table className="table table-sm table-borderless mb-1"
+                         style={{ maxWidth: 340, fontSize: '0.8rem' }}>
+                    <thead>
+                      <tr className="text-muted">
+                        <th className="fw-normal"> </th>
+                        <th className="text-end fw-normal">X</th>
+                        <th className="text-end fw-normal">Y</th>
+                        <th className="text-end fw-normal">Z</th>
+                      </tr>
+                    </thead>
+                    <tbody className="font-monospace">
+                      <tr>
+                        <td className="text-muted">Position <span className="text-secondary">(cm)</span></td>
+                        <td className="text-end">{anchor.positionCm[0]}</td>
+                        <td className="text-end">{anchor.positionCm[1]}</td>
+                        <td className="text-end">{anchor.positionCm[2]}</td>
+                      </tr>
+                      <tr>
+                        <td className="text-muted">Rotation <span className="text-secondary">(°)</span></td>
+                        <td className="text-end">{anchor.rotationDeg[0]}</td>
+                        <td className="text-end">{anchor.rotationDeg[1]}</td>
+                        <td className="text-end">{anchor.rotationDeg[2]}</td>
+                      </tr>
+                      <tr>
+                        <td className="text-muted">Scale</td>
+                        <td className="text-end">{anchor.scale[0]}</td>
+                        <td className="text-end">{anchor.scale[1]}</td>
+                        <td className="text-end">{anchor.scale[2]}</td>
+                      </tr>
+                    </tbody>
+                  </table>
                   <div className="text-muted" style={{ fontSize: '0.72rem' }}>
-                    Rotation &amp; scale are baked into the model — leave them at default in Lens
-                    Studio and paste only the position. {anchor.note}
+                    Rotation &amp; scale are already baked into the model — you normally leave them
+                    at their Lens Studio defaults and only set the Position. {anchor.note} Assumes
+                    the model is imported in centimetres.
                   </div>
                 </div>
               )}
