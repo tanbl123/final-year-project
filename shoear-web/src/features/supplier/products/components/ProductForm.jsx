@@ -593,8 +593,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
       <p className="text-muted small">
         A .glb file (self-contained), up to 30&nbsp;MB. It's checked automatically for AR try-on.
         Export it <b>upright and facing forward</b> — sole down, toe pointing forward, the way the
-        shoe sits when worn. We keep your model's orientation as-is, so a tilted, lying-down or
-        upside-down model won't sit correctly in AR and may be returned in review.
+        shoe sits when worn.
       </p>
       {modelError && <div className="invalid-feedback d-block mb-2">{modelError}</div>}
       {validatingModel && (
@@ -629,11 +628,6 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
               onClick={resetView} title="Snap the camera back to the default view">
               Reset view
             </button>
-          </div>
-          <div className="form-text mt-1">
-            Check the preview: the shoe should sit <b>upright, sole down, toe forward</b>. If it's
-            lying down, tilted or upside-down, fix the orientation in your 3D tool and re-upload —
-            the model is used in AR exactly as it appears here.
           </div>
 
           {/* Submission spec: the facts geometry can't reliably read, so the
