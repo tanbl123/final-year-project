@@ -941,18 +941,27 @@ def _split_by_components(mesh):
     even when the pair is placed at an angle — it groups by nearness, not a
     straight cut. Returns [left, right] ordered by X, or None if it can't find
     two balanced, separated groups (then the caller uses the gap split, which is
-    flagged for QC). Needs a graph engine (scipy) for mesh.split."""
-    if len(mesh.faces) > SPLIT_MAX_FACES:   # too heavy — fall back to geometric
+    flagged for QC). Needs scipy/networkx for connected_components."""
+    n = len(mesh.faces)
+    if n > SPLIT_MAX_FACES:                  # too heavy — fall back to geometric
         return None
+    # Connected components as FACE-INDEX arrays, NOT submeshes. Building a submesh
+    # per component (mesh.split) copies the mesh's texture image onto EVERY
+    # component, so a many-part TEXTURED model (e.g. an ornamented sneaker) blows
+    # up memory and OOM-crashes the machine. Face indices are free; only the final
+    # two halves are ever materialised.
     try:
-        comps = [c for c in mesh.split(only_watertight=False) if len(c.faces) > 0]
+        comps = [np.asarray(c) for c in trimesh.graph.connected_components(
+            mesh.face_adjacency, min_len=1, nodes=np.arange(n)) if len(c) > 0]
     except Exception:
         return None
     if len(comps) < 2:
         return None
 
-    cents = np.array([c.centroid for c in comps], dtype=np.float64)
-    areas = np.array([max(float(c.area), 1e-9) for c in comps], dtype=np.float64)
+    tc = np.asarray(mesh.triangles_center, dtype=np.float64)
+    fa = np.asarray(mesh.area_faces, dtype=np.float64)
+    cents = np.array([tc[c].mean(axis=0) for c in comps], dtype=np.float64)
+    areas = np.array([max(float(fa[c].sum()), 1e-9) for c in comps], dtype=np.float64)
 
     if len(comps) == 2:
         labels = np.array([0, 1])
@@ -985,8 +994,10 @@ def _split_by_components(mesh):
     if min(a0, a1) < 0.15 * (a0 + a1):          # lop-sided groups -> not two shoes
         return None
 
-    left = trimesh.util.concatenate(g0)
-    right = trimesh.util.concatenate(g1)
+    # Materialise ONLY the two final halves (one texture copy each) from the
+    # grouped face indices — never a submesh per component.
+    left = mesh.submesh([np.concatenate(g0)], append=True)
+    right = mesh.submesh([np.concatenate(g1)], append=True)
     # the two groups must actually sit APART along the axis that separates them;
     # if they overlap heavily it isn't a clean pair -> let the gap split try and
     # the 'verify' flag catch it.
