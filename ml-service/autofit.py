@@ -1360,25 +1360,25 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     # (True) or keep the supplier's own orientation (False, the default).
     aligned, orient_conf = _orient_canonical(measure, straighten=auto_orient)
     meta["orientation"] = orient_conf
-    # L/R VERIFY (soft, geometry-assist). Only when the orientation is RESOLVED and
-    # confident (auto-straighten, not trust-file, sole/toe both solid) — L/R depends
-    # on knowing toe-forward + sole-down, so a shaky frame can't support it. We only
-    # EXPOSE the guess for now (lrGuess/lrConf); the automatic "side may be reversed"
-    # flag stays off until the +X<->side sign is confirmed on a known-side shoe (see
-    # _MEDIAL_POS_X_IS). Geometry never overrides the supplier's declared side.
-    if (auto_orient and not orient_conf.get("trustedFile")
+    # L/R VERIFY (soft, geometry-assist) — SINGLE SHOE ONLY. It verifies the "which
+    # foot" the supplier declared, so it's meaningless for a pair (where left/right
+    # comes from the split, shown in the "Pair split" row) — showing a per-foot
+    # "geometry looks left" next to a declared pair only confuses. Also requires the
+    # orientation to be RESOLVED and confident (auto-straighten, not trust-file,
+    # sole/toe both solid), since L/R needs a known toe-forward + sole-down frame.
+    if (declared_count == 1 and auto_orient and not orient_conf.get("trustedFile")
             and (orient_conf.get("sole") or 0.0) >= 0.4
             and (orient_conf.get("toe") or 0.0) >= 0.4):
         lr_side, lr_conf = _lr_from_geometry(aligned)
         orient_conf["lrGuess"] = lr_side
         orient_conf["lrConf"] = lr_conf
-        orient_conf["lrDeclared"] = declared_side if declared_count == 1 else None
+        orient_conf["lrDeclared"] = declared_side
         # Automatic L/R verify flag: a CONFIDENT geometry guess that DISAGREES with
-        # the supplier's declared side (single shoe only) raises a checklist note so
-        # the admin verifies which foot before publishing. Soft: it never flips or
-        # relabels the shoe and never blocks approval — geometry only assists, the
-        # declared side stays authoritative.
-        if (count_declared and declared_count == 1 and lr_side is not None
+        # the supplier's declared side raises a checklist note so the admin verifies
+        # which foot before publishing. Soft: it never flips or relabels the shoe and
+        # never blocks approval — geometry only assists, the declared side stays
+        # authoritative.
+        if (count_declared and lr_side is not None
                 and lr_conf >= 0.4 and lr_side != declared_side):
             orient_conf["lrMismatch"] = True
             meta["warnings"].append(
