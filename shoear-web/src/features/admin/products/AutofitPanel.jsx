@@ -311,6 +311,12 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
               ? 'Fitted pair (Shoe_L + Shoe_R — lighter, optimised).'
               : 'Original upload (full-size). Generate the fitted model for a lighter preview.'}
           </div>
+          {!showFitted && (
+            <div className="text-muted small mt-1">
+              The model is used in AR as-is. It should sit upright, sole down, toe forward — if it's
+              lying down, tilted or upside-down, Reject and ask the supplier to re-export it upright.
+            </div>
+          )}
         </div>
 
         {meta && (rejected ? (
