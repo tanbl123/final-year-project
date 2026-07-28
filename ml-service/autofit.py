@@ -43,8 +43,17 @@ runtime auto-generation isn't possible — see ar-lens-prototype/README.md).
 
 import io
 import gc
+import sys
+import time
 import numpy as np
 import trimesh
+
+
+def _blog(msg):
+    """Timing/diagnostic line for the build path, flushed immediately so it shows
+    in the running `python app.py` console even if the very next step hangs — this
+    is how we pinpoint which build step is slow on a problem model."""
+    print("[autofit build] %s" % msg, file=sys.stderr, flush=True)
 
 try:
     from PIL import Image
@@ -1478,6 +1487,9 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     # 10. build the fitted files — HEAVY, only on request -------------------
     fitted = None
     if build_files:
+        _t0 = time.time()
+        _blog("start: faces=%d textured=%s count=%s texPx=%d straighten=%s"
+              % (int(len(mesh.faces)), _has_uv_texture(mesh), declared_count, tex_px, auto_orient))
         dec_before = dec_after = tex_before = tex_after = tex_resized = 0
         dec_skipped_tex = [False]
 
@@ -1503,6 +1515,8 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         build_halves = build_method = None
         if declared_count == 2:
             build_halves, build_method, _ = _split_pair(loaded, mesh)
+            _blog("split done in %.2fs -> method=%s halves=%s"
+                  % (time.time() - _t0, build_method, build_halves and len(build_halves)))
         left_norm = right_norm = None
         lr_known = True                            # do we truly know which shoe is left vs right?
         if declared_count == 2 and build_halves and len(build_halves) >= 2:
@@ -1517,12 +1531,15 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                 left_src, right_src = ordered[0], ordered[-1]
                 lr_known = False
             left_norm = _normalise(_prep(left_src), target_m, straighten=auto_orient)
+            _blog("left foot prepped+oriented at %.2fs" % (time.time() - _t0))
             right_norm = _normalise(_prep(right_src), target_m, straighten=auto_orient)
+            _blog("right foot prepped+oriented at %.2fs" % (time.time() - _t0))
         else:
             side = (declared_side or "right").lower()   # single shoe: side is declared
             src = _prep(mesh)
             base = _normalise(src, target_m, straighten=auto_orient)
             opp = _normalise(src, target_m, mirror=True, straighten=auto_orient) if mirror_single else None
+            _blog("single foot prepped+oriented (mirror=%s) at %.2fs" % (bool(opp is not None), time.time() - _t0))
             if side == "left":
                 left_norm, right_norm = base, opp
             else:
@@ -1534,6 +1551,8 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             fitted["combined"] = _combine_pair(left_norm, right_norm, lr_known=lr_known)
         elif primary_norm is not None:
             fitted["combined"] = primary_norm.export(file_type="glb")
+        _blog("combined+exported at %.2fs (bytes=%d)"
+              % (time.time() - _t0, len(fitted.get("combined") or b"")))
 
         # override the projected report with what actually happened
         if tex_before:
