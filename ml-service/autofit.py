@@ -1083,16 +1083,34 @@ def _split_pair(loaded, combined):
 
 
 def _count_clusters(mesh, overall_max):
-    """Best-effort connected-component count. Returns int, or None if a graph
-    engine isn't available (or the mesh is too big to split cheaply)."""
-    if len(mesh.faces) > SPLIT_MAX_FACES:   # too heavy — skip this best-effort check
+    """Best-effort count of the BIG connected pieces (a pair = 2 big clumps).
+    Returns int, or None if a graph engine isn't available / the mesh is too big.
+
+    Uses face-index connected components (not mesh.split) so it never builds a
+    submesh per component — same reason as _split_by_components: on a textured mesh
+    that would copy the texture per part and blow up memory. The count is identical
+    either way: each component's bounding-box max extent is measured directly from
+    its faces' vertices and compared to 15% of the overall size."""
+    n = len(mesh.faces)
+    if n > SPLIT_MAX_FACES:                 # too heavy — skip this best-effort check
         return None
     try:
-        comps = mesh.split(only_watertight=False)
+        comps = trimesh.graph.connected_components(
+            mesh.face_adjacency, min_len=1, nodes=np.arange(n))
     except Exception:
         return None
-    big = [c for c in comps if float(c.extents.max()) > 0.15 * overall_max]
-    return len(big) if big else 1
+    V = np.asarray(mesh.vertices, dtype=np.float64)
+    F = np.asarray(mesh.faces)
+    thresh = 0.15 * overall_max
+    big = 0
+    for c in comps:
+        if len(c) == 0:
+            continue
+        vids = np.unique(F[np.asarray(c)])          # vertices used by this component
+        ext = V[vids].max(axis=0) - V[vids].min(axis=0)
+        if float(ext.max()) > thresh:
+            big += 1
+    return big if big else 1
 
 
 def _detect_count(mesh):
