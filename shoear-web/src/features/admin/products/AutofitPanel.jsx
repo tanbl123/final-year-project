@@ -333,6 +333,15 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
                   <Row label="Place at (cm)">
                     <span className="font-monospace">X {anchor.positionCm[0]} · Y {anchor.positionCm[1]} · Z {anchor.positionCm[2]}</span>
                   </Row>
+                  <Row label="Rotation · Scale">
+                    <span className="font-monospace">
+                      rot {anchor.rotationDeg[0]}·{anchor.rotationDeg[1]}·{anchor.rotationDeg[2]}° · scale {anchor.scale[0]}×
+                    </span>
+                  </Row>
+                  <div className="text-muted" style={{ fontSize: '0.72rem' }}>
+                    Rotation &amp; scale are baked into the model — leave them at default in Lens
+                    Studio and paste only the position. {anchor.note}
+                  </div>
                 </div>
               )}
             </div>
@@ -352,8 +361,15 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
               </button>
               {fitted?.url && (
                 <button type="button" className="btn btn-sm btn-outline-secondary" onClick={download}>
-                  Download .glb
+                  Download fitted .glb
                 </button>
+              )}
+              {modelUrl && (
+                <a className="btn btn-sm btn-outline-secondary" href={modelUrl}
+                   download target="_blank" rel="noreferrer"
+                   title="The supplier's raw upload — not scaled/oriented/optimized. Use only if you'll prep it yourself in Lens Studio.">
+                  Download original
+                </a>
               )}
             </div>
 
