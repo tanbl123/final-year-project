@@ -18,6 +18,34 @@ function readModelMeta(array $body): array {
   return [$count, $side, $len];
 }
 
+// Server-side guard for the 3D-model submission spec, mirroring the supplier form.
+// The client already blocks an incomplete/invalid spec, but a crafted or malformed
+// request must not slip past — otherwise readModelMeta would silently null the bad
+// values and the AR fit would fall back to guesses. When a model is attached, its
+// declared facts must be COMPLETE and SANE. Returns an error message to reject with,
+// or '' when the spec is acceptable (or there is no model).
+function modelMetaError(string $modelUrl, array $body): string {
+  if ($modelUrl === '') { return ''; }                       // no model -> AR fields don't apply
+  $count = isset($body['modelShoeCount']) ? (int) $body['modelShoeCount'] : 0;
+  if ($count !== 1 && $count !== 2) {
+    return 'Select whether the 3D model is a single shoe or a pair.';
+  }
+  if ($count === 1) {
+    $side = strtolower(trim((string) ($body['modelSide'] ?? '')));
+    if (!in_array($side, ['left', 'right'], true)) {
+      return 'For a single-shoe model, choose which foot it is (left or right).';
+    }
+  }
+  if (!isset($body['modelLengthCm']) || !is_numeric($body['modelLengthCm'])) {
+    return 'Enter the real shoe length in cm.';
+  }
+  $len = (float) $body['modelLengthCm'];
+  if ($len < 5 || $len > 60) {
+    return 'Enter a real shoe length between 5 and 60 cm.';
+  }
+  return '';
+}
+
 // GET /products  — list this supplier's products (newest first).
 // Returns the fields the portal needs to render cards AND filter the list:
 // category, status, a primary image, and total stock (summed across sizes).
@@ -121,6 +149,12 @@ function handleCreateProduct(PDO $pdo, array $auth, array $config = []): void {
   if (count($cleanImages) > MAX_PRODUCT_IMAGES) {
     sendJson(400, false, null, ['code' => 'VALIDATION',
       'message' => 'A product can have at most ' . MAX_PRODUCT_IMAGES . ' images.']);
+  }
+
+  // 3D-model submission spec (validated server-side, not just in the form).
+  $modelErr = modelMetaError($modelUrl, $body);
+  if ($modelErr !== '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => $modelErr]);
   }
 
   try {
@@ -419,6 +453,12 @@ function handleUpdateProduct(PDO $pdo, array $auth, string $id): void {
   if (count($cleanImages) > MAX_PRODUCT_IMAGES) {
     sendJson(400, false, null, ['code' => 'VALIDATION',
       'message' => 'A product can have at most ' . MAX_PRODUCT_IMAGES . ' images.']);
+  }
+
+  // 3D-model submission spec (validated server-side, not just in the form).
+  $modelErr = modelMetaError($modelUrl, $body);
+  if ($modelErr !== '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => $modelErr]);
   }
 
   // Current images + model, so we can tell whether *content* really changed.
