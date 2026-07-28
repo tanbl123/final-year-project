@@ -30,11 +30,26 @@ function Row({ label, children }) {
 // Admin AR auto-fit panel. Runs the product's uploaded 3D model through the ML
 // auto-fit service and shows the analysis + a before/after preview, so the admin
 // can QC it and download the fitted, half-tuned model to drop into Lens Studio.
-// Turn a product name into a safe download filename base (strip characters an OS
-// won't allow in a filename; fall back to the id/generic when there's no name).
-function fileBase(name, fallback) {
+// Turn a product name into a safe, human-readable download filename base:
+// strip OS-illegal characters, truncate at a WORD boundary (~40 chars) so a very
+// long name doesn't make an unwieldy filename, then append the product id so files
+// stay unique/traceable even when names are long or duplicated. Falls back to the
+// id (then "model") when there's no name.
+function fileBase(name, id) {
   const clean = (name || '').replace(/[\\/:*?"<>|-]+/g, '').replace(/\s+/g, ' ').trim();
-  return clean.slice(0, 80) || fallback || 'model';
+  const CAP = 40;
+  let base = clean;
+  if (base.length > CAP) {
+    let cut = base.slice(0, CAP);
+    if (base[CAP] !== ' ') {              // sliced mid-word -> back up to the last space
+      const sp = cut.lastIndexOf(' ');
+      if (sp > 15) cut = cut.slice(0, sp);
+    }
+    base = cut.trim();
+  }
+  const tag = (id || '').trim();
+  if (!base) return tag || 'model';       // no usable name -> just the id
+  return tag ? `${base}-${tag}` : base;
 }
 
 function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
