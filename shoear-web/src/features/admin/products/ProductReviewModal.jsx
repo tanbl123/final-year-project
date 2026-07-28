@@ -123,6 +123,7 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                   {product.modelUrl && (
                     <AutofitPanel
                       productId={productId}
+                      productName={product.name}
                       modelUrl={product.modelUrl}
                       declared={{
                         count: product.modelShoeCount,

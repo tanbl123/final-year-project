@@ -30,7 +30,14 @@ function Row({ label, children }) {
 // Admin AR auto-fit panel. Runs the product's uploaded 3D model through the ML
 // auto-fit service and shows the analysis + a before/after preview, so the admin
 // can QC it and download the fitted, half-tuned model to drop into Lens Studio.
-function AutofitPanel({ productId, modelUrl, declared = {} }) {
+// Turn a product name into a safe download filename base (strip characters an OS
+// won't allow in a filename; fall back to the id/generic when there's no name).
+function fileBase(name, fallback) {
+  const clean = (name || '').replace(/[\\/:*?"<>|-]+/g, '').replace(/\s+/g, ' ').trim();
+  return clean.slice(0, 80) || fallback || 'model';
+}
+
+function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
   // default the controls to the supplier's declared submission spec (authoritative),
   // falling back to auto-detect / right / ~26 when they didn't declare it.
   const [ctrl, setCtrl] = useState({
@@ -111,7 +118,7 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
     if (!fitted?.url) return;
     const a = document.createElement('a');
     a.href = fitted.url;
-    a.download = `${productId}_fitted_pair.glb`;
+    a.download = `${fileBase(productName, productId)}_fitted_pair.glb`;
     a.click();
   }
 
@@ -128,7 +135,7 @@ function AutofitPanel({ productId, modelUrl, declared = {} }) {
       blobUrls.current.push(url);                        // revoked on unmount
       const a = document.createElement('a');
       a.href = url;
-      a.download = (modelUrl.split('/').pop() || 'original').split('?')[0] || 'original.glb';
+      a.download = `${fileBase(productName, productId)}.glb`;
       a.click();
     } catch {
       window.open(modelUrl, '_blank', 'noopener');        // fallback if fetch/CORS blocked
