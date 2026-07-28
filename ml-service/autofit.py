@@ -68,9 +68,8 @@ MIN_PLAUSIBLE_CM = 5.0           # a real shoe is never shorter than this
 MAX_PLAUSIBLE_CM = 55.0          # ...or longer than this (after unit conversion)
 HIGH_TOP_CM = 12.0               # collar higher than this -> boot/high-top (occluder)
 SPLIT_MAX_FACES = 400_000        # skip connected-component splits above this (too heavy)
-ANALYSIS_MAX_FACES = 300_000     # decimate the analysis copy above this so a huge upload
-                                 # can't spike RAM/CPU on the locally-run service
-HARD_MAX_FACES = 4_000_000       # beyond this, reject rather than even try to decimate
+HARD_MAX_FACES = 4_000_000       # reject a genuinely degenerate file that could OOM on load
+                                 # (real shoe models are well under ~1.5M — never affected)
 _TEX_ATTRS = ("baseColorTexture", "emissiveTexture", "normalTexture",
               "occlusionTexture", "metallicRoughnessTexture", "image")
 
@@ -1261,20 +1260,17 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     geo = trimesh.Trimesh(vertices=np.asarray(mesh.vertices, dtype=np.float64),
                           faces=np.asarray(mesh.faces), process=False)
 
-    # SAFETY CAP. Every analysis pass below is per-triangle, and the service runs
-    # locally — so a multi-million-triangle upload can exhaust RAM/CPU and hang the
-    # whole machine. Reject the absurdly large outright; decimate the merely-large
-    # to a working copy (lossless for cm-level measurement / orientation / split —
-    # the build path decimates each foot separately anyway).
+    # SAFETY BACKSTOP (reject only): analysis is a fast per-triangle numpy pass, so
+    # it runs full-resolution — no decimation, so measurements/cues are exact. The
+    # only guard is a hard reject for a genuinely degenerate, multi-million-triangle
+    # file that could exhaust RAM just to load. Real shoe models (well under ~1.5M)
+    # are never affected; this only stops an absurd upload from OOM-ing the service.
     if total_faces > HARD_MAX_FACES:
         meta["rejected"] = True
         meta["rejectReason"] = ("This model is extremely detailed (%d triangles) and can't be "
-                                "processed safely. Please decimate it (aim for under ~%dk "
-                                "triangles) and re-upload." % (total_faces, ANALYSIS_MAX_FACES // 1000))
+                                "processed safely. Please decimate it (aim for under ~1M "
+                                "triangles) and re-upload." % total_faces)
         return meta, None
-    if len(geo.faces) > ANALYSIS_MAX_FACES:
-        geo, _b, _a, _ok = _decimate(geo, ANALYSIS_MAX_FACES)
-        gc.collect()
 
     if not build_files:
         loaded = None
