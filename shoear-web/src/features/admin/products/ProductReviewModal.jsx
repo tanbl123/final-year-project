@@ -143,12 +143,13 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                         {product.arLensId
                           ? <span className="badge text-bg-success">live</span>
                           : product.virtualTryOnEnable
-                            ? <span className="badge text-bg-danger">required</span>
+                            ? <span className="badge text-bg-warning">required</span>
                             : <span className="badge text-bg-secondary">not set</span>}
                       </div>
 
-                      {/* Supplier's try-on choice + lens state, kept as badges + small
-                          helper text to match the panel's styling (no heavy banners). */}
+                      {/* Supplier's try-on choice + lens state, kept as badges + muted
+                          helper text to match the panel (the badge carries the signal —
+                          no error-red paragraph, since nothing has actually failed). */}
                       <div className="mb-1 small text-muted">
                         Virtual try-on:{' '}
                         {product.virtualTryOnEnable
@@ -156,9 +157,8 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                           : <span className="badge text-bg-secondary">not enabled by supplier</span>}
                       </div>
                       {product.virtualTryOnEnable && !product.arLensId && (
-                        <div className="text-danger small mb-2">
-                          A Camera Kit lens id is required — pick a lens or paste an id, then Save.
-                          The product can't be approved until a lens is set.
+                        <div className="form-text mt-0 mb-2">
+                          Required before this product can be approved — pick a lens or paste an id, then Save.
                         </div>
                       )}
                       {!product.virtualTryOnEnable && (
