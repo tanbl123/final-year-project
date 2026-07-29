@@ -145,6 +145,22 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                           : <span className="badge text-bg-secondary">not set</span>}
                       </div>
 
+                      {/* Make the supplier's try-on choice explicit — the admin needs to
+                          know whether AR is even wanted before spending time on a lens. */}
+                      <div className="mb-2 small">
+                        Virtual try-on:{' '}
+                        {product.virtualTryOnEnable
+                          ? <span className="badge text-bg-info">enabled by supplier</span>
+                          : <span className="badge text-bg-secondary">not enabled by supplier</span>}
+                      </div>
+                      {!product.virtualTryOnEnable && (
+                        <div className="alert alert-warning py-2 small">
+                          The supplier hasn't enabled virtual try-on for this product, so customers
+                          won't see AR even if a lens is set here — setting one has no effect until
+                          try-on is enabled on the supplier side.
+                        </div>
+                      )}
+
                       {/* Pick from the lenses in your Camera Kit group (loaded via
                           the Web SDK with an admin-only token). */}
                       <div className="mb-2">

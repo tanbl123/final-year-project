@@ -161,7 +161,10 @@ function handleRejectCourier(PDO $pdo, string $userId, array $config = []): void
 function handleListPendingProducts(PDO $pdo): void {
   $stmt = $pdo->query(
     "SELECT p.productId, p.productName, p.productBrand, p.productPrice,
-            p.productDescription, c.categoryName, s.companyName, p.created_at
+            p.productDescription, c.categoryName, s.companyName, p.created_at,
+            p.virtualTryOnEnable,
+            (SELECT pm.arLensId FROM product_model pm
+              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arLensId
        FROM product p
        JOIN supplier s ON s.supplierId = p.supplierId
        JOIN category c ON c.categoryId = p.categoryId
@@ -169,7 +172,13 @@ function handleListPendingProducts(PDO $pdo): void {
       ORDER BY p.created_at ASC"
   );
   $rows = $stmt->fetchAll();
-  foreach ($rows as &$r) { $r['productPrice'] = (float) $r['productPrice']; }
+  // virtualTryOnEnable + arLensId let the approvals page warn when a try-on
+  // product is about to be approved without a Camera Kit lens (AR won't work).
+  foreach ($rows as &$r) {
+    $r['productPrice']       = (float) $r['productPrice'];
+    $r['virtualTryOnEnable'] = (bool) $r['virtualTryOnEnable'];
+  }
+  unset($r);
   sendJson(200, true, ['products' => $rows]);
 }
 
