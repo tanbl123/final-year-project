@@ -142,29 +142,29 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                         AR try-on lens (Camera Kit){' '}
                         {product.arLensId
                           ? <span className="badge text-bg-success">live</span>
-                          : <span className="badge text-bg-secondary">not set</span>}
+                          : product.virtualTryOnEnable
+                            ? <span className="badge text-bg-danger">required</span>
+                            : <span className="badge text-bg-secondary">not set</span>}
                       </div>
 
-                      {/* Make the supplier's try-on choice explicit — the admin needs to
-                          know whether AR is even wanted before spending time on a lens. */}
-                      <div className="mb-2 small">
+                      {/* Supplier's try-on choice + lens state, kept as badges + small
+                          helper text to match the panel's styling (no heavy banners). */}
+                      <div className="mb-1 small text-muted">
                         Virtual try-on:{' '}
                         {product.virtualTryOnEnable
                           ? <span className="badge text-bg-info">enabled by supplier</span>
                           : <span className="badge text-bg-secondary">not enabled by supplier</span>}
                       </div>
-                      {!product.virtualTryOnEnable && (
-                        <div className="alert alert-warning py-2 small">
-                          The supplier hasn't enabled virtual try-on for this product, so customers
-                          won't see AR even if a lens is set here — setting one has no effect until
-                          try-on is enabled on the supplier side.
+                      {product.virtualTryOnEnable && !product.arLensId && (
+                        <div className="text-danger small mb-2">
+                          A Camera Kit lens id is required — pick a lens or paste an id, then Save.
+                          The product can't be approved until a lens is set.
                         </div>
                       )}
-                      {product.virtualTryOnEnable && !product.arLensId && (
-                        <div className="alert alert-danger py-2 small">
-                          A Camera Kit lens id is <b>required</b> — the supplier enabled virtual
-                          try-on. Pick a lens above or paste an id, then <b>Save</b>. This product
-                          can't be approved until a lens is set.
+                      {!product.virtualTryOnEnable && (
+                        <div className="form-text mt-0 mb-2">
+                          Virtual try-on isn't enabled for this product, so a lens here has no effect
+                          until the supplier enables it.
                         </div>
                       )}
 
