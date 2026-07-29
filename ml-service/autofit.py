@@ -168,15 +168,36 @@ def _optimize_textures(mesh, max_dim):
     return before_px, after_px, resized
 
 
+# ── Lens Studio foot-binding calibration ────────────────────────────────────
+# Where a normalised shoe (sole at Y=0, X/Z centred, metres) must sit under the
+# foot-tracking template's foot binding so the foot OCCLUDER ends up INSIDE the
+# shoe. These are CONSTANTS, not geometry-derived: the occluder is the user's
+# real foot (the same for every product) and the binding origin is a fixed point
+# on it, so once our mesh is normalised the seat is the same for every shoe.
+#
+# Calibrated in Lens Studio (semi-auto lens, LS 5.22) by seating a shoe against
+# the foot occluders: the binding origin sits ~5 cm above the sole, and the shoe
+# is centred front/back and left/right on the foot. The earlier opening-based
+# guess assumed the origin was at the ankle, which dropped the shoe ~8 cm too far
+# and pushed it ~7 cm too far forward. Retune these if the foot rig changes.
+#   position: base (right) foot below; the left foot is the same with X negated.
+#   scale:    the Convert-Meters-to-Centimetres import already applies the ~100x,
+#             so leave Lens Studio's imported Scale as-is (do NOT set it to 1).
+FOOT_BIND_DROP_CM = 5.0    # lower the shoe this far so its sole meets the foot sole
+FOOT_BIND_Z_CM = 0.0       # front/back seat (mesh is already centred on the foot)
+FOOT_BIND_X_CM = 0.0       # lateral seat for the base foot; the other foot mirrors X
+
+
 def _anchor(mesh_norm):
     """Suggest how to seat the fitted shoe onto the Lens Studio foot binding, so
     the admin pastes numbers instead of eyeballing. Works on the NORMALISED mesh
-    (metres; sole on Y=0, X/Z centred, toe +Z, heel -Z), so the numbers match
-    the exported glb. The ankle opening is the top rim over the rear of the shoe;
-    seating it at the foot-binding origin (assumed at the ankle) gives a suggested
-    local position. Rotation/scale are identity because the bake already oriented
-    and scaled the model (Lens Studio's convertMetersToCentimeters handles cm).
-    A SUGGESTION with its assumption stated — the admin fine-tunes in QC."""
+    (metres; sole on Y=0, X/Z centred, toe +Z, heel -Z).
+
+    The seat is a CALIBRATED CONSTANT (see FOOT_BIND_* above), not derived from
+    the shoe's opening: the foot occluder is fixed, so the binding origin sits at
+    a fixed height above the sole for every product. We still read the collar/toe
+    from the geometry, but only to drive the high-top occluder note — not the
+    position. A SUGGESTION the admin fine-tunes in QC."""
     b = mesh_norm.bounds
     zmin, zmax = float(b[0][2]), float(b[1][2])
     ymax = float(b[1][1])
@@ -186,15 +207,13 @@ def _anchor(mesh_norm):
     opening = rear_top.mean(axis=0) if len(rear_top) else np.array([0.0, ymax, zmin])
     collar_cm = round(float(opening[1]) * 100, 1)
     return {
-        "assumption": "foot-binding origin at ankle; convertMetersToCentimeters on",
-        "positionCm": [round(float(-opening[0]) * 100, 1),
-                       round(float(-opening[1]) * 100, 1),
-                       round(float(-opening[2]) * 100, 1)],
+        "assumption": "calibrated to the foot-tracking template binding; keep the Lens Studio import scale",
+        "positionCm": [FOOT_BIND_X_CM, round(-FOOT_BIND_DROP_CM, 1), FOOT_BIND_Z_CM],
         "rotationDeg": [0.0, 0.0, 0.0],
         "scale": [1.0, 1.0, 1.0],
         "toeTipCm": round(zmax * 100, 1),
         "collarHeightCm": collar_cm,
-        "note": "Left foot mirrors X (negate position X).",
+        "note": "Left foot mirrors X (negate position X). Keep Lens Studio's imported scale (~100).",
     }
 
 
