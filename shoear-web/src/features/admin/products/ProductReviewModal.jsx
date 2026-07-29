@@ -160,6 +160,13 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                           try-on is enabled on the supplier side.
                         </div>
                       )}
+                      {product.virtualTryOnEnable && !product.arLensId && (
+                        <div className="alert alert-danger py-2 small">
+                          A Camera Kit lens id is <b>required</b> — the supplier enabled virtual
+                          try-on. Pick a lens above or paste an id, then <b>Save</b>. This product
+                          can't be approved until a lens is set.
+                        </div>
+                      )}
 
                       {/* Pick from the lenses in your Camera Kit group (loaded via
                           the Web SDK with an admin-only token). */}
@@ -218,7 +225,11 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                       onClick={() => onReject(product)}>Reject</button>
                   )}
                   {onApprove && (
-                    <button type="button" className="btn btn-success" disabled={busy || !product}
+                    <button type="button" className="btn btn-success"
+                      disabled={busy || !product || (product.virtualTryOnEnable && !product.arLensId)}
+                      title={product && product.virtualTryOnEnable && !product.arLensId
+                        ? 'Set a Camera Kit lens id first — virtual try-on is enabled.'
+                        : undefined}
                       onClick={() => onApprove(product)}>{busy ? '…' : 'Approve'}</button>
                   )}
                 </>

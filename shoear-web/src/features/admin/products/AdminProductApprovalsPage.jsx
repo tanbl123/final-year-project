@@ -137,7 +137,16 @@ function AdminProductApprovalsPage() {
                     <button
                       className="btn btn-success btn-sm me-2"
                       disabled={busyId === p.productId}
-                      onClick={() => setApproving({ ...p, vtoNoLens: !!p.virtualTryOnEnable && !p.arLensId })}
+                      onClick={() => {
+                        // VTO products need a Camera Kit lens before going live, and the
+                        // lens is set inside the review modal — so block the quick path
+                        // and send the admin there rather than approving without AR.
+                        if (p.virtualTryOnEnable && !p.arLensId) {
+                          setError(`"${p.productName}" has virtual try-on enabled but no AR lens set. Open it (View) and add a Camera Kit lens before approving.`);
+                          return;
+                        }
+                        setApproving(p);
+                      }}
                     >
                       {busyId === p.productId ? '…' : 'Approve'}
                     </button>
@@ -163,7 +172,7 @@ function AdminProductApprovalsPage() {
         productId={reviewId}
         busy={busyId === reviewId}
         onClose={() => setReviewId('')}
-        onApprove={(prod) => { setReviewId(''); setApproving({ productId: prod.id, productName: prod.name, vtoNoLens: !!prod.virtualTryOnEnable && !prod.arLensId }); }}
+        onApprove={(prod) => { setReviewId(''); setApproving({ productId: prod.id, productName: prod.name }); }}
         onReject={(prod) => { setReviewId(''); setRejectReason(''); setRejecting({ productId: prod.id, productName: prod.name }); }}
       />
 
@@ -171,12 +180,7 @@ function AdminProductApprovalsPage() {
       <ConfirmDialog
         isOpen={!!approving}
         title="Approve product?"
-        message={approving
-          ? `Approve "${approving.productName}"? It will be published and visible to customers.`
-            + (approving.vtoNoLens
-                ? ' Virtual try-on is enabled but no AR lens is set, so AR try-on will not be available to customers until you add one.'
-                : '')
-          : ''}
+        message={approving ? `Approve "${approving.productName}"? It will be published and visible to customers.` : ''}
         confirmText="Approve"
         confirmColor="success"
         onCancel={() => setApproving(null)}

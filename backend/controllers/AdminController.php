@@ -189,7 +189,9 @@ function handleListPendingProducts(PDO $pdo): void {
 function setProductStatus(PDO $pdo, string $productId, string $newStatus, ?string $reason = null, array $config = []): void {
   // Pull the product + the supplier's contact so we can notify them.
   $stmt = $pdo->prepare(
-    "SELECT p.productStatus, p.productName, u.email, s.companyName
+    "SELECT p.productStatus, p.productName, p.virtualTryOnEnable, u.email, s.companyName,
+            (SELECT pm.arLensId FROM product_model pm
+              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arLensId
        FROM product p
        JOIN supplier s ON s.supplierId = p.supplierId
        JOIN `user`  u ON u.userId    = s.userId
@@ -203,6 +205,17 @@ function setProductStatus(PDO $pdo, string $productId, string $newStatus, ?strin
   }
   if ($row['productStatus'] !== 'Pending') {
     sendJson(409, false, null, ['code' => 'CONFLICT', 'message' => 'This product has already been reviewed.']);
+  }
+
+  // A try-on product must have its Camera Kit lens recorded before going live —
+  // otherwise AR would be advertised to customers but never appear. The admin
+  // sets the lens in the review panel; this mirrors the client guard as
+  // defence in depth (direct API calls can't bypass it).
+  if ($newStatus === 'Approved'
+      && (int) $row['virtualTryOnEnable'] === 1
+      && empty($row['arLensId'])) {
+    sendJson(409, false, null, ['code' => 'LENS_REQUIRED',
+      'message' => 'This product has virtual try-on enabled but no AR lens set. Add a Camera Kit lens id before approving.']);
   }
 
   // Approve clears any prior reason; Reject stores it.
