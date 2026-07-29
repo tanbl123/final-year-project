@@ -117,8 +117,13 @@ class ProductDetail {
   final double ratingAverage;
   final int ratingCount;
 
-  /// AR try-on is available only once an admin has built + recorded the lens.
-  bool get arReady => arLensId != null && arLensId!.trim().isNotEmpty;
+  /// AR try-on is available only when BOTH parties have opted in: the supplier
+  /// enabled virtual try-on (virtualTryOnEnable) AND an admin has built and
+  /// recorded the Camera Kit lens (arLensId). Requiring the lens id alone let a
+  /// product keep offering AR after the supplier switched try-on off, because the
+  /// previously-recorded lens id lingers — so gate on the supplier flag too.
+  bool get arReady =>
+      virtualTryOnEnable && arLensId != null && arLensId!.trim().isNotEmpty;
 
   ProductDetail({
     required this.id,
