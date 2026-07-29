@@ -15,6 +15,7 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
   const [lensId, setLensId] = useState('');       // AR Camera Kit lens id (editable)
   const [savingLens, setSavingLens] = useState(false);
   const [lensMsg, setLensMsg] = useState('');     // transient save feedback
+  const [lensReqMsg, setLensReqMsg] = useState(''); // shown at the field if Approve is clicked with a required lens missing
 
   useEffect(() => {
     if (!productId) return undefined;
@@ -23,6 +24,7 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
     setProduct(null);
     setError('');
     setLensMsg('');
+    setLensReqMsg('');
     getAdminProduct(productId)
       .then((p) => {
         if (!active) return;
@@ -41,6 +43,7 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
       const trimmed = lensId.trim();
       await setProductArLens(productId, trimmed);
       setProduct((p) => (p ? { ...p, arLensId: trimmed || null } : p));
+      if (trimmed) setLensReqMsg('');   // requirement satisfied — clear the approve-time error
       setLensMsg(trimmed ? 'AR lens saved — try-on is now live for this product.' : 'AR lens removed.');
     } catch (err) {
       setLensMsg(err.message || 'Could not save the lens id.');
@@ -156,11 +159,6 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                           ? <span className="badge text-bg-info">enabled by supplier</span>
                           : <span className="badge text-bg-secondary">not enabled by supplier</span>}
                       </div>
-                      {product.virtualTryOnEnable && !product.arLensId && (
-                        <div className="form-text mt-0 mb-2">
-                          Required before this product can be approved — pick a lens or paste an id, then Save.
-                        </div>
-                      )}
                       {!product.virtualTryOnEnable && (
                         <div className="form-text mt-0 mb-2">
                           Virtual try-on isn't enabled for this product, so a lens here has no effect
@@ -173,7 +171,7 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                       <div className="mb-2">
                         <LensPicker
                           selectedLensId={lensId}
-                          onPick={(id) => setLensId(id)}
+                          onPick={(id) => { setLensId(id); setLensReqMsg(''); }}
                           disabled={savingLens}
                         />
                       </div>
@@ -185,7 +183,7 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                           className="form-control"
                           placeholder="…or paste a Camera Kit lens id"
                           value={lensId}
-                          onChange={(e) => setLensId(e.target.value)}
+                          onChange={(e) => { setLensId(e.target.value); setLensReqMsg(''); }}
                         />
                         {/* Dirty-check: only enable Save when the id differs from
                             what's already stored, so the admin can't re-save the
@@ -203,6 +201,9 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                               : 'Save'}
                         </button>
                       </div>
+                      {/* Shown only after the admin tries to Approve without the
+                          required lens — validate-on-submit, error at the field. */}
+                      {lensReqMsg && <div className="text-danger small mt-1">{lensReqMsg}</div>}
                       <div className="form-text">
                         Build the foot-tracking lens from this 3D model in Lens Studio and publish it to your Camera Kit
                         lens group — it then appears above to pick. Customers can use AR try-on once saved; clear it to disable.
@@ -225,12 +226,16 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                       onClick={() => onReject(product)}>Reject</button>
                   )}
                   {onApprove && (
-                    <button type="button" className="btn btn-success"
-                      disabled={busy || !product || (product.virtualTryOnEnable && !product.arLensId)}
-                      title={product && product.virtualTryOnEnable && !product.arLensId
-                        ? 'Set a Camera Kit lens id first — virtual try-on is enabled.'
-                        : undefined}
-                      onClick={() => onApprove(product)}>{busy ? '…' : 'Approve'}</button>
+                    <button type="button" className="btn btn-success" disabled={busy || !product}
+                      onClick={() => {
+                        // Validate on submit instead of disabling the button: a VTO
+                        // product needs a saved lens. Surface it inline at the field.
+                        if (product.virtualTryOnEnable && !product.arLensId) {
+                          setLensReqMsg('A Camera Kit lens id is required before approving — pick a lens or paste an id, then Save.');
+                          return;
+                        }
+                        onApprove(product);
+                      }}>{busy ? '…' : 'Approve'}</button>
                   )}
                 </>
               ) : (
