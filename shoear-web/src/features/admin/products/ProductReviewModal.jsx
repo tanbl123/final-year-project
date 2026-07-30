@@ -208,12 +208,6 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                         Build the foot-tracking lens from this 3D model in Lens Studio and publish it to your Camera Kit
                         lens group — it then appears above to pick. Customers can use AR try-on once saved; clear it to disable.
                       </div>
-                      <div className="form-text">
-                        💡 <strong>Test before approving:</strong> in <strong>Lens Studio</strong>, preview the lens on
-                        a foot (Preview panel → pick a foot video) and confirm the shoe renders and sits correctly.
-                        Do this <em>before</em> publishing, so nothing untested reaches customers. Once it looks right,
-                        publish it to the Camera Kit group, paste the id here, and approve.
-                      </div>
                       {lensMsg && <div className="small mt-1">{lensMsg}</div>}
                     </div>
                   )}
