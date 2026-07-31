@@ -65,6 +65,10 @@ const KEEP_TRIS = 100000000;
 // Smallest sensible custom PAIR triangle target — below this a shoe isn't recognisable,
 // so we reject it (guards against 0 / negative / junk input).
 const MIN_CUSTOM_TRIS = 1000;
+// The ~100k pair budget "Optimized" targets, and Lens Studio's texture import ceiling.
+// Used to grey out options that wouldn't change an already-light model.
+const OPTIMIZED_PAIR_TRIS = 100000;
+const LS_TEX_CAP = 2048;
 
 // Admin AR auto-fit panel. Runs the product's uploaded 3D model through the ML
 // auto-fit service and shows the analysis + a before/after preview, so the admin
@@ -186,6 +190,11 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
   // Max is the model's own pair triangle count (from the analysis) — you can't decimate
   // UP, so a target above the source is meaningless; "Keep supplier's" covers keeping all.
   const srcTris = meta?.decimation?.before || 0;
+  // Already at/under the optimized budget? Then "Optimized" is a no-op (nothing to reduce).
+  const alreadyOptimal = srcTris > 0 && srcTris <= OPTIMIZED_PAIR_TRIS;
+  // Effective source texture resolution = what "Original" yields (supplier px, capped at
+  // Lens Studio's 2048). A px preset >= this wouldn't reduce anything, so it's disabled.
+  const texEffPx = meta?.textures?.beforePx ? Math.min(meta.textures.beforePx, LS_TEX_CAP) : 0;
   const customTrisNum = parseInt(customTris, 10);
   const customBelowMin = customTris !== '' && customTrisNum < MIN_CUSTOM_TRIS;
   const customAboveMax = customTris !== '' && srcTris > 0 && customTrisNum > srcTris;
@@ -525,11 +534,17 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
             <div className="d-flex align-items-center gap-2 mt-3 flex-wrap">
               <span className="small text-muted">Textures</span>
               <div className="btn-group btn-group-sm" role="group" aria-label="Texture resolution">
-                {[{ v: 0, l: 'Original' }, { v: 2048, l: '2048' }, { v: 1024, l: '1024' }, { v: 512, l: '512' }].map((o) => (
-                  <button key={o.v} type="button"
-                    className={`btn btn-outline-secondary${textureCap === o.v ? ' active' : ''}`}
-                    onClick={() => pickTextureCap(o.v)} disabled={generating}>{o.l}{o.v ? 'px' : ''}</button>
-                ))}
+                {[{ v: 0, l: 'Original' }, { v: 2048, l: '2048' }, { v: 1024, l: '1024' }, { v: 512, l: '512' }].map((o) => {
+                  // a px preset >= the model's own resolution wouldn't reduce anything
+                  const noop = o.v !== 0 && texEffPx > 0 && o.v >= texEffPx;
+                  return (
+                    <button key={o.v} type="button"
+                      className={`btn btn-outline-secondary${textureCap === o.v ? ' active' : ''}`}
+                      onClick={() => pickTextureCap(o.v)} disabled={generating || noop}
+                      title={noop ? `Textures are ${texEffPx}px — this wouldn't reduce them` : undefined}>
+                      {o.l}{o.v ? 'px' : ''}</button>
+                  );
+                })}
               </div>
             </div>
             <div className="text-muted small mt-1">
@@ -546,7 +561,9 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
               <div className="btn-group btn-group-sm" role="group" aria-label="Triangle detail">
                 <button type="button"
                   className={`btn btn-outline-secondary${triCap === 0 ? ' active' : ''}`}
-                  onClick={() => pickTriCap(0)} disabled={generating}>Optimized (~100k)</button>
+                  onClick={() => pickTriCap(0)} disabled={generating || alreadyOptimal}
+                  title={alreadyOptimal ? 'Already under ~100k triangles — nothing to reduce' : undefined}>
+                  Optimized (~100k)</button>
                 <button type="button"
                   className={`btn btn-outline-secondary${triCap === KEEP_TRIS ? ' active' : ''}`}
                   onClick={() => pickTriCap(KEEP_TRIS)} disabled={generating}>Keep supplier's</button>
@@ -581,10 +598,14 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
               </div>
             )}
             <div className="text-muted small mt-1">
-              By default the pair is reduced to about 100,000 triangles — Snapchat's recommended budget for
-              smooth AR. "Keep supplier's" retains the full geometry (a very high-poly shoe can exceed the
-              8 MB cap this way). Or set a custom target and re-check the real Lens Size in Lens Studio —
-              pick the highest that still fits. Numbers are for the pair (both shoes), matching Lens Studio.
+              {alreadyOptimal
+                ? <>This model already has {srcTris.toLocaleString()} triangles (under Snapchat's ~100k budget),
+                    so it's kept as-is. Set a lower custom target only if you need it lighter. Numbers are for
+                    the pair (both shoes), matching Lens Studio.</>
+                : <>By default the pair is reduced to about 100,000 triangles — Snapchat's recommended budget for
+                    smooth AR. "Keep supplier's" retains the full geometry (a very high-poly shoe can exceed the
+                    8 MB cap this way). Or set a custom target and re-check the real Lens Size in Lens Studio —
+                    pick the highest that still fits. Numbers are for the pair (both shoes), matching Lens Studio.</>}
             </div>
 
             {/* generate + download — selections above only take effect when this runs */}
