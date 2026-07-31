@@ -111,6 +111,7 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
   const [textureCap, setTextureCap] = useState(0);      // 0 = supplier full-res; else px cap the admin picked
   const [triCap, setTriCap] = useState(0);              // PAIR target: 0 = ~100k default; KEEP_TRIS = keep supplier's; else custom
   const [customTris, setCustomTris] = useState('');     // admin's custom pair-triangle input (text)
+  const [genSettings, setGenSettings] = useState(null); // {textureCap, triCap} the current preview was built with
   const blobUrls = useRef([]);                    // track for revocation
   const mvRef = useRef(null);                     // the <model-viewer> element
 
@@ -155,21 +156,20 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
     }
   }
 
-  // `over` lets the texture/triangle buttons force a value for THIS run before React
-  // state settles (e.g. {textureCap: 1024} or {triCap: KEEP_TRIS}); anything not
-  // overridden falls back to current state.
-  async function generate(over = {}) {
-    const tex = over.textureCap !== undefined ? over.textureCap : textureCap;
-    const tri = over.triCap !== undefined ? over.triCap : triCap;
+  // Build the fitted pair with the CURRENTLY-SELECTED texture + detail. Selecting a
+  // texture/detail only updates state; nothing regenerates until the admin clicks
+  // Generate, so they can set both first and build once (instead of a rebuild per click).
+  async function generate() {
     setGenerating(true); setErr(''); revokeBlobs();
     try {
-      const res = await getProductAutofit(productId, opts({ files: true, textureCap: tex || undefined, triCap: tri || undefined }));
+      const res = await getProductAutofit(productId, opts({ files: true }));
       setMeta(res);
       if (res.fitted?.combined) {
         const url = b64ToBlobUrl(res.fitted.combined);
         blobUrls.current.push(url);
         setFitted({ url });
         setShowFitted(true);
+        setGenSettings({ textureCap, triCap });   // remember what this preview was built with
       }
     } catch (e) {
       setErr(e.message || 'Could not generate the fitted model.');
@@ -178,9 +178,10 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
     }
   }
 
-  // Admin picks a texture resolution / triangle detail -> remember it and regenerate.
-  function pickTextureCap(cap) { setTextureCap(cap); generate({ textureCap: cap }); }
-  function pickTriCap(cap) { setTriCap(cap); setCustomTris(''); generate({ triCap: cap }); }
+  // Admin selects a texture resolution / triangle detail -> just update the pending
+  // selection (no regenerate; Generate applies it).
+  function pickTextureCap(cap) { setTextureCap(cap); }
+  function pickTriCap(cap) { setTriCap(cap); setCustomTris(''); }
   // Admin typed a custom PAIR triangle total -> use it (ignored if blank/invalid).
   // Max is the model's own pair triangle count (from the analysis) — you can't decimate
   // UP, so a target above the source is meaningless; "Keep supplier's" covers keeping all.
@@ -192,9 +193,12 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
     && !customBelowMin && !customAboveMax;
   function applyCustomTris() {
     if (!customTrisValid) return;
-    setTriCap(customTrisNum);
-    generate({ triCap: customTrisNum });
+    setTriCap(customTrisNum);   // selects the custom detail; Generate applies it
   }
+  // The current preview is stale if the selected texture/detail differs from what it
+  // was built with — prompt the admin to (re)generate.
+  const settingsChanged = !!fitted && !!genSettings
+    && (genSettings.textureCap !== textureCap || genSettings.triCap !== triCap);
 
   function download() {
     if (!fitted?.url) return;
@@ -559,7 +563,7 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                   onKeyDown={(e) => { if (e.key === 'Enter') applyCustomTris(); }}
                   disabled={generating} />
                 <button type="button" className="btn btn-outline-secondary"
-                  onClick={applyCustomTris} disabled={generating || !customTrisValid}>Apply</button>
+                  onClick={applyCustomTris} disabled={generating || !customTrisValid}>Set</button>
               </div>
               {triCap !== 0 && triCap !== KEEP_TRIS && (
                 <span className="badge text-bg-secondary">custom: {triCap.toLocaleString()} tris</span>
@@ -583,10 +587,10 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
               pick the highest that still fits. Numbers are for the pair (both shoes), matching Lens Studio.
             </div>
 
-            {/* generate + download */}
+            {/* generate + download — selections above only take effect when this runs */}
             <div className="d-flex gap-2 mt-3">
               <button type="button" className="btn btn-sm btn-primary" onClick={() => generate()} disabled={generating}>
-                {generating ? 'Generating…' : fitted ? 'Regenerate' : 'Generate fitted model'}
+                {generating ? 'Generating…' : fitted ? 'Regenerate fitted model' : 'Generate fitted model'}
               </button>
               {fitted?.url && (
                 <button type="button" className="btn btn-sm btn-outline-secondary" onClick={download}>
@@ -601,6 +605,12 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                 </button>
               )}
             </div>
+            {settingsChanged && !generating && (
+              <div className="small mt-1">
+                <span className="badge text-bg-warning">Settings changed</span>{' '}
+                the preview was built with different texture/detail — click <strong>Regenerate</strong> to apply your changes.
+              </div>
+            )}
 
             {/* Lens Studio steps tucked away — available, not in the way */}
             <details className="mt-2">
