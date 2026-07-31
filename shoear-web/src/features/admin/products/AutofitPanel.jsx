@@ -62,6 +62,9 @@ function TransformCard({ title, pos, rot, scale }) {
 // decimates, i.e. the full supplier mesh is retained. (A very high-poly shoe kept this
 // way can exceed the 8 MB lens cap — that's why the admin can also set a custom target.)
 const KEEP_TRIS = 100000000;
+// Smallest sensible custom PAIR triangle target — below this a shoe isn't recognisable,
+// so we reject it (guards against 0 / negative / junk input).
+const MIN_CUSTOM_TRIS = 1000;
 
 // Admin AR auto-fit panel. Runs the product's uploaded 3D model through the ML
 // auto-fit service and shows the analysis + a before/after preview, so the admin
@@ -179,11 +182,12 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
   function pickTextureCap(cap) { setTextureCap(cap); generate({ textureCap: cap }); }
   function pickTriCap(cap) { setTriCap(cap); setCustomTris(''); generate({ triCap: cap }); }
   // Admin typed a custom PAIR triangle total -> use it (ignored if blank/invalid).
+  const customTrisNum = parseInt(customTris, 10);
+  const customTrisValid = customTris !== '' && Number.isInteger(customTrisNum) && customTrisNum >= MIN_CUSTOM_TRIS;
   function applyCustomTris() {
-    const n = parseInt(customTris, 10);
-    if (!Number.isFinite(n) || n <= 0) return;
-    setTriCap(n);
-    generate({ triCap: n });
+    if (!customTrisValid) return;
+    setTriCap(customTrisNum);
+    generate({ triCap: customTrisNum });
   }
 
   function download() {
@@ -537,21 +541,28 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                   className={`btn btn-outline-secondary${triCap === KEEP_TRIS ? ' active' : ''}`}
                   onClick={() => pickTriCap(KEEP_TRIS)} disabled={generating}>Keep supplier's</button>
               </div>
-              {/* custom PAIR triangle target — lets the admin dial detail to fit the 8 MB cap */}
+              {/* custom PAIR triangle target — lets the admin dial detail to fit the 8 MB cap.
+                  Digits only (strip anything else on input), and require a sensible minimum. */}
               <span className="small text-muted">or</span>
               <div className="input-group input-group-sm" style={{ width: 'auto' }}>
-                <input type="number" min="1" step="10000" className="form-control form-control-sm"
+                <input type="text" inputMode="numeric"
+                  className={`form-control form-control-sm${customTris !== '' && !customTrisValid ? ' is-invalid' : ''}`}
                   style={{ width: '9rem' }} placeholder="custom tris (pair)"
-                  value={customTris} onChange={(e) => setCustomTris(e.target.value)}
+                  value={customTris} onChange={(e) => setCustomTris(e.target.value.replace(/\D/g, ''))}
                   onKeyDown={(e) => { if (e.key === 'Enter') applyCustomTris(); }}
                   disabled={generating} />
                 <button type="button" className="btn btn-outline-secondary"
-                  onClick={applyCustomTris} disabled={generating || !customTris}>Apply</button>
+                  onClick={applyCustomTris} disabled={generating || !customTrisValid}>Apply</button>
               </div>
               {triCap !== 0 && triCap !== KEEP_TRIS && (
                 <span className="badge text-bg-secondary">custom: {triCap.toLocaleString()} tris</span>
               )}
             </div>
+            {customTris !== '' && !customTrisValid && (
+              <div className="text-danger small mt-1">
+                Enter a whole number of at least {MIN_CUSTOM_TRIS.toLocaleString()} triangles (for the pair).
+              </div>
+            )}
             <div className="text-muted small mt-1">
               By default the pair is reduced to about 100,000 triangles — Snapchat's recommended budget for
               smooth AR. "Keep supplier's" retains the full geometry (a very high-poly shoe can exceed the
