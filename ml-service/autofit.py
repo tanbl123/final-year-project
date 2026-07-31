@@ -91,15 +91,20 @@ TRI_TARGET = TRI_FLOOR           # back-compat alias / projection default
 # under-reports the real lens size. We therefore judge "fits the cap?" against an
 # ESTIMATE of the packaged size (near-uncompressed texture footprint + geometry).
 LENS_MAX_BYTES = 8 * 1024 * 1024         # Camera Kit hard per-lens cap
-# Calibrated against real Lens Studio 5.22 packaged sizes for a fitted pair with two
-# textures: 2048px -> 8.14 MB, 1024px -> 4.92 MB. Solving the two points gives
-# ~0.5 bytes/texel for textures and ~3.9 MB for everything else (decimated geometry
-# + foot occluders + template scripts/materials). Since geometry is always decimated
-# to the same triangle budget, that non-texture part is ~constant across models.
-# These match both data points to within ~1% (no longer rounded up: we're deciding
-# reject-vs-keep now, so an over-conservative estimate would falsely reject good
-# models — accuracy matters more than a safety margin).
-TEX_BYTES_PER_PX = 0.5           # packaged (near-uncompressed) cost per texture texel
+# Lens Studio itself resizes any texture over 2048px down to 2048 on import
+# (confirmed in the LS 5.22 logger: "Image texture.png resized to 2048x2048").
+# So there is NO point shipping a bigger texture — it's discarded. We cap here to
+# match, which is lossless in-lens and shrinks the supplier's .glb download.
+LENS_TEX_MAX = 2048
+# Calibrated against real LS 5.22 PACKAGED sizes for the same fitted pair: at 1024px
+# textures the lens was 4.58 MB and at 2048px it was 4.61 MB — nearly identical.
+# The lesson: Lens Studio block-compresses textures so hard that resolution barely
+# moves the packaged size; GEOMETRY dominates. So texture cost per texel is tiny and
+# the geometry term carries the estimate. (The earlier 0.5 B/texel figure came from
+# pre-pipeline manual imports and badly over-predicted, which would have falsely
+# flagged fitting models as over-cap.) The estimate is a rough guide only — the panel
+# always tells the admin to confirm the real size in Lens Studio.
+TEX_BYTES_PER_PX = 0.08          # packaged (block-compressed) cost per texture texel
 GEOM_BYTES_PER_FACE = 20         # packaged geometry cost per triangle
 LENS_OVERHEAD_BYTES = 2 * 1024 * 1024  # foot occluders + template scripts/materials
 LENS_GEOM_FILL = 0.85            # only fill geometry to 85% of the cap, leaving headroom
@@ -1739,18 +1744,20 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             cap_px = int(max_tex) if max_tex else None
         except (TypeError, ValueError):
             cap_px = None
+        # Effective cap: never exceed Lens Studio's own 2048 import ceiling (bigger is
+        # discarded on import), and honour a smaller admin cap if set.
+        eff_cap = min(cap_px, LENS_TEX_MAX) if cap_px else LENS_TEX_MAX
 
         def _prep(shoe):
             nonlocal tex_before, tex_after
-            # Measure textures. By default keep them at the supplier's resolution
-            # (visible product identity); only downscale if the admin explicitly
-            # capped them. Geometry is decimated AFTER normalising, once the texture
-            # footprint is known and the adaptive triangle budget is set.
+            # Measure the supplier's textures, then cap to eff_cap. Trimming a >2048
+            # map down to 2048 is lossless in-lens (Lens Studio does it anyway); going
+            # below 2048 only happens when the admin explicitly reduces to fit the cap.
             before = _max_texture_px(shoe)
             tex_before = max(tex_before, before)
             after = before
-            if cap_px and before > cap_px:
-                _b, after, _r = _optimize_textures(shoe, cap_px)
+            if before > eff_cap:
+                _b, after, _r = _optimize_textures(shoe, eff_cap)
             tex_after = max(tex_after, after)
             return shoe
 
@@ -1845,13 +1852,22 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
 
         # override the projected report with what actually happened
         if tex_before:
-            reduced = tex_after < tex_before          # admin capped the textures
+            # A trim down to Lens Studio's 2048 ceiling is LOSSLESS in-lens (LS does it
+            # on import anyway) — treat that as "kept". Only a drop BELOW 2048, which
+            # the admin chose to fit the cap, is a real quality reduction.
+            ls_capped = tex_before > LENS_TEX_MAX and tex_after == LENS_TEX_MAX \
+                and (not cap_px or cap_px >= LENS_TEX_MAX)
+            reduced = tex_after < tex_before and not ls_capped
             meta["textures"] = {"beforePx": tex_before, "afterPx": tex_after,
                                 "resized": 1 if reduced else 0,
-                                "cap": cap_px, "kept": not reduced,
+                                "cap": cap_px, "kept": not reduced, "lsCapped": ls_capped,
                                 # largest edge that would fit the cap — the panel
                                 # offers this when a full-res model is over budget
                                 "suggestPx": _suggest_tex_cap(fit_meshes, len(fit_meshes))}
+            if ls_capped:
+                meta["warnings"].append("Texture(s) over 2048px were capped at 2048 — Lens "
+                                        "Studio does this on import anyway, so there's no "
+                                        "quality loss and the download is smaller.")
             if reduced:
                 meta["warnings"].append("Textures downscaled %dpx -> %dpx at the admin's "
                                         "request to fit Camera Kit's %d MB lens cap. Check the "

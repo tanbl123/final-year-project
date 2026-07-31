@@ -505,8 +505,9 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
               )}
             </div>
             <div className="text-muted small mt-1">
-              Textures stay at the supplier's resolution by default so the try-on matches the product.
-              Reduce them only if the shoe is over the 8 MB cap — then check the preview still looks like the product before approving.
+              Textures stay at the supplier's resolution by default (capped at 2048px — Lens Studio
+              downsizes anything larger on import anyway, so it's lossless). Reduce further only if the
+              shoe is over the 8 MB cap — then check the preview still looks like the product before approving.
             </div>
 
             {/* generate + download */}
