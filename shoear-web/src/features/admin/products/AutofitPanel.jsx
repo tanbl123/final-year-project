@@ -419,6 +419,15 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                   </Row>
                 </div>
               )}
+              {meta.lens && meta.lens.bytes > 0 && (
+                <div className="col-md-6">
+                  <Row label="Lens size">
+                    {meta.lens.withinCap
+                      ? <span><span className="text-success">✓</span> {(meta.lens.bytes / 1048576).toFixed(1)} MB <span className="text-muted">/ {Math.round(meta.lens.capBytes / 1048576)} MB cap</span></span>
+                      : <span className="text-danger">⚠ {(meta.lens.bytes / 1048576).toFixed(1)} MB — over {Math.round(meta.lens.capBytes / 1048576)} MB cap</span>}
+                  </Row>
+                </div>
+              )}
               {meta.occluder && (
                 <div className="col-md-6">
                   <Row label="Ankle cover">

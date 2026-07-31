@@ -67,6 +67,13 @@ except Exception:                # Pillow ships with trimesh's texture support
 MAX_BYTES = 50 * 1024 * 1024     # 50 MB — generous; Lens Studio optimises at publish
 TRI_TARGET = 50_000              # per-foot triangle budget for real-time mobile AR
 MAX_TEX = 2048                   # cap texture edge (px) — the real mobile bottleneck
+# Camera Kit rejects any lens whose bundle exceeds 8 MB at publish, and the
+# fitted .glb is by far the biggest thing in the lens. So the build TARGETS a
+# little under the cap (headroom for Lens Studio's own overhead) and, if the
+# export is still over, shrinks textures step by step until it fits.
+LENS_MAX_BYTES = 8 * 1024 * 1024         # Camera Kit hard per-lens cap
+LENS_TARGET_BYTES = 7 * 1024 * 1024      # aim here so we clear the cap with headroom
+MIN_TEX = 256                    # don't shrink textures below this while fitting to size
 DEFAULT_LENGTH_CM = 26.0         # average adult foot if none declared
 MIN_PLAUSIBLE_CM = 5.0           # a real shoe is never shorter than this
 MAX_PLAUSIBLE_CM = 55.0          # ...or longer than this (after unit conversion)
@@ -240,20 +247,64 @@ def _decimate(mesh, target_faces):
     """Reduce the triangle count to <= target with quadric edge collapse — it
     merges the vertex pairs that change the silhouette least, so the shoe still
     looks the same but renders far faster on a phone. This is what makes the
-    output safe for real-time mobile AR instead of leaving it to the supplier.
+    output safe for real-time mobile AR (and keeps the lens under Camera Kit's
+    8 MB cap) instead of leaving it to the supplier.
+
+    Preserves the UV texture. trimesh stores UVs per-vertex, and
+    fast-simplification can hand back the sequence of vertex collapses and
+    "replay" them, giving a map from every original vertex to its surviving
+    vertex — so we carry the UVs (and the material/image) onto the decimated
+    mesh. This is why textured shoes can now be decimated too: the old path
+    dropped UVs, so heavy textured models used to skip decimation and blow past
+    the 8 MB cap.
+
     Returns (mesh, before, after, applied). Graceful: if the simplifier backend
-    (fast-simplification) isn't installed, returns the original unchanged."""
+    (fast-simplification) isn't installed, or the UV replay fails, returns the
+    original unchanged rather than silently dropping the texture."""
     before = int(len(mesh.faces))
     if before <= target_faces:
         return mesh, before, before, False
+
+    uv = None
+    vis = getattr(mesh, "visual", None)
+    if vis is not None and getattr(vis, "uv", None) is not None:
+        _uv = np.asarray(vis.uv, dtype=np.float32)
+        if _uv.ndim == 2 and _uv.shape[0] == len(mesh.vertices):
+            uv = _uv                                  # per-vertex UVs we can carry across collapses
+
+    # Untextured (or UVs we can't map safely): the simple, exact path.
+    if uv is None:
+        try:
+            simplified = mesh.simplify_quadric_decimation(face_count=int(target_faces))
+        except Exception:
+            return mesh, before, before, False
+        after = int(len(simplified.faces))
+        if after == 0 or after >= before:
+            return mesh, before, before, False
+        return simplified, before, after, True
+
+    # Textured: decimate the geometry AND replay the collapses onto the UVs so
+    # the texture still maps.
     try:
-        simplified = mesh.simplify_quadric_decimation(face_count=int(target_faces))
+        import fast_simplification as _fs
+        pts = np.asarray(mesh.vertices, dtype=np.float32)
+        faces = np.asarray(mesh.faces, dtype=np.int64)
+        reduction = min(0.99, max(0.0, 1.0 - float(target_faces) / float(before)))
+        _, _, collapses = _fs.simplify(pts, faces, target_reduction=reduction,
+                                       return_collapses=True)
+        rv, rf, mapping = _fs.replay_simplification(pts, faces, collapses)
+        after = int(len(rf))
+        if after == 0 or after >= before:
+            return mesh, before, before, False
+        mapping = np.asarray(mapping)
+        new_uv = np.zeros((len(rv), 2), dtype=np.float32)
+        new_uv[mapping] = uv                          # surviving vertex keeps its UV
+        material = getattr(vis, "material", None)
+        new_vis = trimesh.visual.TextureVisuals(uv=new_uv, material=material)
+        out = trimesh.Trimesh(vertices=rv, faces=rf, visual=new_vis, process=False)
+        return out, before, after, True
     except Exception:
         return mesh, before, before, False
-    after = int(len(simplified.faces))
-    if after == 0 or after >= before:
-        return mesh, before, before, False
-    return simplified, before, after, True
 
 
 def _pca_align(mesh, trust_file=False):
@@ -1549,7 +1600,7 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     textured = tex_px > 0
     meta["decimation"] = {"applied": False, "before": per_foot, "after": per_foot,
                           "targetPerFoot": TRI_TARGET, "textured": textured,
-                          "willDecimate": per_foot > TRI_TARGET and not textured}
+                          "willDecimate": per_foot > TRI_TARGET}
 
     # 10. build the fitted files — HEAVY, only on request -------------------
     fitted = None
@@ -1566,16 +1617,14 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             tex_before = max(tex_before, tb)
             tex_after = max(tex_after, ta)
             tex_resized += tr
-            n = int(len(shoe.faces))
-            if _has_uv_texture(shoe):
-                dec_before += n
-                dec_after += n
-                if n > TRI_TARGET:
-                    dec_skipped_tex[0] = True
-                return shoe
             d, before, after, _ = _decimate(shoe, TRI_TARGET)
             dec_before += before
             dec_after += after
+            # Textured, over budget, but nothing came off -> the UV-preserving
+            # backend is unavailable/failed (see _decimate). Flag it so we warn
+            # instead of shipping a mesh that will bust the 8 MB cap.
+            if _has_uv_texture(shoe) and before > TRI_TARGET and after >= before:
+                dec_skipped_tex[0] = True
             return d
 
         # re-split the TEXTURED mesh for the actual bake (analysis used geo)
@@ -1613,13 +1662,36 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                 right_norm, left_norm = base, opp
 
         primary_norm = right_norm or left_norm
-        fitted = {}
-        if left_norm is not None and right_norm is not None:
-            fitted["combined"] = _combine_pair(left_norm, right_norm, lr_known=lr_known)
-        elif primary_norm is not None:
-            fitted["combined"] = primary_norm.export(file_type="glb")
+
+        def _export_combined():
+            if left_norm is not None and right_norm is not None:
+                return _combine_pair(left_norm, right_norm, lr_known=lr_known)
+            if primary_norm is not None:
+                return primary_norm.export(file_type="glb")
+            return b""
+
+        fitted = {"combined": _export_combined()}
         _blog("combined+exported at %.2fs (bytes=%d)"
               % (time.time() - _t0, len(fitted.get("combined") or b"")))
+
+        # Fit to Camera Kit's 8 MB lens cap. Geometry is already decimated to the
+        # mobile budget (UV-preserving), so if the export is still over target the
+        # texture is what's left to trim — shrink it in halves and re-export until
+        # it clears the cap or hits the texture floor. Cheap: at most a few extra
+        # exports, and only when a model is genuinely oversized.
+        cap_cap = MAX_TEX
+        fit_shrunk = False
+        fit_meshes = [m for m in (left_norm, right_norm, primary_norm) if m is not None]
+        while (len(fitted["combined"]) > LENS_TARGET_BYTES and cap_cap > MIN_TEX
+               and fit_meshes):
+            cap_cap = max(MIN_TEX, cap_cap // 2)
+            for m in fit_meshes:
+                _optimize_textures(m, cap_cap)
+            fitted["combined"] = _export_combined()
+            fit_shrunk = True
+            _blog("size-fit: texture cap %dpx -> %d bytes" % (cap_cap, len(fitted["combined"])))
+        if fit_shrunk:
+            tex_after = max((_max_texture_px(m) for m in fit_meshes), default=tex_after)
 
         # override the projected report with what actually happened
         if tex_before:
@@ -1636,10 +1708,24 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                 meta["warnings"].append("Decimated %d -> %d triangles for real-time "
                                         "mobile AR performance." % (dec_before, dec_after))
             elif dec_skipped_tex[0]:
-                meta["warnings"].append("High poly (%d triangles) but textured — "
-                                        "geometry decimation skipped to preserve the UV "
-                                        "texture; Lens Studio optimises it (UV-aware) at "
-                                        "publish." % dec_before)
+                meta["warnings"].append("High poly (%d triangles) and the geometry "
+                                        "simplifier is unavailable, so the mesh was left "
+                                        "as-is — it may exceed Camera Kit's 8 MB lens cap. "
+                                        "Reduce the model's polygon count before export."
+                                        % dec_before)
+
+        # Report the final lens size against Camera Kit's hard cap so the admin
+        # panel can flag a still-oversized model instead of it failing in Lens Studio.
+        lens_bytes = len(fitted.get("combined") or b"")
+        within = lens_bytes <= LENS_MAX_BYTES
+        meta["lens"] = {"bytes": lens_bytes, "capBytes": LENS_MAX_BYTES,
+                        "withinCap": within}
+        if not within:
+            meta["warnings"].append("Fitted lens is %.1f MB, over Camera Kit's %d MB cap — "
+                                    "Lens Studio will reject it. The model's polygon count "
+                                    "is too high even after optimisation; reduce it and "
+                                    "re-upload." % (lens_bytes / 1048576.0,
+                                                    LENS_MAX_BYTES // 1048576))
 
     meta["ok"] = True
     return meta, fitted
