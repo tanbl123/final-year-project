@@ -414,7 +414,9 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                 <div className="col-md-6">
                   <Row label="Detail">
                     {meta.decimation.applied || meta.decimation.willDecimate
-                      ? <span><span className="text-success">✓</span> {meta.decimation.before} → ≤{meta.decimation.targetPerFoot} tris</span>
+                      ? <span><span className="text-success">✓</span> {meta.decimation.before} → ≤{meta.decimation.targetPerFoot} tris
+                          {meta.decimation.heavy && <span className="badge text-bg-warning ms-1">heavily reduced — check preview</span>}
+                        </span>
                       : <span>{meta.decimation.before} tris <span className="text-muted">(fine)</span></span>}
                   </Row>
                 </div>

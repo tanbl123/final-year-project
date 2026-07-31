@@ -1702,11 +1702,24 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                                         "AR performance." % (tex_before, tex_after))
         if dec_before:
             applied = dec_after < dec_before
+            # "heavy" = we removed the bulk of the triangles (>70%). Decimation to
+            # the mobile budget normally looks fine (the Fitted-pair preview IS the
+            # exact model the customer tries on), but a very aggressive cut can soften
+            # fine surface detail — so we flag it for the admin to eyeball the preview
+            # rather than hard-rejecting an otherwise-good upload.
+            heavy = applied and dec_after < 0.30 * dec_before
             meta["decimation"] = {"applied": applied, "before": dec_before,
-                                  "after": dec_after, "targetPerFoot": TRI_TARGET}
+                                  "after": dec_after, "targetPerFoot": TRI_TARGET,
+                                  "heavy": heavy}
             if applied:
                 meta["warnings"].append("Decimated %d -> %d triangles for real-time "
                                         "mobile AR performance." % (dec_before, dec_after))
+                if heavy:
+                    meta["warnings"].append("This model was heavily reduced (%.0f%% of its "
+                                            "triangles removed) to meet the mobile AR budget. "
+                                            "Check the Fitted-pair preview still looks like the "
+                                            "product before approving; Reject if detail is lost."
+                                            % (100.0 * (1.0 - dec_after / float(dec_before))))
             elif dec_skipped_tex[0]:
                 meta["warnings"].append("High poly (%d triangles) and the geometry "
                                         "simplifier is unavailable, so the mesh was left "
