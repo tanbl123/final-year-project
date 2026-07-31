@@ -16,9 +16,7 @@ import 'package:path_provider/path_provider.dart';
 //
 // The cache partition is disposable by definition (the OS can clear it any time), so
 // wiping it is safe — Camera Kit just re-downloads the lens content on next open.
-// Best-effort: never throws. lensCacheReport is shown in a debug-only UI line.
-String lensCacheReport = '';
-
+// Best-effort: never throws.
 Future<void> clearCameraKitLensCache() async {
   Future<Directory?> safe(Future<Directory?> f) async { try { return await f; } catch (_) { return null; } }
   Future<List<Directory>> safeList(Future<List<Directory>?> f) async {
@@ -35,9 +33,8 @@ Future<void> clearCameraKitLensCache() async {
   var wiped = 0;
   for (final root in cacheRoots.values) { wiped += _wipe(root); }
 
-  lensCacheReport = 'wiped $wiped cache item(s) from ${cacheRoots.length} cache root(s) '
-      '(app data left intact)';
-  debugPrint('[lensCache] $lensCacheReport: ${cacheRoots.keys.join(', ')}');
+  debugPrint('[lensCache] wiped $wiped cache item(s) from ${cacheRoots.length} '
+      'cache root(s) (app data left intact): ${cacheRoots.keys.join(', ')}');
 }
 
 // Delete every child of `dir` (files and folders). Returns how many were removed.
