@@ -240,16 +240,6 @@ def _texture_footprint_bytes(meshes):
     return int(total)
 
 
-def _estimated_lens_bytes(meshes, total_faces):
-    """Conservative estimate of the size this model will report inside Lens Studio
-    once packaged — the number the 8 MB Camera Kit cap is actually checked against.
-    The .glb byte count is misleading (compressed textures), so we size the build
-    against this instead."""
-    return (_texture_footprint_bytes(meshes)
-            + int(total_faces) * GEOM_BYTES_PER_FACE
-            + LENS_OVERHEAD_BYTES)
-
-
 def _unique_texture_ids(meshes):
     """Set of distinct texture-image ids across the meshes — i.e. how many separate
     maps the lens carries (base colour, normal, metallic/roughness, ... per foot).
@@ -264,40 +254,6 @@ def _unique_texture_ids(meshes):
             if img is not None and hasattr(img, "size"):
                 seen.add(id(img))
     return seen
-
-
-def _texture_footprint_at(meshes, cap):
-    """Estimated packaged texture cost if every texture were capped at `cap` px on
-    its longest edge (aspect preserved). Used to suggest the largest texture size
-    that would fit the lens cap, without actually resizing anything."""
-    seen, total = set(), 0
-    for mesh in meshes:
-        mat = getattr(getattr(mesh, "visual", None), "material", None)
-        if mat is None:
-            continue
-        for a in _TEX_ATTRS:
-            img = getattr(mat, a, None)
-            if img is None or not hasattr(img, "size") or id(img) in seen:
-                continue
-            seen.add(id(img))
-            w, h = img.size
-            longest = max(int(w), int(h)) or 1
-            s = min(1.0, float(cap) / longest)
-            total += int(w) * int(h) * s * s * TEX_BYTES_PER_PX
-    return int(total)
-
-
-def _suggest_tex_cap(meshes, n_feet):
-    """Largest standard texture edge (px) whose packaged estimate fits the 8 MB cap,
-    assuming the geometry floor. Lets the admin panel offer "reduce to Npx" for an
-    over-cap model instead of a blanket reject. None if it already fits at full res
-    with no image over 2048, or if nothing sensible fits."""
-    faces = max(1, int(n_feet)) * TRI_FLOOR
-    base = faces * GEOM_BYTES_PER_FACE + LENS_OVERHEAD_BYTES
-    for tier in (2048, 1024, 512, 256):
-        if base + _texture_footprint_at(meshes, tier) <= LENS_MAX_BYTES:
-            return tier
-    return 256
 
 
 def _adaptive_tri_target(meshes, n_feet):
@@ -1456,11 +1412,11 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     """Validate + auto-fit a shoe model.
 
     max_tex: optional admin override (px). None (default) keeps the supplier's
-    textures at full resolution — the faithful default. When the model is over the
-    8 MB lens cap at full res, the admin can set this (e.g. 2048/1024/512) to
-    downscale textures to that edge and preview the smaller, cap-fitting result,
-    deciding per shoe whether the reduced version still looks like the product or
-    should be rejected. meta.textures.suggestPx reports the largest size that fits.
+    textures at full resolution — the faithful default. If Lens Studio reports the
+    lens over the 8 MB cap, the admin can set this (e.g. 2048/1024/512) to downscale
+    textures to that edge and preview the smaller result, deciding per shoe whether
+    the reduced version still looks like the product or should be rejected. (We don't
+    estimate the packaged size ourselves — Lens Studio's "Lens Size" is authoritative.)
 
     count_declared: whether the caller has actually chosen the number of shoes.
     True (default, and for the admin's Auto-detect) -> emit the count-specific
@@ -1886,10 +1842,7 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             reduced = tex_after < tex_before and not ls_capped
             meta["textures"] = {"beforePx": tex_before, "afterPx": tex_after,
                                 "resized": 1 if reduced else 0,
-                                "cap": cap_px, "kept": not reduced, "lsCapped": ls_capped,
-                                # largest edge that would fit the cap — the panel
-                                # offers this when a full-res model is over budget
-                                "suggestPx": _suggest_tex_cap(fit_meshes, len(fit_meshes))}
+                                "cap": cap_px, "kept": not reduced, "lsCapped": ls_capped}
             if ls_capped:
                 meta["warnings"].append("Texture(s) over 2048px were capped at 2048 — Lens "
                                         "Studio does this on import anyway, so there's no "
@@ -1927,36 +1880,19 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                                         "Reduce the model's polygon count before export."
                                         % dec_before)
 
-        # ROUGH estimate of the packaged lens size. Lens Studio's real size depends on
-        # the NUMBER of texture maps and its own compression (not visible from the .glb),
-        # so this is only a heads-up — the admin must confirm the true "Lens Size" in
-        # Lens Studio after import. We keep the estimate conservative (errs high) so a
-        # texture-heavy shoe is flagged rather than falsely passed. `glbBytes` is the
-        # supplier's download size, for reference.
+        # We deliberately do NOT estimate the packaged lens size: it depends on the
+        # number of texture maps and Lens Studio's own compression, neither visible
+        # from the .glb, so any estimate is unreliable (it once read ~4.5 MB for a shoe
+        # Lens Studio packaged at 8.14 MB). The admin imports to Lens Studio to publish
+        # anyway, and its "Lens Size" readout is the real, authoritative number — so we
+        # point them there instead of showing a misleading figure. `glbBytes` is the
+        # real fitted-file (download) size, kept for reference only; it is a LOWER
+        # bound on the lens size, not the lens size itself. `nMaps` is the texture-map
+        # count — the main driver of lens size, and a hint for what to trim if over.
         glb_bytes = len(fitted.get("combined") or b"")
-        lens_bytes = _estimated_lens_bytes(fit_meshes, fit_faces)
-        within = lens_bytes <= LENS_MAX_BYTES
-        near = within and lens_bytes > 0.75 * LENS_MAX_BYTES   # wide band — estimate is rough
-        meta["lens"] = {"bytes": lens_bytes, "glbBytes": glb_bytes,
-                        "capBytes": LENS_MAX_BYTES, "withinCap": within,
-                        "near": near, "estimated": True}
-        # Count texture maps — the real driver of lens size — so the guidance points at
-        # the lever that actually works (fewer/simpler maps) rather than resolution,
-        # which Lens Studio's compression makes largely irrelevant.
-        n_maps = len(_unique_texture_ids(fit_meshes))
-        if not within:
-            meta["warnings"].append("Estimated fitted lens is ~%.1f MB — likely over Camera "
-                                    "Kit's %d MB cap. IMPORT IT TO LENS STUDIO and read the real "
-                                    "'Lens Size'. If it's over, the driver is usually the %d "
-                                    "texture map(s) or the triangle count, not their resolution "
-                                    "(Lens Studio compresses textures hard) — ask the supplier "
-                                    "for fewer/simpler maps, or Reject."
-                                    % (lens_bytes / 1048576.0, LENS_MAX_BYTES // 1048576, n_maps))
-        elif near:
-            meta["warnings"].append("Estimated fitted lens is ~%.1f MB — this estimate is rough, "
-                                    "so import to Lens Studio and confirm the real 'Lens Size' is "
-                                    "under %d MB before approving."
-                                    % (lens_bytes / 1048576.0, LENS_MAX_BYTES // 1048576))
+        meta["lens"] = {"glbBytes": glb_bytes, "capBytes": LENS_MAX_BYTES,
+                        "nMaps": len(_unique_texture_ids(fit_meshes)),
+                        "checkInLensStudio": True}
 
     meta["ok"] = True
     return meta, fitted

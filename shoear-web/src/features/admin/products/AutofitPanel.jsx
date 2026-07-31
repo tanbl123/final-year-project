@@ -440,19 +440,14 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                   </Row>
                 </div>
               )}
-              {meta.lens && meta.lens.bytes > 0 && (
+              {meta.lens && (
                 <div className="col-md-6">
                   <Row label="Lens size">
-                    {/* This is a ROUGH estimate — Lens Studio's packaged size depends on
-                        texture-map count + its own compression, which we can't see from
-                        the .glb. The real number is Lens Studio's "Lens Size" after import,
-                        so we never show a confident pass — always point the admin there. */}
-                    <span>
-                      ≈{(meta.lens.bytes / 1048576).toFixed(1)} MB <span className="text-muted">/ {Math.round(meta.lens.capBytes / 1048576)} MB cap (rough est.)</span>
-                      {!meta.lens.withinCap
-                        ? <span className="badge text-bg-danger ms-1">likely over — check Lens Studio</span>
-                        : <span className="badge text-bg-secondary ms-1">confirm real size in Lens Studio</span>}
-                    </span>
+                    {/* We can't measure the packaged lens size from the .glb (Lens Studio
+                        re-compresses on import), so we don't guess — the admin reads the
+                        real "Lens Size" in Lens Studio, which must be ≤ 8 MB. */}
+                    <span className="text-muted">check in Lens Studio (must be ≤ {Math.round(meta.lens.capBytes / 1048576)} MB)</span>
+                    {meta.lens.nMaps > 0 && <span className="text-muted"> · {meta.lens.nMaps} texture map{meta.lens.nMaps === 1 ? '' : 's'}</span>}
                   </Row>
                 </div>
               )}
@@ -505,18 +500,12 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                     onClick={() => pickTextureCap(o.v)} disabled={generating}>{o.l}{o.v ? 'px' : ''}</button>
                 ))}
               </div>
-              {meta?.lens && !meta.lens.withinCap && meta?.textures?.suggestPx && (
-                <button type="button" className="btn btn-sm btn-warning"
-                  onClick={() => pickTextureCap(meta.textures.suggestPx)} disabled={generating}
-                  title="Downscale textures to the largest size that fits Camera Kit's 8 MB cap, then check the preview">
-                  Reduce to {meta.textures.suggestPx}px to fit
-                </button>
-              )}
             </div>
             <div className="text-muted small mt-1">
               Textures stay at the supplier's resolution by default (capped at 2048px — Lens Studio
-              downsizes anything larger on import anyway, so it's lossless). Reduce further only if the
-              shoe is over the 8 MB cap — then check the preview still looks like the product before approving.
+              downsizes anything larger on import anyway, so it's lossless). If Lens Studio reports the
+              lens over the 8 MB cap, reduce here and re-check the preview — or Reject and ask the supplier
+              for fewer/simpler texture maps.
             </div>
 
             {/* generate + download */}
