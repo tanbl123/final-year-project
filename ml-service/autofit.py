@@ -70,11 +70,15 @@ except Exception:                # Pillow ships with trimesh's texture support
     Image = None
 
 MAX_BYTES = 50 * 1024 * 1024     # 50 MB — generous; Lens Studio optimises at publish
-TRI_TARGET = 50_000              # per-foot triangle budget for real-time mobile AR.
-                                 # A phone can't render the supplier's 1M-tri master in
-                                 # real time, and at AR viewing distance a 50k/foot
-                                 # silhouette is visually indistinguishable from it — this
-                                 # is a FRAMERATE budget, not a size one, so it stays fixed.
+# Per-foot triangle budget for real-time mobile AR. A phone can't render the
+# supplier's 1M-tri master live, but ADAPTIVELY we keep as many triangles as the
+# 8 MB cap allows AFTER the full-resolution textures — so a light-texture shoe
+# gets smoother curves (fewer visible facets on the collar etc.) and a
+# texture-heavy shoe stays lean. Clamped between a floor (below which shrinking
+# geometry saves little size but hurts smoothness) and a framerate-safe ceiling.
+TRI_FLOOR = 50_000               # per-foot minimum we decimate to
+TRI_CEILING = 120_000            # per-foot maximum (framerate cap on mobile)
+TRI_TARGET = TRI_FLOOR           # back-compat alias / projection default
 # The AR try-on must match what the supplier proposed, so TEXTURES ARE NEVER
 # DOWNSCALED — texture resolution is where the visible product identity lives
 # (colourway, logo, material), and softening it makes the shoe look like a
@@ -98,6 +102,8 @@ LENS_MAX_BYTES = 8 * 1024 * 1024         # Camera Kit hard per-lens cap
 TEX_BYTES_PER_PX = 0.5           # packaged (near-uncompressed) cost per texture texel
 GEOM_BYTES_PER_FACE = 20         # packaged geometry cost per triangle
 LENS_OVERHEAD_BYTES = 2 * 1024 * 1024  # foot occluders + template scripts/materials
+LENS_GEOM_FILL = 0.85            # only fill geometry to 85% of the cap, leaving headroom
+                                 # so adaptive models don't sit right on the 8 MB limit
 DEFAULT_LENGTH_CM = 26.0         # average adult foot if none declared
 MIN_PLAUSIBLE_CM = 5.0           # a real shoe is never shorter than this
 MAX_PLAUSIBLE_CM = 55.0          # ...or longer than this (after unit conversion)
@@ -231,6 +237,22 @@ def _estimated_lens_bytes(meshes, total_faces):
     return (_texture_footprint_bytes(meshes)
             + int(total_faces) * GEOM_BYTES_PER_FACE
             + LENS_OVERHEAD_BYTES)
+
+
+def _adaptive_tri_target(meshes, n_feet):
+    """Per-foot triangle target: keep as many triangles as the 8 MB cap allows
+    AFTER the full-resolution textures, so light-texture models get smoother
+    geometry (fewer visible facets) and texture-heavy ones stay lean. Clamped to a
+    framerate-safe ceiling and a floor below which shrinking geometry saves little
+    size but hurts smoothness. Leaves headroom (LENS_GEOM_FILL) so adaptive models
+    don't sit right on the cap. `meshes` should carry the (full-res) textures so
+    their footprint is known; `n_feet` is how many feet share the geometry budget."""
+    tex = _texture_footprint_bytes(meshes)
+    budget = int(LENS_MAX_BYTES * LENS_GEOM_FILL) - LENS_OVERHEAD_BYTES - tex
+    if budget <= 0:
+        return TRI_FLOOR                       # textures alone fill the cap -> floor it
+    per_foot = int(budget / GEOM_BYTES_PER_FACE) // max(1, int(n_feet))
+    return max(TRI_FLOOR, min(TRI_CEILING, per_foot))
 
 
 # ── Lens Studio foot-binding calibration ────────────────────────────────────
@@ -1671,21 +1693,14 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         dec_skipped_tex = [False]
 
         def _prep(shoe):
-            nonlocal dec_before, dec_after, tex_before, tex_after
+            nonlocal tex_before, tex_after
             # Keep textures at the supplier's resolution (visible product identity);
-            # only MEASURE them. Geometry is still decimated below.
+            # only MEASURE them here. Geometry is decimated AFTER normalising, once
+            # the texture footprint is known and the adaptive triangle budget is set.
             px = _max_texture_px(shoe)
             tex_before = max(tex_before, px)
             tex_after = max(tex_after, px)
-            d, before, after, _ = _decimate(shoe, TRI_TARGET)
-            dec_before += before
-            dec_after += after
-            # Textured, over budget, but nothing came off -> the UV-preserving
-            # backend is unavailable/failed (see _decimate). Flag it so we warn
-            # instead of shipping a mesh that will bust the 8 MB cap.
-            if _has_uv_texture(shoe) and before > TRI_TARGET and after >= before:
-                dec_skipped_tex[0] = True
-            return d
+            return shoe
 
         # re-split the TEXTURED mesh for the actual bake (analysis used geo)
         build_halves = build_method = None
@@ -1723,6 +1738,39 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
 
         primary_norm = right_norm or left_norm
 
+        # Unique feet (primary_norm aliases right_norm/left_norm) — dedupe by identity
+        # so a foot's triangles/textures aren't counted or decimated twice.
+        def _unique(meshes):
+            seen, out = set(), []
+            for m in meshes:
+                if m is not None and id(m) not in seen:
+                    seen.add(id(m))
+                    out.append(m)
+            return out
+
+        # ADAPTIVE geometry: now that the (full-res) textures are known, decimate to
+        # the largest per-foot triangle count that still fits the 8 MB cap — so spare
+        # cap headroom buys smoother curves instead of being wasted. Textures are
+        # never touched; only the triangle count adapts.
+        norm_feet = _unique([left_norm, right_norm, primary_norm])
+        tri_target = _adaptive_tri_target(norm_feet, len(norm_feet))
+        _blog("adaptive tri target = %d/foot (%d feet, texPx=%d)"
+              % (tri_target, len(norm_feet), tex_before))
+        decimated = {}
+        for m in norm_feet:
+            d, before, after, _applied = _decimate(m, tri_target)
+            dec_before += before
+            dec_after += after
+            # Textured, over budget, but nothing came off -> the UV-preserving backend
+            # is unavailable/failed (see _decimate). Flag it so we warn instead of
+            # shipping a mesh that will bust the cap.
+            if _has_uv_texture(m) and before > tri_target and after >= before:
+                dec_skipped_tex[0] = True
+            decimated[id(m)] = d
+        _redec = lambda m: (decimated.get(id(m), m) if m is not None else None)
+        left_norm, right_norm = _redec(left_norm), _redec(right_norm)
+        primary_norm = _redec(primary_norm)
+
         def _export_combined():
             if left_norm is not None and right_norm is not None:
                 return _combine_pair(left_norm, right_norm, lr_known=lr_known)
@@ -1740,14 +1788,7 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         # than silently degraded. We size against the estimated packaged size, not
         # the .glb byte count, which is far smaller because glTF compresses textures
         # that Lens Studio then expands.
-        # primary_norm aliases right_norm (or left_norm), so dedupe by identity —
-        # otherwise a foot's triangles/textures would be counted twice in the estimate.
-        fit_meshes = []
-        _seen_meshes = set()
-        for m in (left_norm, right_norm, primary_norm):
-            if m is not None and id(m) not in _seen_meshes:
-                _seen_meshes.add(id(m))
-                fit_meshes.append(m)
+        fit_meshes = _unique([left_norm, right_norm, primary_norm])
         fit_faces = sum(int(len(m.faces)) for m in fit_meshes) or int(total_faces)
 
         # override the projected report with what actually happened
@@ -1763,8 +1804,8 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             # rather than hard-rejecting an otherwise-good upload.
             heavy = applied and dec_after < 0.30 * dec_before
             meta["decimation"] = {"applied": applied, "before": dec_before,
-                                  "after": dec_after, "targetPerFoot": TRI_TARGET,
-                                  "heavy": heavy}
+                                  "after": dec_after, "targetPerFoot": tri_target,
+                                  "adaptive": True, "heavy": heavy}
             if applied:
                 meta["warnings"].append("Decimated %d -> %d triangles for real-time "
                                         "mobile AR performance." % (dec_before, dec_after))
