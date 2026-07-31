@@ -271,10 +271,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       // Debug-only: shows what the startup Camera Kit lens-cache clear
                       // did, so it can be verified on-device without adb/flutter logs
                       // (Honor/Huawei block logcat). Hidden in release builds.
-                      if (kDebugMode && lensCacheReport.isNotEmpty)
+                      if (kDebugMode)
                         Padding(
                           padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
                           child: SelectableText(
+                            'opening lens id: ${p.arLensId ?? '(none)'}\n'
                             'lens cache: $lensCacheReport',
                             style: const TextStyle(fontSize: 11, color: Colors.grey),
                           ),
