@@ -2,66 +2,81 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
-// Camera Kit caches its lens group on-device, so a newly-published try-on lens
-// can stay hidden until that cache is cleared. Snap's SDK exposes no clear/refresh
-// API through the plugin we vendor, so we clear it ourselves at launch.
+// Camera Kit caches its lens group on-device, so a newly-published try-on lens can
+// stay hidden until the cache is cleared. Snap's SDK exposes no clear/refresh API
+// through the plugin we vendor, so we clear it ourselves at launch.
 //
-// On-device diagnosis (Honor/Huawei block adb logcat, so we log to the UI via
-// lensCacheReport) showed Camera Kit keeps its data in folders named `camera_kit_*`
-// — NOT in the OS cache dir but in the app's files/documents dir:
-//   camera_kit_lens_content, camera_kit_lens_remote_asset  <- the downloaded lens
-//   camera_kit_lens_sdk_cache, camera_kit_response_cache, camera_kit_cof_cache, ...
-// A `camera_kit_*` folder is unmistakably Camera Kit's own disposable data (it all
-// re-downloads/recreates), so we delete those wherever they live — including the
-// app data dirs. The looser 'snap'/'lens' markers stay restricted to the throwaway
-// OS cache dirs, to avoid ever touching an unrelated app folder by those names.
+// What finally works (matching Android Settings > "Clear cache", the only thing that
+// reliably showed the new lens): WIPE THE WHOLE CACHE PARTITION, not just folders we
+// recognise. Camera Kit downloads lens content through a network/HTTP cache whose
+// folder isn't named `camera_kit_*`, so our earlier name-matched delete missed it.
+// The cache partition is disposable by definition (the OS can clear it any time), so
+// wiping it is safe — it just re-downloads on next use.
 //
-// Trade-off (deliberate): the lens re-downloads on the first AR open after each
-// launch, so a just-published shoe shows without a manual Clear cache. Best-effort,
-// never throws, only removes Camera Kit's own folders. lensCacheReport is shown in a
-// debug-only line under the AR button for on-device verification.
+// Camera Kit also keeps the unpacked lens in `camera_kit_*` folders in the app's
+// DATA dir (files/documents), which "Clear cache" does NOT touch — so we additionally
+// delete those (they're unmistakably Camera Kit's own disposable data).
+//
+// Trade-off: images and the lens re-download on first use after each launch — the
+// deliberate freshness cost so a just-published shoe shows without a manual clear.
+// Best-effort: never throws. lensCacheReport is shown in a debug-only UI line.
 const List<String> _camKitStrict = ['camera_kit', 'camerakit', 'camera-kit'];
-const List<String> _camKitLoose = ['snap', 'lens']; // only in throwaway OS cache dirs
-const int _maxDepth = 5; // descend into nested folders, but bound the scan
+const int _maxDepth = 5;
 
 String lensCacheReport = '';
 
 Future<void> clearCameraKitLensCache() async {
-  // Roots paired with the markers we'll DELETE on there:
-  //  * OS caches (throwaway)  -> strict + loose markers
-  //  * app files/documents    -> strict `camera_kit_*` only (never the loose ones)
-  final targets = <String, ({Directory dir, List<String> del})>{};
-  Future<void> addOne(Future<Directory?> f, List<String> del) async {
-    try { final d = await f; if (d != null) targets[d.path] = (dir: d, del: del); } catch (_) {}
+  Future<Directory?> safe(Future<Directory?> f) async { try { return await f; } catch (_) { return null; } }
+  Future<List<Directory>> safeList(Future<List<Directory>?> f) async {
+    try { return (await f) ?? const []; } catch (_) { return const []; }
   }
-  Future<void> addMany(Future<List<Directory>?> f, List<String> del) async {
-    try { final l = await f; if (l != null) for (final d in l) targets[d.path] = (dir: d, del: del); } catch (_) {}
-  }
-  final looseAndStrict = [..._camKitStrict, ..._camKitLoose];
-  await addOne(getTemporaryDirectory(), looseAndStrict);          // Android cacheDir / iOS tmp
-  await addOne(getApplicationCacheDirectory(), looseAndStrict);   // Android cacheDir / iOS Library/Caches
-  await addMany(getExternalCacheDirectories(), looseAndStrict);   // Android external cache(s)
-  await addOne(getApplicationSupportDirectory(), _camKitStrict);  // Android files / iOS App Support
-  await addOne(getApplicationDocumentsDirectory(), _camKitStrict); // Android files / iOS Documents
 
+  // Phase 1 — wipe the entire cache partition (exactly what "Clear cache" does).
+  final cacheRoots = <String, Directory>{};
+  for (final d in [await safe(getTemporaryDirectory()), await safe(getApplicationCacheDirectory())]) {
+    if (d != null) cacheRoots[d.path] = d;
+  }
+  for (final d in await safeList(getExternalCacheDirectories())) { cacheRoots[d.path] = d; }
+  var wiped = 0;
+  for (final root in cacheRoots.values) { wiped += _wipe(root); }
+
+  // Phase 2 — delete Camera Kit's own folders in the app DATA dir (files/documents),
+  // where the unpacked lens lives (camera_kit_lens_content / _remote_asset). "Clear
+  // cache" doesn't reach here; camera_kit_* is safe to delete (it re-downloads).
+  final dataRoots = <String, Directory>{};
+  for (final d in [await safe(getApplicationSupportDirectory()), await safe(getApplicationDocumentsDirectory())]) {
+    if (d != null) dataRoots[d.path] = d;
+  }
   final seen = <String>[];
   var cleared = 0;
-  for (final t in targets.values) {
-    cleared += _scan(t.dir, 0, seen, t.del);
-  }
+  for (final root in dataRoots.values) { cleared += _clearCamKit(root, 0, seen); }
 
-  final shown = seen.take(30).toList();
+  final shown = seen.take(20).toList();
   final more = seen.length - shown.length;
-  lensCacheReport = 'cleared $cleared Camera Kit folder(s) across ${targets.length} location(s). '
-      'Folders seen: ${shown.isEmpty ? '(none)' : shown.join(', ')}'
-      '${more > 0 ? ' …(+$more more)' : ''}';
+  lensCacheReport = 'wiped $wiped cache item(s), cleared $cleared Camera Kit folder(s) in app data.'
+      ' App-data folders: ${shown.isEmpty ? '(none)' : shown.join(', ')}'
+      '${more > 0 ? ' …(+$more)' : ''}';
   debugPrint('[lensCache] $lensCacheReport');
 }
 
-// Recursively walk `dir` to _maxDepth. Deletes any folder whose name contains one of
-// `deleteMarkers`; records shallow folder names into `seen` (Camera Kit matches get a
-// '!' prefix). Returns folders deleted. Only lists directories and never throws.
-int _scan(Directory dir, int depth, List<String> seen, List<String> deleteMarkers) {
+// Delete every child of `dir` (files and folders). Returns how many were removed.
+int _wipe(Directory dir) {
+  var n = 0;
+  try {
+    if (!dir.existsSync()) return 0;
+    for (final e in dir.listSync()) {
+      try { e.deleteSync(recursive: true); n++; }
+      catch (err) { debugPrint('[lensCache] could not delete ${e.path}: $err'); }
+    }
+  } catch (e) {
+    debugPrint('[lensCache] wipe failed for ${dir.path}: $e');
+  }
+  return n;
+}
+
+// Recursively delete folders named `camera_kit_*` under `dir`; record shallow folder
+// names into `seen` (a Camera Kit match gets a '!' prefix). Returns folders deleted.
+int _clearCamKit(Directory dir, int depth, List<String> seen) {
   if (depth > _maxDepth) return 0;
   List<FileSystemEntity> entries;
   try {
@@ -75,21 +90,13 @@ int _scan(Directory dir, int depth, List<String> seen, List<String> deleteMarker
   for (final entity in entries) {
     if (entity is! Directory) continue;
     final base = entity.path.split(Platform.pathSeparator).last;
-    final low = base.toLowerCase();
-    final shouldDelete = deleteMarkers.any((m) => low.contains(m));
-    final looksCamKit = _camKitStrict.any((m) => low.contains(m)) ||
-        _camKitLoose.any((m) => low.contains(m));
-    if (depth <= 1) seen.add(looksCamKit ? '!$base' : base);
-    debugPrint('[lensCache] d$depth ${entity.path}${shouldDelete ? '  (clearing)' : ''}');
-    if (shouldDelete) {
-      try {
-        entity.deleteSync(recursive: true);
-        cleared++;
-      } catch (e) {
-        debugPrint('[lensCache] could not delete "$base": $e');
-      }
-    } else if (!looksCamKit) {
-      cleared += _scan(entity, depth + 1, seen, deleteMarkers); // look for a nested one
+    final isCamKit = _camKitStrict.any((m) => base.toLowerCase().contains(m));
+    if (depth <= 1) seen.add(isCamKit ? '!$base' : base);
+    if (isCamKit) {
+      try { entity.deleteSync(recursive: true); cleared++; }
+      catch (e) { debugPrint('[lensCache] could not delete "$base": $e'); }
+    } else {
+      cleared += _clearCamKit(entity, depth + 1, seen);
     }
   }
   return cleared;
