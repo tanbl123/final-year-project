@@ -77,7 +77,10 @@ MAX_BYTES = 50 * 1024 * 1024     # 50 MB — generous; Lens Studio optimises at 
 # texture-heavy shoe stays lean. Clamped between a floor (below which shrinking
 # geometry saves little size but hurts smoothness) and a framerate-safe ceiling.
 TRI_FLOOR = 50_000               # per-foot minimum we decimate to
-TRI_CEILING = 120_000            # per-foot maximum (framerate cap on mobile)
+TRI_CEILING = 80_000             # per-foot maximum — a framerate-safe cap for mid-range
+                                 # phones (~160k/pair). Textures are cheap in-lens, so
+                                 # the cap leaves lots of room; this ceiling, not the
+                                 # 8 MB budget, is what keeps AR smooth on weaker devices.
 TRI_TARGET = TRI_FLOOR           # back-compat alias / projection default
 # The AR try-on must match what the supplier proposed, so TEXTURES ARE NEVER
 # DOWNSCALED — texture resolution is where the visible product identity lives
