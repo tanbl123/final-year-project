@@ -19,6 +19,8 @@
 import 'package:camerakit_flutter/camerakit_flutter.dart';
 import 'package:camerakit_flutter/lens_model.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:customer/features/ar/ar_lens_cache.dart';
 
 /// The Camera Kit lens GROUP that holds all ShoeAR try-on lenses. Not a secret —
 /// just an identifier. Override at build time with --dart-define=CK_GROUP_ID=...
@@ -32,14 +34,33 @@ class ArTryOnService implements CameraKitFlutterEvents {
   late final CameraKitFlutterImpl _cameraKit =
       CameraKitFlutterImpl(cameraKitFlutterEvents: this);
 
+  static const _seenLensKey = 'ar_seen_lens_ids';
+
   /// Launches Camera Kit with [lensId] applied. Requests camera/mic first.
   Future<void> open(String lensId) async {
     await [Permission.camera, Permission.microphone].request();
+    await _refreshCacheIfNewLens(lensId);
     await _cameraKit.openCameraKitWithSingleLens(
       lensId: lensId,
       groupId: kCameraKitGroupId,
       isHideCloseButton: false,
     );
+  }
+
+  /// Camera Kit caches the group's lens content, so a re-published shoe can stay
+  /// stale. Rather than clearing on every launch, we clear ONLY when opening a lens
+  /// id we haven't cached before — i.e. a new/changed lens (our admin publishes a new
+  /// lens id per update). Same lens id again -> cache is already fresh, no clear, so
+  /// normal try-ons stay fast. Best-effort: never blocks or fails the AR open.
+  Future<void> _refreshCacheIfNewLens(String lensId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final seen = prefs.getStringList(_seenLensKey) ?? <String>[];
+      if (seen.contains(lensId)) return;      // already cached this lens
+      await clearCameraKitLensCache();         // new/changed lens -> force a fresh fetch
+      seen.add(lensId);
+      await prefs.setStringList(_seenLensKey, seen);
+    } catch (_) {/* never let cache housekeeping stop a try-on */}
   }
 
 
