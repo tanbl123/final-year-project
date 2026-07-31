@@ -108,6 +108,7 @@ function handleValidateSupplierModel(PDO $pdo, array $auth, array $config): void
 //   &length=<cm>      (real shoe length for scaling; default ~26)
 //   &files=0|1        (1 also returns the fitted per-foot .glb as base64)
 //   &maxTex=<px>      (admin texture cap; absent = keep supplier full resolution)
+//   &maxTris=<n>      (admin per-foot triangle target; absent = ~50k/foot default)
 //
 // Runs the uploaded model through the ML auto-fit and returns the analysis so
 // the admin can QC it and download the fitted model for Lens Studio.
@@ -144,6 +145,10 @@ function handleAdminProductAutofit(PDO $pdo, string $id, array $config): void {
   // resolution (the faithful default). Set (2048/1024/512) to downscale textures
   // so an over-cap shoe can be previewed at a cap-fitting size instead of rejected.
   $maxTex = isset($_GET['maxTex']) && ctype_digit((string) $_GET['maxTex']) ? (int) $_GET['maxTex'] : 0;
+  // Optional admin per-foot triangle target. Absent/0 -> Snapchat's ~50k/foot default.
+  // A high value (e.g. 120000) means "keep the supplier's geometry", clamped by the
+  // ML service to Lens Studio's import limit.
+  $maxTris = isset($_GET['maxTris']) && ctype_digit((string) $_GET['maxTris']) ? (int) $_GET['maxTris'] : 0;
 
   $payload = [
     'modelUrl'     => $modelUrl,
@@ -155,6 +160,7 @@ function handleAdminProductAutofit(PDO $pdo, string $id, array $config): void {
   if ($countRaw === '1' || $countRaw === '2') { $payload['count'] = (int) $countRaw; }  // else auto-detect
   if ($lengthCm !== null && $lengthCm > 0)    { $payload['lengthCm'] = $lengthCm; }
   if ($maxTex > 0)                            { $payload['maxTex'] = $maxTex; }
+  if ($maxTris > 0)                           { $payload['maxTris'] = $maxTris; }
 
   $result = mlAutofit($config, $payload);
   if (isset($result['__error'])) {

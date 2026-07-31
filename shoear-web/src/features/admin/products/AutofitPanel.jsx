@@ -58,6 +58,11 @@ function TransformCard({ title, pos, rot, scale }) {
   );
 }
 
+// "Keep supplier's geometry" triangle target sent to the ML service: a high per-foot
+// value the service clamps to Lens Studio's ~65,535-vertex import limit, so it keeps
+// as much of the supplier's mesh as Lens Studio will actually accept.
+const KEEP_TRIS = 120000;
+
 // Admin AR auto-fit panel. Runs the product's uploaded 3D model through the ML
 // auto-fit service and shows the analysis + a before/after preview, so the admin
 // can QC it and download the fitted, half-tuned model to drop into Lens Studio.
@@ -101,6 +106,7 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
   const [savingOrig, setSavingOrig] = useState(false);  // fetching the raw upload for download
   const [showFitted, setShowFitted] = useState(false);  // preview: original vs fitted pair
   const [textureCap, setTextureCap] = useState(0);      // 0 = supplier full-res; else px cap the admin picked
+  const [triCap, setTriCap] = useState(0);              // 0 = ~50k/foot default; KEEP_TRIS = keep supplier's
   const blobUrls = useRef([]);                    // track for revocation
   const mvRef = useRef(null);                     // the <model-viewer> element
 
@@ -128,6 +134,7 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
       length: ctrl.length ? Number(ctrl.length) : undefined,
       straighten: ctrl.straighten,
       textureCap: textureCap || undefined,   // 0/undefined = keep supplier full-res
+      triCap: triCap || undefined,           // 0/undefined = ~50k/foot default
       ...extra,
     };
   }
@@ -144,13 +151,15 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
     }
   }
 
-  // capOverride: px to cap textures at for THIS run (undefined = use current state).
-  // Passed explicitly so the texture buttons can regenerate before React state settles.
-  async function generate(capOverride) {
-    const cap = capOverride === undefined ? textureCap : capOverride;
+  // `over` lets the texture/triangle buttons force a value for THIS run before React
+  // state settles (e.g. {textureCap: 1024} or {triCap: KEEP_TRIS}); anything not
+  // overridden falls back to current state.
+  async function generate(over = {}) {
+    const tex = over.textureCap !== undefined ? over.textureCap : textureCap;
+    const tri = over.triCap !== undefined ? over.triCap : triCap;
     setGenerating(true); setErr(''); revokeBlobs();
     try {
-      const res = await getProductAutofit(productId, opts({ files: true, textureCap: cap || undefined }));
+      const res = await getProductAutofit(productId, opts({ files: true, textureCap: tex || undefined, triCap: tri || undefined }));
       setMeta(res);
       if (res.fitted?.combined) {
         const url = b64ToBlobUrl(res.fitted.combined);
@@ -165,11 +174,9 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
     }
   }
 
-  // Admin picks a texture resolution -> remember it and regenerate the preview.
-  function pickTextureCap(cap) {
-    setTextureCap(cap);
-    generate(cap);
-  }
+  // Admin picks a texture resolution / triangle detail -> remember it and regenerate.
+  function pickTextureCap(cap) { setTextureCap(cap); generate({ textureCap: cap }); }
+  function pickTriCap(cap) { setTriCap(cap); generate({ triCap: cap }); }
 
   function download() {
     if (!fitted?.url) return;
@@ -506,6 +513,25 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
               downsizes anything larger on import anyway, so it's lossless). If Lens Studio reports the
               lens over the 8 MB cap, reduce here and re-check the preview — or Reject and ask the supplier
               for fewer/simpler texture maps.
+            </div>
+
+            {/* triangle detail — optimized to Snapchat's budget by default; the admin can
+                keep the supplier's higher-poly mesh (clamped to Lens Studio's import limit) */}
+            <div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
+              <span className="small text-muted">Detail</span>
+              <div className="btn-group btn-group-sm" role="group" aria-label="Triangle detail">
+                <button type="button"
+                  className={`btn btn-outline-secondary${triCap === 0 ? ' active' : ''}`}
+                  onClick={() => pickTriCap(0)} disabled={generating}>Optimized (~50k/foot)</button>
+                <button type="button"
+                  className={`btn btn-outline-secondary${triCap === KEEP_TRIS ? ' active' : ''}`}
+                  onClick={() => pickTriCap(KEEP_TRIS)} disabled={generating}>Keep supplier's</button>
+              </div>
+            </div>
+            <div className="text-muted small mt-1">
+              Triangles are reduced to Snapchat's ~50k/foot performance budget by default. "Keep supplier's"
+              retains more detail (smoother curves) but may exceed Snapchat's ~100k-per-scene recommendation —
+              it's still clamped to Lens Studio's ~65,535-vertex import limit. Check the framerate in Lens Studio.
             </div>
 
             {/* generate + download */}

@@ -70,51 +70,27 @@ except Exception:                # Pillow ships with trimesh's texture support
     Image = None
 
 MAX_BYTES = 50 * 1024 * 1024     # 50 MB — generous; Lens Studio optimises at publish
-# Per-foot triangle budget for real-time mobile AR. Snapchat's official guidance is
-# to keep the WHOLE 3D scene under ~100k triangles for framerate/RAM
+# Per-foot triangle budget for real-time mobile AR. Snapchat's guidance is to keep the
+# WHOLE 3D scene under ~100k triangles for framerate/RAM
 # (https://docs.snap.com/lens-studio/references/guides/lens-features/optimization/3d-meshes/),
-# and a lens holds a PAIR, so the per-foot budget is ~50k. Triangle count is a
-# PERFORMANCE budget, not a size one: a lens can be well under 8 MB and still stutter
-# with too many triangles, so we cap by Snapchat's guidance, NOT by spare MB. Floor
-# == ceiling means we always decimate down to 50k/foot (and keep a lighter source
-# untouched — never upscale geometry).
-TRI_FLOOR = 50_000               # per-foot target (Snapchat ~100k/scene, 2 feet)
-TRI_CEILING = 50_000             # == floor: fixed at Snapchat's performance budget
-                                 # (Lens Studio also hard-limits imports to 65,535
-                                 # vertices per mesh, which 50k tris stays under)
-TRI_TARGET = TRI_FLOOR           # back-compat alias / projection default
-# The AR try-on must match what the supplier proposed, so TEXTURES ARE NEVER
-# DOWNSCALED — texture resolution is where the visible product identity lives
-# (colourway, logo, material), and softening it makes the shoe look like a
-# different product. Geometry is still decimated (invisible at AR distance,
-# keeps framerate). If the supplier's full-resolution textures push the model
-# over the 8 MB cap, we DON'T degrade it — we flag it for the admin to reject
-# and ask the supplier to re-export smaller.
-# The .glb the supplier downloads is small because glTF stores textures
-# PNG/JPEG-compressed — but Lens Studio expands them, so the .glb byte count badly
-# under-reports the real lens size. We therefore judge "fits the cap?" against an
-# ESTIMATE of the packaged size (near-uncompressed texture footprint + geometry).
-LENS_MAX_BYTES = 8 * 1024 * 1024         # Camera Kit hard per-lens cap
-# Lens Studio itself resizes any texture over 2048px down to 2048 on import
-# (confirmed in the LS 5.22 logger: "Image texture.png resized to 2048x2048").
-# So there is NO point shipping a bigger texture — it's discarded. We cap here to
-# match, which is lossless in-lens and shrinks the supplier's .glb download.
-LENS_TEX_MAX = 2048
-# IMPORTANT: this estimate is only a rough guide. Lens Studio's packaged size is
-# genuinely hard to predict from the .glb — it depends on the NUMBER of texture maps
-# (base colour + normal + metallic/roughness + ... , each duplicated per foot) and
-# Lens Studio's own block compression, neither visible from outside. Observed reality
-# is contradictory for a per-texel model: the same shoe read ~4.6 MB in one build and
-# 8.14 MB in another, and 1024px vs 2048px gave nearly the same size — i.e. map COUNT
-# and compression matter far more than resolution. We cost per texel (counting every
-# map) at a deliberately CONSERVATIVE rate so a texture-heavy shoe is flagged rather
-# than falsely passed, but the ONLY reliable number is Lens Studio's own "Lens Size"
-# readout after import — which the panel tells the admin to check.
-TEX_BYTES_PER_PX = 0.20          # conservative per-texel cost (errs high, counts every map)
-GEOM_BYTES_PER_FACE = 20         # packaged geometry cost per triangle
-LENS_OVERHEAD_BYTES = 2 * 1024 * 1024  # foot occluders + template scripts/materials
-LENS_GEOM_FILL = 0.85            # only fill geometry to 85% of the cap, leaving headroom
-                                 # so adaptive models don't sit right on the 8 MB limit
+# and a lens holds a PAIR, so the DEFAULT per-foot target is ~50k. The admin can instead
+# keep the supplier's higher-poly geometry (see tri_target), but never above TRI_HARD_MAX:
+# Lens Studio refuses to import a mesh over 65,535 VERTICES (~120k tris), so anything
+# above that MUST be decimated or the import fails outright. A source already below the
+# chosen target is kept untouched — we never upscale geometry.
+TRI_DEFAULT = 50_000             # per-foot default target (Snapchat ~100k/scene, 2 feet)
+TRI_HARD_MAX = 120_000           # per-foot hard ceiling (Lens Studio 65,535-vertex import limit)
+TRI_TARGET = TRI_DEFAULT         # back-compat alias / light-path projection default
+# TEXTURES are NOT downscaled by default — resolution is where the visible product
+# identity lives (colourway, logo, material). Lens Studio itself resizes any texture over
+# 2048px down to 2048 on import (confirmed in the LS 5.22 logger), so we cap there to
+# match: lossless in-lens and a smaller .glb download. The admin can reduce further per
+# shoe if Lens Studio reports the packaged lens over the 8 MB cap.
+LENS_MAX_BYTES = 8 * 1024 * 1024 # Camera Kit hard per-lens cap. We do NOT estimate the
+                                 # packaged size (it depends on texture-map count + Lens
+                                 # Studio's own compression, invisible from the .glb) —
+                                 # the admin reads the real "Lens Size" in Lens Studio.
+LENS_TEX_MAX = 2048              # Lens Studio's own texture import ceiling
 DEFAULT_LENGTH_CM = 26.0         # average adult foot if none declared
 MIN_PLAUSIBLE_CM = 5.0           # a real shoe is never shorter than this
 MAX_PLAUSIBLE_CM = 55.0          # ...or longer than this (after unit conversion)
@@ -216,30 +192,6 @@ def _optimize_textures(mesh, max_dim):
     return before_px, after_px, resized
 
 
-def _texture_footprint_bytes(meshes):
-    """Estimated packaged texture cost across the given meshes. Lens Studio stores
-    textures largely uncompressed, so the real lens cost is ~texels x bytes/texel,
-    NOT the tiny PNG/JPEG-compressed size the .glb reports. Shared image objects
-    (a single map reused on both feet) are counted once — dedupe by identity."""
-    seen = set()
-    total = 0
-    for mesh in meshes:
-        v = getattr(mesh, "visual", None)
-        mat = getattr(v, "material", None) if v is not None else None
-        if mat is None:
-            continue
-        for a in _TEX_ATTRS:
-            img = getattr(mat, a, None)
-            if img is None or not hasattr(img, "size"):
-                continue
-            if id(img) in seen:
-                continue
-            seen.add(id(img))
-            w, h = img.size
-            total += int(w) * int(h) * TEX_BYTES_PER_PX
-    return int(total)
-
-
 def _unique_texture_ids(meshes):
     """Set of distinct texture-image ids across the meshes — i.e. how many separate
     maps the lens carries (base colour, normal, metallic/roughness, ... per foot).
@@ -256,20 +208,17 @@ def _unique_texture_ids(meshes):
     return seen
 
 
-def _adaptive_tri_target(meshes, n_feet):
-    """Per-foot triangle target: keep as many triangles as the 8 MB cap allows
-    AFTER the full-resolution textures, so light-texture models get smoother
-    geometry (fewer visible facets) and texture-heavy ones stay lean. Clamped to a
-    framerate-safe ceiling and a floor below which shrinking geometry saves little
-    size but hurts smoothness. Leaves headroom (LENS_GEOM_FILL) so adaptive models
-    don't sit right on the cap. `meshes` should carry the (full-res) textures so
-    their footprint is known; `n_feet` is how many feet share the geometry budget."""
-    tex = _texture_footprint_bytes(meshes)
-    budget = int(LENS_MAX_BYTES * LENS_GEOM_FILL) - LENS_OVERHEAD_BYTES - tex
-    if budget <= 0:
-        return TRI_FLOOR                       # textures alone fill the cap -> floor it
-    per_foot = int(budget / GEOM_BYTES_PER_FACE) // max(1, int(n_feet))
-    return max(TRI_FLOOR, min(TRI_CEILING, per_foot))
+def _resolve_tri_target(requested):
+    """Per-foot triangle target for decimation. `requested` is the admin's choice:
+    None -> the default budget (Snapchat ~100k/scene); a positive int -> that target
+    (e.g. "keep supplier's" passes a high number). Either way we clamp to TRI_HARD_MAX,
+    because Lens Studio refuses to import a mesh over ~65,535 vertices, so we must
+    decimate above that no matter what the admin picked."""
+    try:
+        req = int(requested) if requested else None
+    except (TypeError, ValueError):
+        req = None
+    return min(TRI_HARD_MAX, req if req and req > 0 else TRI_DEFAULT)
 
 
 # ── Lens Studio foot-binding calibration ────────────────────────────────────
@@ -1408,7 +1357,7 @@ def _combine_pair(left_mesh, right_mesh, lr_known=True):
 
 def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                     declared_side="right", mirror_single=True, auto_orient=True,
-                    build_files=True, count_declared=True, max_tex=None):
+                    build_files=True, count_declared=True, max_tex=None, tri_target=None):
     """Validate + auto-fit a shoe model.
 
     max_tex: optional admin override (px). None (default) keeps the supplier's
@@ -1417,6 +1366,12 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     textures to that edge and preview the smaller result, deciding per shoe whether
     the reduced version still looks like the product or should be rejected. (We don't
     estimate the packaged size ourselves — Lens Studio's "Lens Size" is authoritative.)
+
+    tri_target: optional admin override for the per-foot triangle count. None (default)
+    decimates to the Snapchat performance budget (~50k/foot). A higher number keeps more
+    of the supplier's geometry ("keep supplier's" passes a large value) — always clamped
+    to TRI_HARD_MAX, since Lens Studio won't import a mesh over ~65,535 vertices. A source
+    already under the target is kept untouched.
 
     count_declared: whether the caller has actually chosen the number of shoes.
     True (default, and for the admin's Auto-detect) -> emit the count-specific
@@ -1789,23 +1744,23 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                     out.append(m)
             return out
 
-        # ADAPTIVE geometry: now that the (full-res) textures are known, decimate to
-        # the largest per-foot triangle count that still fits the 8 MB cap — so spare
-        # cap headroom buys smoother curves instead of being wasted. Textures are
-        # never touched; only the triangle count adapts.
+        # Decimate geometry to the per-foot target: the Snapchat performance budget by
+        # default, or the admin's higher "keep supplier's" choice — always clamped to
+        # Lens Studio's import limit. A foot already below the target is kept untouched.
         norm_feet = _unique([left_norm, right_norm, primary_norm])
-        tri_target = _adaptive_tri_target(norm_feet, len(norm_feet))
-        _blog("adaptive tri target = %d/foot (%d feet, texPx=%d)"
-              % (tri_target, len(norm_feet), tex_before))
+        tri_goal = _resolve_tri_target(tri_target)
+        tri_clamped = bool(tri_target) and tri_goal < int(tri_target)   # admin asked for more than the import limit
+        _blog("tri target = %d/foot (requested=%s, %d feet)"
+              % (tri_goal, tri_target, len(norm_feet)))
         decimated = {}
         for m in norm_feet:
-            d, before, after, _applied = _decimate(m, tri_target)
+            d, before, after, _applied = _decimate(m, tri_goal)
             dec_before += before
             dec_after += after
             # Textured, over budget, but nothing came off -> the UV-preserving backend
             # is unavailable/failed (see _decimate). Flag it so we warn instead of
             # shipping a mesh that will bust the cap.
-            if _has_uv_texture(m) and before > tri_target and after >= before:
+            if _has_uv_texture(m) and before > tri_goal and after >= before:
                 dec_skipped_tex[0] = True
             decimated[id(m)] = d
         _redec = lambda m: (decimated.get(id(m), m) if m is not None else None)
@@ -1861,18 +1816,31 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             # fine surface detail — so we flag it for the admin to eyeball the preview
             # rather than hard-rejecting an otherwise-good upload.
             heavy = applied and dec_after < 0.30 * dec_before
+            kept_supplier = not applied                       # source was already <= target
             meta["decimation"] = {"applied": applied, "before": dec_before,
-                                  "after": dec_after, "targetPerFoot": tri_target,
-                                  "adaptive": True, "heavy": heavy}
+                                  "after": dec_after, "targetPerFoot": tri_goal,
+                                  "kept": kept_supplier, "heavy": heavy}
             if applied:
                 meta["warnings"].append("Decimated %d -> %d triangles for real-time "
                                         "mobile AR performance." % (dec_before, dec_after))
-                if heavy:
+                if tri_clamped:
+                    meta["warnings"].append("Kept as much geometry as Lens Studio allows: it "
+                                            "won't import a mesh over ~65,535 vertices, so the "
+                                            "triangles were reduced to ~%d/foot regardless."
+                                            % TRI_HARD_MAX)
+                elif heavy:
                     meta["warnings"].append("This model was heavily reduced (%.0f%% of its "
                                             "triangles removed) to meet the mobile AR budget. "
                                             "Check the Fitted-pair preview still looks like the "
                                             "product before approving; Reject if detail is lost."
                                             % (100.0 * (1.0 - dec_after / float(dec_before))))
+            elif kept_supplier and dec_before > TRI_DEFAULT:
+                # Admin chose "keep supplier's" and the source was above the default budget
+                # but within the import limit — kept as-is, but flag the framerate risk.
+                meta["warnings"].append("Kept the supplier's geometry at %d triangles (~%d/foot) "
+                                        "at your request — above Snapchat's ~100k-per-scene "
+                                        "recommendation, so check the framerate in Lens Studio."
+                                        % (dec_before, dec_before // max(1, len(norm_feet))))
             elif dec_skipped_tex[0]:
                 meta["warnings"].append("High poly (%d triangles) and the geometry "
                                         "simplifier is unavailable, so the mesh was left "
