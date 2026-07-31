@@ -274,7 +274,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                       if (kDebugMode && lensCacheReport.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
-                          child: Text(
+                          child: SelectableText(
                             'lens cache: $lensCacheReport',
                             style: const TextStyle(fontSize: 11, color: Colors.grey),
                           ),
