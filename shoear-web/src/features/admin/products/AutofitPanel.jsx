@@ -182,8 +182,14 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
   function pickTextureCap(cap) { setTextureCap(cap); generate({ textureCap: cap }); }
   function pickTriCap(cap) { setTriCap(cap); setCustomTris(''); generate({ triCap: cap }); }
   // Admin typed a custom PAIR triangle total -> use it (ignored if blank/invalid).
+  // Max is the model's own pair triangle count (from the analysis) — you can't decimate
+  // UP, so a target above the source is meaningless; "Keep supplier's" covers keeping all.
+  const srcTris = meta?.decimation?.before || 0;
   const customTrisNum = parseInt(customTris, 10);
-  const customTrisValid = customTris !== '' && Number.isInteger(customTrisNum) && customTrisNum >= MIN_CUSTOM_TRIS;
+  const customBelowMin = customTris !== '' && customTrisNum < MIN_CUSTOM_TRIS;
+  const customAboveMax = customTris !== '' && srcTris > 0 && customTrisNum > srcTris;
+  const customTrisValid = customTris !== '' && Number.isInteger(customTrisNum)
+    && !customBelowMin && !customAboveMax;
   function applyCustomTris() {
     if (!customTrisValid) return;
     setTriCap(customTrisNum);
@@ -547,7 +553,8 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
               <div className="input-group input-group-sm" style={{ width: 'auto' }}>
                 <input type="text" inputMode="numeric"
                   className={`form-control form-control-sm${customTris !== '' && !customTrisValid ? ' is-invalid' : ''}`}
-                  style={{ width: '9rem' }} placeholder="custom tris (pair)"
+                  style={{ width: '10rem' }}
+                  placeholder={srcTris ? `${MIN_CUSTOM_TRIS}–${srcTris} (pair)` : 'custom tris (pair)'}
                   value={customTris} onChange={(e) => setCustomTris(e.target.value.replace(/\D/g, ''))}
                   onKeyDown={(e) => { if (e.key === 'Enter') applyCustomTris(); }}
                   disabled={generating} />
@@ -558,9 +565,15 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                 <span className="badge text-bg-secondary">custom: {triCap.toLocaleString()} tris</span>
               )}
             </div>
-            {customTris !== '' && !customTrisValid && (
+            {customBelowMin && (
               <div className="text-danger small mt-1">
                 Enter a whole number of at least {MIN_CUSTOM_TRIS.toLocaleString()} triangles (for the pair).
+              </div>
+            )}
+            {customAboveMax && (
+              <div className="text-danger small mt-1">
+                This model has only {srcTris.toLocaleString()} triangles — that's the most you can keep.
+                Use "Keep supplier's" to keep them all.
               </div>
             )}
             <div className="text-muted small mt-1">
