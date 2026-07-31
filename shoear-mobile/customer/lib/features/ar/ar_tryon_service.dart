@@ -42,24 +42,6 @@ class ArTryOnService implements CameraKitFlutterEvents {
     );
   }
 
-  /// Refresh the Camera Kit lens repository for our group so a newly-published
-  /// lens becomes usable WITHOUT reinstalling the app.
-  ///
-  /// Camera Kit caches the lens group on-device; a lens added/updated on the
-  /// server isn't served until that cache refreshes, which otherwise only
-  /// happens on its own TTL or a fresh install — so a customer opening AR for a
-  /// just-published shoe can get "camera on, no shoe". Observing the group
-  /// (getGroupLenses) fetches the current list from Snap and updates that cache.
-  /// Fire-and-forget: we don't need the returned list, only the refresh side
-  /// effect, and it must never block or crash the UI. Call it on app
-  /// launch/resume to keep the repository warm. No camera/permissions involved.
-  Future<void> warmLensCache() async {
-    try {
-      await _cameraKit.getGroupLenses(groupIds: [kCameraKitGroupId]);
-    } catch (_) {
-      // best effort — a failed warm just leaves the existing cache in place
-    }
-  }
 
   // Required by the events interface; unused for a simple try-on.
   @override

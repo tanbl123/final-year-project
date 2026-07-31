@@ -27,6 +27,7 @@ dependencies:
   camerakit_flutter:
     path: packages/camerakit_flutter
   permission_handler: ^11.0.0 # camera/mic permission for AR try-on
+  path_provider: ^2.1.4     # locate the cache dir to drop Camera Kit's stale lens cache
 
 dev_dependencies:
   flutter_test:

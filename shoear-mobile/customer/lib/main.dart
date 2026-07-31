@@ -17,9 +17,14 @@ import 'package:customer/features/cart/state/cart_provider.dart';
 import 'package:customer/features/wishlist/state/wishlist_provider.dart';
 import 'package:customer/features/notification/state/notification_provider.dart';
 import 'package:customer/features/shell/main_shell.dart';
+import 'package:customer/features/ar/ar_lens_cache.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Drop Camera Kit's stale lens cache BEFORE any lens session is created, so a
+  // just-published try-on shoe shows without a manual Clear cache. Targeted to
+  // Camera Kit's own cache folders; best-effort (never blocks a normal launch).
+  await clearCameraKitLensCache();
   final api = ApiClient();
   final authProvider = AuthProvider(api: api, authService: AuthService(api))
     ..loadFromStorage();

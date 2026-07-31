@@ -36,20 +36,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     super.initState();
     _future = context.read<CatalogService>().getProduct(widget.productId);
     if (context.read<AuthProvider>().isLoggedIn) _loadMyReview();
-    _warmArLensIfNeeded();
-  }
-
-  /// Refresh the Camera Kit lens cache the moment an AR-capable product opens,
-  /// so a lens published while the customer was already in the app is fetched
-  /// BEFORE they tap "AR Try-On". (Launch/resume warms in MainShell don't cover
-  /// the "already in the app, browse to a brand-new product" path.) Doing it
-  /// here — while they read the page — gives the async fetch time to finish
-  /// before the tap; warming at the exact tap would race the camera opening.
-  Future<void> _warmArLensIfNeeded() async {
-    try {
-      final p = await _future;
-      if (mounted && p.arReady) await _ar.warmLensCache();
-    } catch (_) {/* load errors surface via the FutureBuilder */}
   }
 
   Future<void> _loadMyReview() async {
