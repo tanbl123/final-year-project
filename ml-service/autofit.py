@@ -74,12 +74,13 @@ MAX_BYTES = 50 * 1024 * 1024     # 50 MB — generous; Lens Studio optimises at 
 # WHOLE 3D scene under ~100k triangles for framerate/RAM
 # (https://docs.snap.com/lens-studio/references/guides/lens-features/optimization/3d-meshes/),
 # and a lens holds a PAIR, so the DEFAULT per-foot target is ~50k. The admin can instead
-# keep the supplier's higher-poly geometry (see tri_target), but never above TRI_HARD_MAX:
-# Lens Studio refuses to import a mesh over 65,535 VERTICES (~120k tris), so anything
-# above that MUST be decimated or the import fails outright. A source already below the
-# chosen target is kept untouched — we never upscale geometry.
+# "keep supplier's" to retain the full geometry — verified in practice: a 145k-tri/foot
+# (~72k-vertex) mesh imports and publishes fine at ~4 MB, so the "65,535-vertex import
+# limit" from the docs does NOT bite for imported shoe meshes in LS 5.22. We therefore
+# DON'T impose an artificial triangle ceiling; the real gates are the degenerate-file
+# rejection (HARD_MAX_FACES) and Lens Studio itself, which the admin checks. A source
+# below the chosen target is kept untouched — we never upscale geometry.
 TRI_DEFAULT = 50_000             # per-foot default target (Snapchat ~100k/scene, 2 feet)
-TRI_HARD_MAX = 120_000           # per-foot hard ceiling (Lens Studio 65,535-vertex import limit)
 TRI_TARGET = TRI_DEFAULT         # back-compat alias / light-path projection default
 # TEXTURES are NOT downscaled by default — resolution is where the visible product
 # identity lives (colourway, logo, material). Lens Studio itself resizes any texture over
@@ -210,15 +211,15 @@ def _unique_texture_ids(meshes):
 
 def _resolve_tri_target(requested):
     """Per-foot triangle target for decimation. `requested` is the admin's choice:
-    None -> the default budget (Snapchat ~100k/scene); a positive int -> that target
-    (e.g. "keep supplier's" passes a high number). Either way we clamp to TRI_HARD_MAX,
-    because Lens Studio refuses to import a mesh over ~65,535 vertices, so we must
-    decimate above that no matter what the admin picked."""
+    None -> the default budget (Snapchat ~100k/scene, i.e. ~50k/foot); a positive int ->
+    that target, e.g. "keep supplier's" passes a very large value so nothing is removed.
+    No artificial ceiling — a truly degenerate file is caught earlier by HARD_MAX_FACES,
+    and Lens Studio is the real import/size gate."""
     try:
         req = int(requested) if requested else None
     except (TypeError, ValueError):
         req = None
-    return min(TRI_HARD_MAX, req if req and req > 0 else TRI_DEFAULT)
+    return req if req and req > 0 else TRI_DEFAULT
 
 
 # ── Lens Studio foot-binding calibration ────────────────────────────────────
@@ -1369,9 +1370,9 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
 
     tri_target: optional admin override for the per-foot triangle count. None (default)
     decimates to the Snapchat performance budget (~50k/foot). A higher number keeps more
-    of the supplier's geometry ("keep supplier's" passes a large value) — always clamped
-    to TRI_HARD_MAX, since Lens Studio won't import a mesh over ~65,535 vertices. A source
-    already under the target is kept untouched.
+    of the supplier's geometry; "keep supplier's" passes a very large value so nothing is
+    removed (verified importable/publishable in practice). A source already under the
+    target is kept untouched. Truly degenerate files are still caught by HARD_MAX_FACES.
 
     count_declared: whether the caller has actually chosen the number of shoes.
     True (default, and for the admin's Auto-detect) -> emit the count-specific
@@ -1751,11 +1752,10 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             return out
 
         # Decimate geometry to the per-foot target: the Snapchat performance budget by
-        # default, or the admin's higher "keep supplier's" choice — always clamped to
-        # Lens Studio's import limit. A foot already below the target is kept untouched.
+        # default, or (for "keep supplier's") a huge target so nothing is removed. A foot
+        # already below the target is kept untouched.
         norm_feet = _unique([left_norm, right_norm, primary_norm])
         tri_goal = _resolve_tri_target(tri_target)
-        tri_clamped = bool(tri_target) and tri_goal < int(tri_target)   # admin asked for more than the import limit
         _blog("tri target = %d/foot (requested=%s, %d feet)"
               % (tri_goal, tri_target, len(norm_feet)))
         decimated = {}
@@ -1826,15 +1826,10 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             meta["decimation"] = {"applied": applied, "before": dec_before,
                                   "after": dec_after, "targetPerFoot": tri_goal,
                                   "kept": kept_supplier, "heavy": heavy}
-            pair_target = tri_goal * max(1, len(norm_feet))   # per-foot target -> pair total
             if applied:
                 meta["warnings"].append("Reduced the pair from %d to %d triangles for real-time "
                                         "mobile AR performance." % (dec_before, dec_after))
-                if tri_clamped:
-                    meta["warnings"].append("The model was too detailed to import as-is, so its "
-                                            "triangles were reduced to about %d for the pair — the "
-                                            "most Lens Studio will import." % pair_target)
-                elif heavy:
+                if heavy:
                     meta["warnings"].append("This model was heavily reduced (%.0f%% of its "
                                             "triangles removed) to meet the mobile AR budget. "
                                             "Check the Fitted-pair preview still looks like the "

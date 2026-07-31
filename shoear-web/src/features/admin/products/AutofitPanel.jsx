@@ -58,10 +58,10 @@ function TransformCard({ title, pos, rot, scale }) {
   );
 }
 
-// "Keep supplier's geometry" triangle target sent to the ML service: a high per-foot
-// value the service clamps to Lens Studio's ~65,535-vertex import limit, so it keeps
-// as much of the supplier's mesh as Lens Studio will actually accept.
-const KEEP_TRIS = 120000;
+// "Keep supplier's geometry": a per-foot triangle target so large the ML service never
+// decimates, i.e. the full supplier mesh is retained. (Verified in practice — a
+// 145k-tri/foot shoe imports and publishes fine, so there's no artificial ceiling.)
+const KEEP_TRIS = 100000000;
 
 // Admin AR auto-fit panel. Runs the product's uploaded 3D model through the ML
 // auto-fit service and shows the analysis + a before/after preview, so the admin
@@ -532,9 +532,8 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
             </div>
             <div className="text-muted small mt-1">
               By default the pair is reduced to about 100,000 triangles — Snapchat's recommended budget for
-              smooth AR. "Keep supplier's" keeps more of the model's detail (smoother curves) but goes above
-              that budget, so check the framerate in Lens Studio. Very high-poly models are still trimmed
-              enough to import.
+              smooth AR. "Keep supplier's" retains the full supplier geometry (smoother curves) but goes above
+              that budget, so check the framerate in Lens Studio.
             </div>
 
             {/* generate + download */}
