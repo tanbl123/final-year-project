@@ -439,11 +439,13 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
               {meta.decimation && (
                 <div className="col-md-6">
                   <Row label="Detail">
+                    {/* before/after are both PAIR totals (2 shoes) — like-for-like, so the
+                        numbers aren't mixing a pair total with a per-foot target. */}
                     {meta.decimation.applied || meta.decimation.willDecimate
-                      ? <span><span className="text-success">✓</span> {meta.decimation.before} → ≤{meta.decimation.targetPerFoot} tris
+                      ? <span><span className="text-success">✓</span> {meta.decimation.before} → {meta.decimation.after} tris <span className="text-muted">(pair)</span>
                           {meta.decimation.heavy && <span className="badge text-bg-warning ms-1">heavily reduced — check preview</span>}
                         </span>
-                      : <span>{meta.decimation.before} tris <span className="text-muted">(fine)</span></span>}
+                      : <span>{meta.decimation.before} tris <span className="text-muted">(pair{meta.decimation.kept ? ', kept' : ', fine'})</span></span>}
                   </Row>
                 </div>
               )}
@@ -522,16 +524,17 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
               <div className="btn-group btn-group-sm" role="group" aria-label="Triangle detail">
                 <button type="button"
                   className={`btn btn-outline-secondary${triCap === 0 ? ' active' : ''}`}
-                  onClick={() => pickTriCap(0)} disabled={generating}>Optimized (~50k/foot)</button>
+                  onClick={() => pickTriCap(0)} disabled={generating}>Optimized (~100k)</button>
                 <button type="button"
                   className={`btn btn-outline-secondary${triCap === KEEP_TRIS ? ' active' : ''}`}
                   onClick={() => pickTriCap(KEEP_TRIS)} disabled={generating}>Keep supplier's</button>
               </div>
             </div>
             <div className="text-muted small mt-1">
-              Triangles are reduced to Snapchat's ~50k/foot performance budget by default. "Keep supplier's"
-              retains more detail (smoother curves) but may exceed Snapchat's ~100k-per-scene recommendation —
-              it's still clamped to Lens Studio's ~65,535-vertex import limit. Check the framerate in Lens Studio.
+              By default the pair is reduced to about 100,000 triangles — Snapchat's recommended budget for
+              smooth AR. "Keep supplier's" keeps more of the model's detail (smoother curves) but goes above
+              that budget, so check the framerate in Lens Studio. Very high-poly models are still trimmed
+              enough to import.
             </div>
 
             {/* generate + download */}

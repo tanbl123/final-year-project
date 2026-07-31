@@ -1660,11 +1660,17 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         meta["textures"] = {"beforePx": tex_px, "afterPx": eff_px,
                             "resized": 0, "cap": None, "willResize": False,
                             "kept": eff_px == tex_px, "lsCapped": tex_px > LENS_TEX_MAX}
-    per_foot = total_faces // (2 if declared_count == 2 else 1)
+    # Project triangle counts for the whole PAIR (what the lens actually holds), so
+    # the before/after the admin sees are like-for-like (2 shoes vs 2 shoes), not a
+    # pair total compared against a per-foot target.
+    feet_in_lens = 1 if (declared_count == 1 and not mirror_single) else 2
+    pair_before = int(total_faces) if declared_count == 2 else int(total_faces) * feet_in_lens
+    per_foot_now = pair_before // max(1, feet_in_lens)
+    proj_after = min(per_foot_now, TRI_TARGET) * feet_in_lens
     textured = tex_px > 0
-    meta["decimation"] = {"applied": False, "before": per_foot, "after": per_foot,
+    meta["decimation"] = {"applied": False, "before": pair_before, "after": proj_after,
                           "targetPerFoot": TRI_TARGET, "textured": textured,
-                          "willDecimate": per_foot > TRI_TARGET}
+                          "willDecimate": per_foot_now > TRI_TARGET}
 
     # 10. build the fitted files — HEAVY, only on request -------------------
     fitted = None
@@ -1820,27 +1826,26 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             meta["decimation"] = {"applied": applied, "before": dec_before,
                                   "after": dec_after, "targetPerFoot": tri_goal,
                                   "kept": kept_supplier, "heavy": heavy}
+            pair_target = tri_goal * max(1, len(norm_feet))   # per-foot target -> pair total
             if applied:
-                meta["warnings"].append("Decimated %d -> %d triangles for real-time "
+                meta["warnings"].append("Reduced the pair from %d to %d triangles for real-time "
                                         "mobile AR performance." % (dec_before, dec_after))
                 if tri_clamped:
-                    meta["warnings"].append("Kept as much geometry as Lens Studio allows: it "
-                                            "won't import a mesh over ~65,535 vertices, so the "
-                                            "triangles were reduced to ~%d/foot regardless."
-                                            % TRI_HARD_MAX)
+                    meta["warnings"].append("The model was too detailed to import as-is, so its "
+                                            "triangles were reduced to about %d for the pair — the "
+                                            "most Lens Studio will import." % pair_target)
                 elif heavy:
                     meta["warnings"].append("This model was heavily reduced (%.0f%% of its "
                                             "triangles removed) to meet the mobile AR budget. "
                                             "Check the Fitted-pair preview still looks like the "
                                             "product before approving; Reject if detail is lost."
                                             % (100.0 * (1.0 - dec_after / float(dec_before))))
-            elif kept_supplier and dec_before > TRI_DEFAULT:
-                # Admin chose "keep supplier's" and the source was above the default budget
-                # but within the import limit — kept as-is, but flag the framerate risk.
-                meta["warnings"].append("Kept the supplier's geometry at %d triangles (~%d/foot) "
-                                        "at your request — above Snapchat's ~100k-per-scene "
-                                        "recommendation, so check the framerate in Lens Studio."
-                                        % (dec_before, dec_before // max(1, len(norm_feet))))
+            elif kept_supplier and dec_before > (TRI_DEFAULT * max(1, len(norm_feet))):
+                # Admin chose "keep supplier's" and the pair is above the default budget but
+                # within the import limit — kept as-is, but flag the framerate risk.
+                meta["warnings"].append("Kept the supplier's geometry (%d triangles for the pair) "
+                                        "at your request — above Snapchat's ~100k recommendation, "
+                                        "so check the framerate in Lens Studio." % dec_before)
             elif dec_skipped_tex[0]:
                 meta["warnings"].append("High poly (%d triangles) and the geometry "
                                         "simplifier is unavailable, so the mesh was left "
