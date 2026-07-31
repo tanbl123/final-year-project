@@ -416,14 +416,16 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
             {/* PREPARED FOR AR */}
             <div className="text-muted text-uppercase fw-semibold mb-1" style={{ fontSize: '0.7rem' }}>Prepared for AR</div>
             <div className="row gx-3 mb-1">
-              {meta.textures && meta.textures.beforePx > 0 && (
+              {meta.textures && meta.textures.afterPx > 0 && (
                 <div className="col-md-6">
                   <Row label="Textures">
-                    {meta.textures.kept
-                      ? <span>{meta.textures.beforePx}px <span className="text-muted">(kept — supplier resolution)</span></span>
-                      : meta.textures.resized || meta.textures.willResize
-                        ? <span><span className="text-success">✓</span> {meta.textures.beforePx} → {meta.textures.afterPx}px</span>
-                        : <span>{meta.textures.beforePx}px <span className="text-muted">(fine)</span></span>}
+                    {/* Always show the resolution the lens ACTUALLY uses (afterPx), so a
+                        4096 map that Lens Studio caps at 2048 reads as 2048, not 4096. */}
+                    {meta.textures.lsCapped
+                      ? <span>{meta.textures.afterPx}px <span className="text-muted">(capped from {meta.textures.beforePx}px — Lens Studio limit)</span></span>
+                      : meta.textures.resized
+                        ? <span><span className="text-success">✓</span> {meta.textures.afterPx}px <span className="text-muted">(reduced from {meta.textures.beforePx}px)</span></span>
+                        : <span>{meta.textures.afterPx}px <span className="text-muted">(supplier resolution)</span></span>}
                   </Row>
                 </div>
               )}

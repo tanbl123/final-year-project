@@ -1724,9 +1724,13 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     # 9. projected optimisation report (cheap: texture size + face count captured
     #    up front). The full build below overrides with actuals.
     if tex_px:
-        # Textures are kept at the supplier's resolution — never downscaled.
-        meta["textures"] = {"beforePx": tex_px, "afterPx": tex_px,
-                            "resized": 0, "cap": None, "willResize": False, "kept": True}
+        # Report the EFFECTIVE resolution the lens will use: anything over Lens
+        # Studio's 2048 import ceiling is shown as 2048 (it's capped there anyway),
+        # so the admin never sees a misleading "4096" for a texture that ends up 2048.
+        eff_px = min(tex_px, LENS_TEX_MAX)
+        meta["textures"] = {"beforePx": tex_px, "afterPx": eff_px,
+                            "resized": 0, "cap": None, "willResize": False,
+                            "kept": eff_px == tex_px, "lsCapped": tex_px > LENS_TEX_MAX}
     per_foot = total_faces // (2 if declared_count == 2 else 1)
     textured = tex_px > 0
     meta["decimation"] = {"applied": False, "before": per_foot, "after": per_foot,
