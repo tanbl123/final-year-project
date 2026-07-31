@@ -441,8 +441,9 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                   <div className="text-muted" style={{ fontSize: '0.72rem' }}>
                     Position is in centimetres; rotation in degrees. The two feet differ only in
                     Position X (the left shoe is the right one mirrored). Rotation stays 0.
-                    Scale is baked into the model — leave Lens Studio's imported scale as-is
-                    (it shows ~100 with Convert&nbsp;Meters&nbsp;to&nbsp;Centimetres on; don't change it to 1).
+                    Set the <strong>Scale</strong> shown on both feet — it's sized to cover the
+                    foot with a little margin (import with Convert&nbsp;Meters&nbsp;to&nbsp;Centimetres
+                    on, then set this Scale). Fine-tune by ±a few if needed.
                   </div>
                 </div>
               )}

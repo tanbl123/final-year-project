@@ -181,11 +181,22 @@ def _optimize_textures(mesh, max_dim):
 # guess assumed the origin was at the ankle, which dropped the shoe ~8 cm too far
 # and pushed it ~7 cm too far forward. Retune these if the foot rig changes.
 #   position: base (right) foot below; the left foot is the same with X negated.
-#   scale:    the Convert-Meters-to-Centimetres import already applies the ~100x,
-#             so leave Lens Studio's imported Scale as-is (do NOT set it to 1).
+#   scale:    fit-to-foot — we scale every shoe to a fixed ON-SCREEN length so it
+#             covers the (fixed) occluder with a little reserve, regardless of the
+#             model's real size. See FOOT_COVER_LENGTH_CM.
 FOOT_BIND_DROP_CM = 5.0    # lower the shoe this far so its sole meets the foot sole
 FOOT_BIND_Z_CM = 0.0       # front/back seat (mesh is already centred on the foot)
 FOOT_BIND_X_CM = 0.0       # lateral seat for the base foot; the other foot mirrors X
+
+# On-screen (Lens Studio) shoe LENGTH in cm that covers the template's foot
+# occluder with a little reserve — a real foot reads slightly bigger than the
+# occluder proxy, so a skin-tight fit leaves the foot poking out. Calibrated on
+# device: scale 110 covered a 27.9 cm (UK 8) shoe → 27.9 × 1.10 ≈ 30.7 cm.
+# The occluder is fixed, so we scale EVERY shoe to this length regardless of its
+# real size → it always wraps the foot. Lens Studio scale = this ÷ the model's
+# real length (in metres), which gives ≈110 for a 27.9 cm shoe and auto-adjusts
+# for any other declared size. Retune if the foot rig / desired fit changes.
+FOOT_COVER_LENGTH_CM = 30.7
 
 
 def _anchor(mesh_norm):
@@ -193,11 +204,13 @@ def _anchor(mesh_norm):
     the admin pastes numbers instead of eyeballing. Works on the NORMALISED mesh
     (metres; sole on Y=0, X/Z centred, toe +Z, heel -Z).
 
-    The seat is a CALIBRATED CONSTANT (see FOOT_BIND_* above), not derived from
-    the shoe's opening: the foot occluder is fixed, so the binding origin sits at
-    a fixed height above the sole for every product. We still read the collar/toe
-    from the geometry, but only to drive the high-top occluder note — not the
-    position. A SUGGESTION the admin fine-tunes in QC."""
+    The seat POSITION is a CALIBRATED CONSTANT (see FOOT_BIND_* above), not derived
+    from the shoe's opening: the foot occluder is fixed, so the binding origin sits
+    at a fixed height above the sole for every product. The SCALE is size-aware —
+    we scale the shoe to a fixed on-screen length (FOOT_COVER_LENGTH_CM) so it
+    covers the fixed occluder regardless of the model's real size. We still read
+    the collar/toe from the geometry, but only for the high-top occluder note. A
+    SUGGESTION the admin fine-tunes in QC."""
     b = mesh_norm.bounds
     zmin, zmax = float(b[0][2]), float(b[1][2])
     ymax = float(b[1][1])
@@ -206,14 +219,18 @@ def _anchor(mesh_norm):
     rear_top = V[(V[:, 2] <= zmin + 0.35 * lz) & (V[:, 1] >= 0.60 * ymax)]
     opening = rear_top.mean(axis=0) if len(rear_top) else np.array([0.0, ymax, zmin])
     collar_cm = round(float(opening[1]) * 100, 1)
+    # Lens Studio scale that makes the shoe FOOT_COVER_LENGTH_CM long on screen.
+    # lz is the real length in metres, so (cover_cm / lz) already folds in the
+    # metres→cm 100x (e.g. 30.7 / 0.279 ≈ 110). Fall back to 100 if length is odd.
+    cover_scale = round(FOOT_COVER_LENGTH_CM / lz, 1) if lz > 1e-6 else 100.0
     return {
-        "assumption": "calibrated to the foot-tracking template binding; keep the Lens Studio import scale",
+        "assumption": "position calibrated to the foot-tracking binding; scale sized to cover the foot occluder",
         "positionCm": [FOOT_BIND_X_CM, round(-FOOT_BIND_DROP_CM, 1), FOOT_BIND_Z_CM],
         "rotationDeg": [0.0, 0.0, 0.0],
-        "scale": [1.0, 1.0, 1.0],
+        "scale": [cover_scale, cover_scale, cover_scale],
         "toeTipCm": round(zmax * 100, 1),
         "collarHeightCm": collar_cm,
-        "note": "Left foot mirrors X (negate position X). Keep Lens Studio's imported scale (~100).",
+        "note": "Left foot mirrors X (negate position X). Set the Lens Studio Scale to this value on both feet — it sizes the shoe to cover the foot with a little margin.",
     }
 
 
