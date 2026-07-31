@@ -70,17 +70,18 @@ except Exception:                # Pillow ships with trimesh's texture support
     Image = None
 
 MAX_BYTES = 50 * 1024 * 1024     # 50 MB — generous; Lens Studio optimises at publish
-# Per-foot triangle budget for real-time mobile AR. A phone can't render the
-# supplier's 1M-tri master live, but ADAPTIVELY we keep as many triangles as the
-# 8 MB cap allows AFTER the full-resolution textures — so a light-texture shoe
-# gets smoother curves (fewer visible facets on the collar etc.) and a
-# texture-heavy shoe stays lean. Clamped between a floor (below which shrinking
-# geometry saves little size but hurts smoothness) and a framerate-safe ceiling.
-TRI_FLOOR = 50_000               # per-foot minimum we decimate to
-TRI_CEILING = 80_000             # per-foot maximum — a framerate-safe cap for mid-range
-                                 # phones (~160k/pair). Textures are cheap in-lens, so
-                                 # the cap leaves lots of room; this ceiling, not the
-                                 # 8 MB budget, is what keeps AR smooth on weaker devices.
+# Per-foot triangle budget for real-time mobile AR. Snapchat's official guidance is
+# to keep the WHOLE 3D scene under ~100k triangles for framerate/RAM
+# (https://docs.snap.com/lens-studio/references/guides/lens-features/optimization/3d-meshes/),
+# and a lens holds a PAIR, so the per-foot budget is ~50k. Triangle count is a
+# PERFORMANCE budget, not a size one: a lens can be well under 8 MB and still stutter
+# with too many triangles, so we cap by Snapchat's guidance, NOT by spare MB. Floor
+# == ceiling means we always decimate down to 50k/foot (and keep a lighter source
+# untouched — never upscale geometry).
+TRI_FLOOR = 50_000               # per-foot target (Snapchat ~100k/scene, 2 feet)
+TRI_CEILING = 50_000             # == floor: fixed at Snapchat's performance budget
+                                 # (Lens Studio also hard-limits imports to 65,535
+                                 # vertices per mesh, which 50k tris stays under)
 TRI_TARGET = TRI_FLOOR           # back-compat alias / projection default
 # The AR try-on must match what the supplier proposed, so TEXTURES ARE NEVER
 # DOWNSCALED — texture resolution is where the visible product identity lives
