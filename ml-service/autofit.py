@@ -100,15 +100,17 @@ LENS_MAX_BYTES = 8 * 1024 * 1024         # Camera Kit hard per-lens cap
 # So there is NO point shipping a bigger texture — it's discarded. We cap here to
 # match, which is lossless in-lens and shrinks the supplier's .glb download.
 LENS_TEX_MAX = 2048
-# Calibrated against real LS 5.22 PACKAGED sizes for the same fitted pair: at 1024px
-# textures the lens was 4.58 MB and at 2048px it was 4.61 MB — nearly identical.
-# The lesson: Lens Studio block-compresses textures so hard that resolution barely
-# moves the packaged size; GEOMETRY dominates. So texture cost per texel is tiny and
-# the geometry term carries the estimate. (The earlier 0.5 B/texel figure came from
-# pre-pipeline manual imports and badly over-predicted, which would have falsely
-# flagged fitting models as over-cap.) The estimate is a rough guide only — the panel
-# always tells the admin to confirm the real size in Lens Studio.
-TEX_BYTES_PER_PX = 0.08          # packaged (block-compressed) cost per texture texel
+# IMPORTANT: this estimate is only a rough guide. Lens Studio's packaged size is
+# genuinely hard to predict from the .glb — it depends on the NUMBER of texture maps
+# (base colour + normal + metallic/roughness + ... , each duplicated per foot) and
+# Lens Studio's own block compression, neither visible from outside. Observed reality
+# is contradictory for a per-texel model: the same shoe read ~4.6 MB in one build and
+# 8.14 MB in another, and 1024px vs 2048px gave nearly the same size — i.e. map COUNT
+# and compression matter far more than resolution. We cost per texel (counting every
+# map) at a deliberately CONSERVATIVE rate so a texture-heavy shoe is flagged rather
+# than falsely passed, but the ONLY reliable number is Lens Studio's own "Lens Size"
+# readout after import — which the panel tells the admin to check.
+TEX_BYTES_PER_PX = 0.20          # conservative per-texel cost (errs high, counts every map)
 GEOM_BYTES_PER_FACE = 20         # packaged geometry cost per triangle
 LENS_OVERHEAD_BYTES = 2 * 1024 * 1024  # foot occluders + template scripts/materials
 LENS_GEOM_FILL = 0.85            # only fill geometry to 85% of the cap, leaving headroom
@@ -246,6 +248,22 @@ def _estimated_lens_bytes(meshes, total_faces):
     return (_texture_footprint_bytes(meshes)
             + int(total_faces) * GEOM_BYTES_PER_FACE
             + LENS_OVERHEAD_BYTES)
+
+
+def _unique_texture_ids(meshes):
+    """Set of distinct texture-image ids across the meshes — i.e. how many separate
+    maps the lens carries (base colour, normal, metallic/roughness, ... per foot).
+    This count, more than resolution, is what drives Lens Studio's packaged size."""
+    seen = set()
+    for mesh in meshes:
+        mat = getattr(getattr(mesh, "visual", None), "material", None)
+        if mat is None:
+            continue
+        for a in _TEX_ATTRS:
+            img = getattr(mat, a, None)
+            if img is not None and hasattr(img, "size"):
+                seen.add(id(img))
+    return seen
 
 
 def _texture_footprint_at(meshes, cap):
@@ -1909,41 +1927,36 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                                         "Reduce the model's polygon count before export."
                                         % dec_before)
 
-        # Report the ESTIMATED packaged lens size against Camera Kit's hard cap.
-        # Lens Studio re-encodes textures to its own GPU format when it packages the
-        # lens, so the size follows the (near-uncompressed) texture footprint + geometry
-        # — NOT the .glb byte count, which depends on how well the source PNG/JPEGs
-        # compress and can be either smaller (typical) or larger (incompressible art)
-        # than the packaged result. So we judge the cap on the estimate; `glbBytes` is
-        # kept only as reference for the supplier's download.
+        # ROUGH estimate of the packaged lens size. Lens Studio's real size depends on
+        # the NUMBER of texture maps and its own compression (not visible from the .glb),
+        # so this is only a heads-up — the admin must confirm the true "Lens Size" in
+        # Lens Studio after import. We keep the estimate conservative (errs high) so a
+        # texture-heavy shoe is flagged rather than falsely passed. `glbBytes` is the
+        # supplier's download size, for reference.
         glb_bytes = len(fitted.get("combined") or b"")
         lens_bytes = _estimated_lens_bytes(fit_meshes, fit_faces)
         within = lens_bytes <= LENS_MAX_BYTES
-        # The estimate is accurate to a few % but not exact, so a model sitting in the
-        # top 10% of the budget is "near cap" — flag it amber so the admin confirms the
-        # real size in Lens Studio before approving, rather than trusting a green tick.
-        near = within and lens_bytes > 0.90 * LENS_MAX_BYTES
+        near = within and lens_bytes > 0.75 * LENS_MAX_BYTES   # wide band — estimate is rough
         meta["lens"] = {"bytes": lens_bytes, "glbBytes": glb_bytes,
                         "capBytes": LENS_MAX_BYTES, "withinCap": within,
                         "near": near, "estimated": True}
-        if near:
-            meta["warnings"].append("Estimated fitted lens is ~%.1f MB — close to Camera Kit's "
-                                    "%d MB cap. Confirm the real size after importing to Lens "
-                                    "Studio; if it reports over 8 MB, Reject and ask the supplier "
-                                    "for smaller textures."
-                                    % (lens_bytes / 1048576.0, LENS_MAX_BYTES // 1048576))
+        # Count texture maps — the real driver of lens size — so the guidance points at
+        # the lever that actually works (fewer/simpler maps) rather than resolution,
+        # which Lens Studio's compression makes largely irrelevant.
+        n_maps = len(_unique_texture_ids(fit_meshes))
         if not within:
-            # Over cap at the current texture resolution. The admin has two moves:
-            # drop the textures to the suggested size and re-check how it looks, or
-            # reject and ask the supplier for smaller source art. We surface both.
-            sug = meta.get("textures", {}).get("suggestPx")
-            meta["warnings"].append("Estimated fitted lens is ~%.1f MB, over Camera Kit's "
-                                    "%d MB cap at %dpx textures. Either reduce the textures%s "
-                                    "and re-check the preview, or Reject and ask the supplier "
-                                    "for smaller source art."
-                                    % (lens_bytes / 1048576.0, LENS_MAX_BYTES // 1048576,
-                                       tex_after,
-                                       (" to %dpx" % sug) if sug else ""))
+            meta["warnings"].append("Estimated fitted lens is ~%.1f MB — likely over Camera "
+                                    "Kit's %d MB cap. IMPORT IT TO LENS STUDIO and read the real "
+                                    "'Lens Size'. If it's over, the driver is usually the %d "
+                                    "texture map(s) or the triangle count, not their resolution "
+                                    "(Lens Studio compresses textures hard) — ask the supplier "
+                                    "for fewer/simpler maps, or Reject."
+                                    % (lens_bytes / 1048576.0, LENS_MAX_BYTES // 1048576, n_maps))
+        elif near:
+            meta["warnings"].append("Estimated fitted lens is ~%.1f MB — this estimate is rough, "
+                                    "so import to Lens Studio and confirm the real 'Lens Size' is "
+                                    "under %d MB before approving."
+                                    % (lens_bytes / 1048576.0, LENS_MAX_BYTES // 1048576))
 
     meta["ok"] = True
     return meta, fitted

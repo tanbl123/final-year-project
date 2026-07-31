@@ -443,9 +443,16 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
               {meta.lens && meta.lens.bytes > 0 && (
                 <div className="col-md-6">
                   <Row label="Lens size">
-                    {meta.lens.withinCap
-                      ? <span><span className={meta.lens.near ? 'text-warning' : 'text-success'}>{meta.lens.near ? '⚠' : '✓'}</span> {meta.lens.estimated ? '~' : ''}{(meta.lens.bytes / 1048576).toFixed(1)} MB <span className="text-muted">/ {Math.round(meta.lens.capBytes / 1048576)} MB cap{meta.lens.estimated ? ', packaged est.' : ''}</span>{meta.lens.near && <span className="badge text-bg-warning ms-1">near cap — confirm in Lens Studio</span>}</span>
-                      : <span className="text-danger">⚠ ~{(meta.lens.bytes / 1048576).toFixed(1)} MB — over {Math.round(meta.lens.capBytes / 1048576)} MB cap <span className="badge text-bg-danger ms-1">Reject — supplier must re-export smaller</span></span>}
+                    {/* This is a ROUGH estimate — Lens Studio's packaged size depends on
+                        texture-map count + its own compression, which we can't see from
+                        the .glb. The real number is Lens Studio's "Lens Size" after import,
+                        so we never show a confident pass — always point the admin there. */}
+                    <span>
+                      ≈{(meta.lens.bytes / 1048576).toFixed(1)} MB <span className="text-muted">/ {Math.round(meta.lens.capBytes / 1048576)} MB cap (rough est.)</span>
+                      {!meta.lens.withinCap
+                        ? <span className="badge text-bg-danger ms-1">likely over — check Lens Studio</span>
+                        : <span className="badge text-bg-secondary ms-1">confirm real size in Lens Studio</span>}
+                    </span>
                   </Row>
                 </div>
               )}
