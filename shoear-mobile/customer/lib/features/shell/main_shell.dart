@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'package:customer/core/utils/refresh_bus.dart';
+import 'package:customer/features/ar/ar_tryon_service.dart';
 import 'package:customer/features/cart/state/cart_provider.dart';
 import 'package:customer/features/cart/screens/cart_screen.dart';
 import 'package:customer/features/catalog/screens/catalog_screen.dart';
@@ -42,10 +43,18 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     ProfileScreen(),
   ];
 
+  // Kept alive for the whole app session so we can refresh the Camera Kit lens
+  // repository (newly-published try-on lenses otherwise stay hidden behind
+  // Camera Kit's on-device cache until its TTL or a reinstall).
+  final ArTryOnService _ar = ArTryOnService();
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // Pull the latest lenses on launch so a shoe published while the app was
+    // closed is available the first time the customer opens AR try-on.
+    _ar.warmLensCache();
   }
 
   @override
@@ -57,7 +66,12 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Returning to the foreground may mean statuses changed while away.
-    if (state == AppLifecycleState.resumed) bumpRefresh();
+    if (state == AppLifecycleState.resumed) {
+      bumpRefresh();
+      // …and a lens may have been published while backgrounded — refresh the
+      // Camera Kit cache so AR try-on doesn't open blank for a new shoe.
+      _ar.warmLensCache();
+    }
   }
 
   @override
