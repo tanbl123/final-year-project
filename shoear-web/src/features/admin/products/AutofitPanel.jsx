@@ -220,7 +220,11 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
     /decimat/i,                             // shown in "Detail"
     /assigned by position/i,                // shown in "Pair split"
   ];
-  const checkNotes = (meta?.warnings || []).filter((w) => !REDUNDANT.some((re) => re.test(w)));
+  // ...but a lens-size / cap message is an action item (reject, or confirm in Lens
+  // Studio), not a restatement of a row — always keep it even if it mentions textures.
+  const KEEP = /\bcap\b|lens|over \d/i;
+  const checkNotes = (meta?.warnings || []).filter(
+    (w) => KEEP.test(w) || !REDUNDANT.some((re) => re.test(w)));
 
   return (
     <div className="mt-3">
@@ -404,9 +408,11 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
               {meta.textures && meta.textures.beforePx > 0 && (
                 <div className="col-md-6">
                   <Row label="Textures">
-                    {meta.textures.resized || meta.textures.willResize
-                      ? <span><span className="text-success">✓</span> {meta.textures.beforePx} → {meta.textures.afterPx}px</span>
-                      : <span>{meta.textures.beforePx}px <span className="text-muted">(fine)</span></span>}
+                    {meta.textures.kept
+                      ? <span>{meta.textures.beforePx}px <span className="text-muted">(kept — supplier resolution)</span></span>
+                      : meta.textures.resized || meta.textures.willResize
+                        ? <span><span className="text-success">✓</span> {meta.textures.beforePx} → {meta.textures.afterPx}px</span>
+                        : <span>{meta.textures.beforePx}px <span className="text-muted">(fine)</span></span>}
                   </Row>
                 </div>
               )}
@@ -425,8 +431,8 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                 <div className="col-md-6">
                   <Row label="Lens size">
                     {meta.lens.withinCap
-                      ? <span><span className="text-success">✓</span> {meta.lens.estimated ? '~' : ''}{(meta.lens.bytes / 1048576).toFixed(1)} MB <span className="text-muted">/ {Math.round(meta.lens.capBytes / 1048576)} MB cap{meta.lens.estimated ? ', packaged est.' : ''}</span></span>
-                      : <span className="text-danger">⚠ ~{(meta.lens.bytes / 1048576).toFixed(1)} MB — over {Math.round(meta.lens.capBytes / 1048576)} MB cap</span>}
+                      ? <span><span className={meta.lens.near ? 'text-warning' : 'text-success'}>{meta.lens.near ? '⚠' : '✓'}</span> {meta.lens.estimated ? '~' : ''}{(meta.lens.bytes / 1048576).toFixed(1)} MB <span className="text-muted">/ {Math.round(meta.lens.capBytes / 1048576)} MB cap{meta.lens.estimated ? ', packaged est.' : ''}</span>{meta.lens.near && <span className="badge text-bg-warning ms-1">near cap — confirm in Lens Studio</span>}</span>
+                      : <span className="text-danger">⚠ ~{(meta.lens.bytes / 1048576).toFixed(1)} MB — over {Math.round(meta.lens.capBytes / 1048576)} MB cap <span className="badge text-bg-danger ms-1">Reject — supplier must re-export smaller</span></span>}
                   </Row>
                 </div>
               )}

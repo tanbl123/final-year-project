@@ -15,11 +15,16 @@ a few declared facts, it:
            leaves — sole-down (mass sits low), toe-forward (the heel end is
            taller) — each with a CONFIDENCE score so low-confidence fits are
            flagged for QC instead of silently trusted.
-  4. OPTIMISES for the mobile target: downscales oversized textures (the real
-     phone bottleneck — lossless to the UV mapping) and decimates high-poly
-     geometry to a per-foot triangle budget with quadric edge collapse. Geometry
-     decimation is skipped for textured models (the backend drops UVs) and
-     flagged for Lens Studio's UV-aware optimiser instead.
+  4. OPTIMISES for the mobile target — but ONLY where it doesn't change how the
+     shoe looks. Geometry is decimated to a per-foot triangle budget with quadric
+     edge collapse (invisible at AR viewing distance, but keeps the framerate up).
+     TEXTURES ARE KEPT AT THE SUPPLIER'S ORIGINAL RESOLUTION: they carry the
+     product's visible identity (colourway, logo, material), so the try-on must
+     match what the supplier proposed. A model whose textures push it over Camera
+     Kit's 8 MB lens cap is NOT silently degraded — it's flagged so the admin can
+     reject it and ask the supplier to re-export a smaller/compliant model.
+     Geometry decimation is skipped for textured models when the backend drops UVs
+     and flagged for Lens Studio's UV-aware optimiser instead.
   5. BAKES the fit into ONE .glb holding both shoes as named nodes (Shoe_L /
      Shoe_R) — uniform-scaled to real length, sole on Y=0, laid out as a pair —
      which is what Lens Studio publishes to a lens group. Also SUGGESTS the
@@ -70,31 +75,29 @@ TRI_TARGET = 50_000              # per-foot triangle budget for real-time mobile
                                  # real time, and at AR viewing distance a 50k/foot
                                  # silhouette is visually indistinguishable from it — this
                                  # is a FRAMERATE budget, not a size one, so it stays fixed.
-# The AR try-on can never be byte-identical to the supplier's master (Camera Kit
-# rejects any lens over 8 MB and phones can't render a full-res model live). The
-# goal is instead: keep as much of the supplier's detail as the 8 MB cap allows,
-# and reduce ONLY as far as fitting forces. Texture resolution is where the visible
-# product identity lives (colourway, logo, material), so we START at the supplier's
-# resolution (up to MAX_TEX) and step DOWN the ladder only until the packaged
-# estimate fits — never to a fixed low default that wastes cap headroom.
-MAX_TEX = 2048                   # ceiling on texture edge (px); kept when it fits the cap
-TEX_LADDER = (2048, 1536, 1280, 1024, 768, 512, 384, 256)  # descending fit steps
+# The AR try-on must match what the supplier proposed, so TEXTURES ARE NEVER
+# DOWNSCALED — texture resolution is where the visible product identity lives
+# (colourway, logo, material), and softening it makes the shoe look like a
+# different product. Geometry is still decimated (invisible at AR distance,
+# keeps framerate). If the supplier's full-resolution textures push the model
+# over the 8 MB cap, we DON'T degrade it — we flag it for the admin to reject
+# and ask the supplier to re-export smaller.
 # The .glb the supplier downloads is small because glTF stores textures
 # PNG/JPEG-compressed — but Lens Studio expands them, so the .glb byte count badly
-# under-reports the real lens size. We budget against an ESTIMATE of the packaged
-# size (near-uncompressed texture footprint + geometry) and keep the largest texture
-# tier whose estimate clears the cap with headroom.
+# under-reports the real lens size. We therefore judge "fits the cap?" against an
+# ESTIMATE of the packaged size (near-uncompressed texture footprint + geometry).
 LENS_MAX_BYTES = 8 * 1024 * 1024         # Camera Kit hard per-lens cap
-LENS_TARGET_BYTES = 7 * 1024 * 1024      # aim here so we clear the cap with headroom
-MIN_TEX = 256                    # don't shrink textures below this while fitting to size
 # Calibrated against real Lens Studio 5.22 packaged sizes for a fitted pair with two
 # textures: 2048px -> 8.14 MB, 1024px -> 4.92 MB. Solving the two points gives
-# ~0.5 bytes/texel and the rest (geometry + occluders + template) as fixed-ish cost;
-# the constants below round UP so the estimate stays conservative (never predicts
-# smaller than reality, so a "fits" verdict is trustworthy).
-TEX_BYTES_PER_PX = 0.6           # packaged (near-uncompressed) cost per texture texel
-GEOM_BYTES_PER_FACE = 30         # packaged geometry cost per triangle
-LENS_OVERHEAD_BYTES = 1536 * 1024 # occluders + template scripts/materials we don't export
+# ~0.5 bytes/texel for textures and ~3.9 MB for everything else (decimated geometry
+# + foot occluders + template scripts/materials). Since geometry is always decimated
+# to the same triangle budget, that non-texture part is ~constant across models.
+# These match both data points to within ~1% (no longer rounded up: we're deciding
+# reject-vs-keep now, so an over-conservative estimate would falsely reject good
+# models — accuracy matters more than a safety margin).
+TEX_BYTES_PER_PX = 0.5           # packaged (near-uncompressed) cost per texture texel
+GEOM_BYTES_PER_FACE = 20         # packaged geometry cost per triangle
+LENS_OVERHEAD_BYTES = 2 * 1024 * 1024  # foot occluders + template scripts/materials
 DEFAULT_LENGTH_CM = 26.0         # average adult foot if none declared
 MIN_PLAUSIBLE_CM = 5.0           # a real shoe is never shorter than this
 MAX_PLAUSIBLE_CM = 55.0          # ...or longer than this (after unit conversion)
@@ -1649,8 +1652,9 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     # 9. projected optimisation report (cheap: texture size + face count captured
     #    up front). The full build below overrides with actuals.
     if tex_px:
-        meta["textures"] = {"beforePx": tex_px, "afterPx": min(tex_px, MAX_TEX),
-                            "resized": 0, "cap": MAX_TEX, "willResize": tex_px > MAX_TEX}
+        # Textures are kept at the supplier's resolution — never downscaled.
+        meta["textures"] = {"beforePx": tex_px, "afterPx": tex_px,
+                            "resized": 0, "cap": None, "willResize": False, "kept": True}
     per_foot = total_faces // (2 if declared_count == 2 else 1)
     textured = tex_px > 0
     meta["decimation"] = {"applied": False, "before": per_foot, "after": per_foot,
@@ -1663,15 +1667,16 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         _t0 = time.time()
         _blog("start: faces=%d textured=%s count=%s texPx=%d straighten=%s"
               % (int(len(mesh.faces)), _has_uv_texture(mesh), declared_count, tex_px, auto_orient))
-        dec_before = dec_after = tex_before = tex_after = tex_resized = 0
+        dec_before = dec_after = tex_before = tex_after = 0
         dec_skipped_tex = [False]
 
         def _prep(shoe):
-            nonlocal dec_before, dec_after, tex_before, tex_after, tex_resized
-            tb, ta, tr = _optimize_textures(shoe, MAX_TEX)
-            tex_before = max(tex_before, tb)
-            tex_after = max(tex_after, ta)
-            tex_resized += tr
+            nonlocal dec_before, dec_after, tex_before, tex_after
+            # Keep textures at the supplier's resolution (visible product identity);
+            # only MEASURE them. Geometry is still decimated below.
+            px = _max_texture_px(shoe)
+            tex_before = max(tex_before, px)
+            tex_after = max(tex_after, px)
             d, before, after, _ = _decimate(shoe, TRI_TARGET)
             dec_before += before
             dec_after += after
@@ -1729,46 +1734,26 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         _blog("combined+exported at %.2fs (bytes=%d)"
               % (time.time() - _t0, len(fitted.get("combined") or b"")))
 
-        # Fit to Camera Kit's 8 MB lens cap. Geometry is already decimated to the
-        # mobile budget (UV-preserving), so the texture is what's left to trim. We
-        # size against the ESTIMATED PACKAGED lens size — not the .glb byte count,
-        # which is far smaller because glTF compresses textures that Lens Studio then
-        # expands — shrinking textures in halves until the estimate clears the cap
-        # (with headroom) or we hit the texture floor. Cheap: a few extra exports,
-        # and only when a model is genuinely oversized.
-        cap_cap = MAX_TEX
-        fit_shrunk = False
-        fit_meshes = [m for m in (left_norm, right_norm, primary_norm) if m is not None]
+        # Estimate the PACKAGED lens size against Camera Kit's 8 MB cap. Textures are
+        # kept at the supplier's resolution (never downscaled), so this is judged
+        # as-is: if it's over, the model is flagged for the admin to reject rather
+        # than silently degraded. We size against the estimated packaged size, not
+        # the .glb byte count, which is far smaller because glTF compresses textures
+        # that Lens Studio then expands.
+        # primary_norm aliases right_norm (or left_norm), so dedupe by identity —
+        # otherwise a foot's triangles/textures would be counted twice in the estimate.
+        fit_meshes = []
+        _seen_meshes = set()
+        for m in (left_norm, right_norm, primary_norm):
+            if m is not None and id(m) not in _seen_meshes:
+                _seen_meshes.add(id(m))
+                fit_meshes.append(m)
         fit_faces = sum(int(len(m.faces)) for m in fit_meshes) or int(total_faces)
-        est_lens = _estimated_lens_bytes(fit_meshes, fit_faces)
-        # Walk DOWN the ladder, keeping the LARGEST texture tier whose packaged
-        # estimate still fits under target — preserve as much of the supplier's
-        # detail as the cap allows, instead of cutting to a fixed low default.
-        for tier in TEX_LADDER:
-            if est_lens <= LENS_TARGET_BYTES:
-                break
-            if tier >= cap_cap or tier < MIN_TEX:
-                continue                        # only ever step down, respect the floor
-            cap_cap = tier
-            for m in fit_meshes:
-                _optimize_textures(m, cap_cap)
-            fitted["combined"] = _export_combined()
-            est_lens = _estimated_lens_bytes(fit_meshes, fit_faces)
-            fit_shrunk = True
-            _blog("size-fit: texture cap %dpx -> est lens %d bytes (glb %d)"
-                  % (cap_cap, est_lens, len(fitted["combined"])))
-        if fit_shrunk:
-            tex_after = max((_max_texture_px(m) for m in fit_meshes), default=tex_after)
 
         # override the projected report with what actually happened
         if tex_before:
             meta["textures"] = {"beforePx": tex_before, "afterPx": tex_after,
-                                "resized": tex_resized,
-                                "cap": min(MAX_TEX, cap_cap) if fit_shrunk else MAX_TEX}
-            if tex_resized:
-                meta["warnings"].append("Kept textures at %dpx (down from %dpx) — the largest "
-                                        "resolution that fits Camera Kit's 8 MB lens cap."
-                                        % (tex_after, tex_before))
+                                "resized": 0, "cap": None, "kept": True}
         if dec_before:
             applied = dec_after < dec_before
             # "heavy" = we removed the bulk of the triangles (>70%). Decimation to
@@ -1797,23 +1782,40 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                                         % dec_before)
 
         # Report the ESTIMATED packaged lens size against Camera Kit's hard cap.
-        # We report the estimate (uncompressed texture footprint + geometry) rather
-        # than the .glb byte count, because the .glb badly under-reports what Lens
-        # Studio actually packages — a model can be a small .glb yet still bust the
-        # 8 MB cap once its textures are expanded. `glbBytes` is kept for reference.
+        # Lens Studio re-encodes textures to its own GPU format when it packages the
+        # lens, so the size follows the (near-uncompressed) texture footprint + geometry
+        # — NOT the .glb byte count, which depends on how well the source PNG/JPEGs
+        # compress and can be either smaller (typical) or larger (incompressible art)
+        # than the packaged result. So we judge the cap on the estimate; `glbBytes` is
+        # kept only as reference for the supplier's download.
         glb_bytes = len(fitted.get("combined") or b"")
-        lens_bytes = max(glb_bytes, _estimated_lens_bytes(fit_meshes, fit_faces))
+        lens_bytes = _estimated_lens_bytes(fit_meshes, fit_faces)
         within = lens_bytes <= LENS_MAX_BYTES
+        # The estimate is accurate to a few % but not exact, so a model sitting in the
+        # top 10% of the budget is "near cap" — flag it amber so the admin confirms the
+        # real size in Lens Studio before approving, rather than trusting a green tick.
+        near = within and lens_bytes > 0.90 * LENS_MAX_BYTES
         meta["lens"] = {"bytes": lens_bytes, "glbBytes": glb_bytes,
                         "capBytes": LENS_MAX_BYTES, "withinCap": within,
-                        "estimated": True}
+                        "near": near, "estimated": True}
+        if near:
+            meta["warnings"].append("Estimated fitted lens is ~%.1f MB — close to Camera Kit's "
+                                    "%d MB cap. Confirm the real size after importing to Lens "
+                                    "Studio; if it reports over 8 MB, Reject and ask the supplier "
+                                    "for smaller textures."
+                                    % (lens_bytes / 1048576.0, LENS_MAX_BYTES // 1048576))
         if not within:
+            # Textures are deliberately NOT downscaled (they'd change how the product
+            # looks), so an over-cap model is the supplier's to fix. Flag it for the
+            # admin to reject and request a compliant re-export.
             meta["warnings"].append("Estimated fitted lens is ~%.1f MB, over Camera Kit's "
-                                    "%d MB cap — Lens Studio will reject it. Textures are "
-                                    "already at the floor (%dpx), so the polygon count is "
-                                    "too high; reduce it and re-upload."
+                                    "%d MB cap. Textures are kept at the supplier's "
+                                    "resolution (%dpx) so the try-on matches the product, so "
+                                    "this can't be shipped as-is — Reject and ask the supplier "
+                                    "to re-export with smaller/fewer textures (aim for one "
+                                    "≤2048px map, or ≤1024px if the pair shares two)."
                                     % (lens_bytes / 1048576.0, LENS_MAX_BYTES // 1048576,
-                                       MIN_TEX))
+                                       tex_before))
 
     meta["ok"] = True
     return meta, fitted
