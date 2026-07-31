@@ -108,7 +108,7 @@ def autofit_endpoint():
             count_declared=bool(body.get('countDeclared', True)),  # supplier sets False pre-choice
             build_files=want_files,   # skip the heavy bake/export for analysis-only
             max_tex=(int(body['maxTex']) if body.get('maxTex') else None),   # admin texture cap
-            tri_target=(int(body['maxTris']) if body.get('maxTris') else None),  # admin triangle target
+            tri_target=(int(body['maxTris']) if body.get('maxTris') else None),  # admin PAIR triangle total
         )
     except Exception as e:
         import traceback

@@ -120,8 +120,8 @@ export function setProductArLens(productId, arLensId) {
 // default false keeps the supplier's original orientation.
 // textureCap (px) downscales textures to that edge to fit the 8 MB lens cap;
 // omit/0 keeps the supplier's full resolution (the faithful default).
-// triCap (per-foot triangle target) — omit/0 uses the ~50k/foot default; a high
-// value (e.g. 120000) keeps the supplier's geometry, clamped to the import limit.
+// triCap (PAIR triangle total, both feet) — omit/0 uses the ~100k default; a custom
+// value dials the detail to fit; a huge value keeps the supplier's full geometry.
 export function getProductAutofit(productId, { count = 'auto', side = 'right', length, files = false, straighten = false, textureCap, triCap } = {}) {
   const qs = new URLSearchParams({ count: String(count), side, files: files ? '1' : '0', orient: straighten ? '1' : '0' });
   if (length) { qs.set('length', String(length)); }

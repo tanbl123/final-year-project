@@ -58,9 +58,9 @@ function TransformCard({ title, pos, rot, scale }) {
   );
 }
 
-// "Keep supplier's geometry": a per-foot triangle target so large the ML service never
-// decimates, i.e. the full supplier mesh is retained. (Verified in practice — a
-// 145k-tri/foot shoe imports and publishes fine, so there's no artificial ceiling.)
+// "Keep supplier's geometry": a PAIR triangle total so large the ML service never
+// decimates, i.e. the full supplier mesh is retained. (A very high-poly shoe kept this
+// way can exceed the 8 MB lens cap — that's why the admin can also set a custom target.)
 const KEEP_TRIS = 100000000;
 
 // Admin AR auto-fit panel. Runs the product's uploaded 3D model through the ML
@@ -106,7 +106,8 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
   const [savingOrig, setSavingOrig] = useState(false);  // fetching the raw upload for download
   const [showFitted, setShowFitted] = useState(false);  // preview: original vs fitted pair
   const [textureCap, setTextureCap] = useState(0);      // 0 = supplier full-res; else px cap the admin picked
-  const [triCap, setTriCap] = useState(0);              // 0 = ~50k/foot default; KEEP_TRIS = keep supplier's
+  const [triCap, setTriCap] = useState(0);              // PAIR target: 0 = ~100k default; KEEP_TRIS = keep supplier's; else custom
+  const [customTris, setCustomTris] = useState('');     // admin's custom pair-triangle input (text)
   const blobUrls = useRef([]);                    // track for revocation
   const mvRef = useRef(null);                     // the <model-viewer> element
 
@@ -176,7 +177,14 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
 
   // Admin picks a texture resolution / triangle detail -> remember it and regenerate.
   function pickTextureCap(cap) { setTextureCap(cap); generate({ textureCap: cap }); }
-  function pickTriCap(cap) { setTriCap(cap); generate({ triCap: cap }); }
+  function pickTriCap(cap) { setTriCap(cap); setCustomTris(''); generate({ triCap: cap }); }
+  // Admin typed a custom PAIR triangle total -> use it (ignored if blank/invalid).
+  function applyCustomTris() {
+    const n = parseInt(customTris, 10);
+    if (!Number.isFinite(n) || n <= 0) return;
+    setTriCap(n);
+    generate({ triCap: n });
+  }
 
   function download() {
     if (!fitted?.url) return;
@@ -529,11 +537,26 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                   className={`btn btn-outline-secondary${triCap === KEEP_TRIS ? ' active' : ''}`}
                   onClick={() => pickTriCap(KEEP_TRIS)} disabled={generating}>Keep supplier's</button>
               </div>
+              {/* custom PAIR triangle target — lets the admin dial detail to fit the 8 MB cap */}
+              <span className="small text-muted">or</span>
+              <div className="input-group input-group-sm" style={{ width: 'auto' }}>
+                <input type="number" min="1" step="10000" className="form-control form-control-sm"
+                  style={{ width: '9rem' }} placeholder="custom tris (pair)"
+                  value={customTris} onChange={(e) => setCustomTris(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') applyCustomTris(); }}
+                  disabled={generating} />
+                <button type="button" className="btn btn-outline-secondary"
+                  onClick={applyCustomTris} disabled={generating || !customTris}>Apply</button>
+              </div>
+              {triCap !== 0 && triCap !== KEEP_TRIS && (
+                <span className="badge text-bg-secondary">custom: {triCap.toLocaleString()} tris</span>
+              )}
             </div>
             <div className="text-muted small mt-1">
               By default the pair is reduced to about 100,000 triangles — Snapchat's recommended budget for
-              smooth AR. "Keep supplier's" retains the full supplier geometry (smoother curves) but goes above
-              that budget, so check the framerate in Lens Studio.
+              smooth AR. "Keep supplier's" retains the full geometry (a very high-poly shoe can exceed the
+              8 MB cap this way). Or set a custom target and re-check the real Lens Size in Lens Studio —
+              pick the highest that still fits. Numbers are for the pair (both shoes), matching Lens Studio.
             </div>
 
             {/* generate + download */}

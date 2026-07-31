@@ -209,17 +209,21 @@ def _unique_texture_ids(meshes):
     return seen
 
 
-def _resolve_tri_target(requested):
-    """Per-foot triangle target for decimation. `requested` is the admin's choice:
-    None -> the default budget (Snapchat ~100k/scene, i.e. ~50k/foot); a positive int ->
-    that target, e.g. "keep supplier's" passes a very large value so nothing is removed.
-    No artificial ceiling — a truly degenerate file is caught earlier by HARD_MAX_FACES,
-    and Lens Studio is the real import/size gate."""
+def _resolve_tri_target(requested_pair, n_feet):
+    """Per-foot triangle target for decimation, from the admin's desired PAIR total.
+    `requested_pair` is the admin's choice for the whole lens (both feet), matching the
+    panel display and Lens Studio's own triangle readout: None -> the default budget
+    (Snapchat ~100k/scene, i.e. ~50k/foot); a positive int -> split evenly across the
+    feet; "keep supplier's" passes a huge value so nothing is removed. No artificial
+    ceiling — a truly degenerate file is caught earlier by HARD_MAX_FACES, and Lens
+    Studio is the real import/size gate."""
     try:
-        req = int(requested) if requested else None
+        req = int(requested_pair) if requested_pair else None
     except (TypeError, ValueError):
         req = None
-    return req if req and req > 0 else TRI_DEFAULT
+    if not req or req <= 0:
+        return TRI_DEFAULT
+    return max(1, req // max(1, int(n_feet)))
 
 
 # ── Lens Studio foot-binding calibration ────────────────────────────────────
@@ -1368,11 +1372,12 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     the reduced version still looks like the product or should be rejected. (We don't
     estimate the packaged size ourselves — Lens Studio's "Lens Size" is authoritative.)
 
-    tri_target: optional admin override for the per-foot triangle count. None (default)
-    decimates to the Snapchat performance budget (~50k/foot). A higher number keeps more
-    of the supplier's geometry; "keep supplier's" passes a very large value so nothing is
-    removed (verified importable/publishable in practice). A source already under the
-    target is kept untouched. Truly degenerate files are still caught by HARD_MAX_FACES.
+    tri_target: optional admin override for the PAIR triangle total (both feet — matching
+    the panel display and Lens Studio's own readout). None (default) decimates to the
+    Snapchat performance budget (~100k pair). A higher number keeps more of the supplier's
+    geometry; "keep supplier's" passes a very large value so nothing is removed. The value
+    is split evenly across the feet for the actual per-mesh decimation. A source already
+    under the target is kept untouched; truly degenerate files are caught by HARD_MAX_FACES.
 
     count_declared: whether the caller has actually chosen the number of shoes.
     True (default, and for the admin's Auto-detect) -> emit the count-specific
@@ -1755,8 +1760,8 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         # default, or (for "keep supplier's") a huge target so nothing is removed. A foot
         # already below the target is kept untouched.
         norm_feet = _unique([left_norm, right_norm, primary_norm])
-        tri_goal = _resolve_tri_target(tri_target)
-        _blog("tri target = %d/foot (requested=%s, %d feet)"
+        tri_goal = _resolve_tri_target(tri_target, len(norm_feet))
+        _blog("tri target = %d/foot (requested pair=%s, %d feet)"
               % (tri_goal, tri_target, len(norm_feet)))
         decimated = {}
         for m in norm_feet:
