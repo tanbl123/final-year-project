@@ -185,8 +185,10 @@ def _optimize_textures(mesh, max_dim):
 #             covers the (fixed) occluder with a little reserve, regardless of the
 #             model's real size. See FOOT_COVER_LENGTH_CM.
 FOOT_BIND_DROP_CM = 5.0    # lower the shoe this far so its sole meets the foot sole
-FOOT_BIND_Z_CM = 0.0       # front/back seat (mesh is already centred on the foot)
-FOOT_BIND_X_CM = 0.0       # lateral seat for the base foot; the other foot mirrors X
+FOOT_BIND_Z_CM = 0.7       # nudge forward onto the foot — both test shoes agreed on +0.7
+FOOT_BIND_X_CM = 0.0       # centred. A per-model ±~0.6 lateral nudge is left to QC: its
+                           # SIGN varied between test shoes (each model's foot cavity is
+                           # centred a hair differently), so it isn't a fixed constant.
 
 # On-screen (Lens Studio) shoe LENGTH in cm that covers the template's foot
 # occluder with a little reserve — a real foot reads slightly bigger than the
