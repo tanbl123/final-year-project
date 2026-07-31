@@ -28,6 +28,11 @@ const List<String> _camKitMarkers = [
 ];
 const int _maxDepth = 5; // descend into nested cache folders, but bound the scan
 
+// Human-readable summary of the last clear, surfaced in a debug-only line in the UI
+// so it can be verified on-device (Honor/Huawei block `adb logcat`, so the terminal
+// route often shows nothing). Empty until the first clear runs.
+String lensCacheReport = '';
+
 Future<void> clearCameraKitLensCache() async {
   // Dedupe roots by path — on Android several of these resolve to the same cacheDir.
   final roots = <String, Directory>{};
@@ -46,8 +51,8 @@ Future<void> clearCameraKitLensCache() async {
   for (final root in roots.values) {
     cleared += _scanAndClear(root, 0);
   }
-  debugPrint('[lensCache] done — cleared $cleared Camera Kit folder(s) across '
-      '${roots.length} root(s): ${roots.keys.join(', ')}');
+  lensCacheReport = 'cleared $cleared Camera Kit folder(s) across ${roots.length} cache root(s)';
+  debugPrint('[lensCache] done — $lensCacheReport: ${roots.keys.join(', ')}');
 }
 
 // Recursively walk `dir` to _maxDepth: delete any directory whose name looks like

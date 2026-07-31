@@ -15,6 +15,7 @@ import 'package:customer/core/widgets/product_image.dart';
 import 'package:customer/core/utils/snackbar.dart';
 import 'package:customer/features/auth/screens/login_screen.dart';
 import 'package:customer/features/ar/ar_tryon_service.dart';
+import 'package:customer/features/ar/ar_lens_cache.dart' show lensCacheReport;
 
 class ProductDetailScreen extends StatefulWidget {
   final String productId;
@@ -266,6 +267,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           ),
                         ),
                       ),
+                      // Debug-only: shows what the startup Camera Kit lens-cache clear
+                      // did, so it can be verified on-device without adb/flutter logs
+                      // (Honor/Huawei block logcat). Hidden in release builds.
+                      if (kDebugMode && lensCacheReport.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
+                          child: Text(
+                            'lens cache: $lensCacheReport',
+                            style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          ),
+                        ),
                     ],
 
                     const SizedBox(height: 20),
