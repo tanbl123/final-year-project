@@ -65,28 +65,36 @@ except Exception:                # Pillow ships with trimesh's texture support
     Image = None
 
 MAX_BYTES = 50 * 1024 * 1024     # 50 MB — generous; Lens Studio optimises at publish
-TRI_TARGET = 50_000              # per-foot triangle budget for real-time mobile AR
-MAX_TEX = 1024                   # cap texture edge (px) — the real mobile bottleneck.
-                                 # 1024, not 2048: Lens Studio stores textures largely
-                                 # UNCOMPRESSED in the packaged lens (~1 byte/texel), so a
-                                 # single 2048² map already costs ~4 MB and two of them
-                                 # blow the 8 MB cap on their own — regardless of how small
-                                 # the .glb compresses to. 1024² is ~1 MB each: sharp enough
-                                 # at AR viewing distance, with room for geometry.
-# Camera Kit rejects any lens whose bundle exceeds 8 MB at publish. The .glb the
-# supplier downloads is small because glTF stores textures PNG/JPEG-compressed —
-# but Lens Studio expands them, so the .glb byte count badly under-reports the
-# real lens size. We therefore budget against an ESTIMATE of the packaged size
-# (uncompressed texture footprint + geometry), and shrink textures step by step
-# until that estimate clears the cap with headroom.
+TRI_TARGET = 50_000              # per-foot triangle budget for real-time mobile AR.
+                                 # A phone can't render the supplier's 1M-tri master in
+                                 # real time, and at AR viewing distance a 50k/foot
+                                 # silhouette is visually indistinguishable from it — this
+                                 # is a FRAMERATE budget, not a size one, so it stays fixed.
+# The AR try-on can never be byte-identical to the supplier's master (Camera Kit
+# rejects any lens over 8 MB and phones can't render a full-res model live). The
+# goal is instead: keep as much of the supplier's detail as the 8 MB cap allows,
+# and reduce ONLY as far as fitting forces. Texture resolution is where the visible
+# product identity lives (colourway, logo, material), so we START at the supplier's
+# resolution (up to MAX_TEX) and step DOWN the ladder only until the packaged
+# estimate fits — never to a fixed low default that wastes cap headroom.
+MAX_TEX = 2048                   # ceiling on texture edge (px); kept when it fits the cap
+TEX_LADDER = (2048, 1536, 1280, 1024, 768, 512, 384, 256)  # descending fit steps
+# The .glb the supplier downloads is small because glTF stores textures
+# PNG/JPEG-compressed — but Lens Studio expands them, so the .glb byte count badly
+# under-reports the real lens size. We budget against an ESTIMATE of the packaged
+# size (near-uncompressed texture footprint + geometry) and keep the largest texture
+# tier whose estimate clears the cap with headroom.
 LENS_MAX_BYTES = 8 * 1024 * 1024         # Camera Kit hard per-lens cap
 LENS_TARGET_BYTES = 7 * 1024 * 1024      # aim here so we clear the cap with headroom
 MIN_TEX = 256                    # don't shrink textures below this while fitting to size
-# Calibrated against Lens Studio 5.22 packaged lens sizes: two 2048² textures on a
-# fitted pair report ~8 MB of lens size on their own => ~1 byte per texel packaged.
-TEX_BYTES_PER_PX = 1.0           # packaged (near-uncompressed) cost per texture texel
-GEOM_BYTES_PER_FACE = 18         # rough packaged geometry cost per triangle
-LENS_OVERHEAD_BYTES = 512 * 1024 # occluders, template scripts, material graph, etc.
+# Calibrated against real Lens Studio 5.22 packaged sizes for a fitted pair with two
+# textures: 2048px -> 8.14 MB, 1024px -> 4.92 MB. Solving the two points gives
+# ~0.5 bytes/texel and the rest (geometry + occluders + template) as fixed-ish cost;
+# the constants below round UP so the estimate stays conservative (never predicts
+# smaller than reality, so a "fits" verdict is trustworthy).
+TEX_BYTES_PER_PX = 0.6           # packaged (near-uncompressed) cost per texture texel
+GEOM_BYTES_PER_FACE = 30         # packaged geometry cost per triangle
+LENS_OVERHEAD_BYTES = 1536 * 1024 # occluders + template scripts/materials we don't export
 DEFAULT_LENGTH_CM = 26.0         # average adult foot if none declared
 MIN_PLAUSIBLE_CM = 5.0           # a real shoe is never shorter than this
 MAX_PLAUSIBLE_CM = 55.0          # ...or longer than this (after unit conversion)
@@ -1733,8 +1741,15 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         fit_meshes = [m for m in (left_norm, right_norm, primary_norm) if m is not None]
         fit_faces = sum(int(len(m.faces)) for m in fit_meshes) or int(total_faces)
         est_lens = _estimated_lens_bytes(fit_meshes, fit_faces)
-        while (est_lens > LENS_TARGET_BYTES and cap_cap > MIN_TEX and fit_meshes):
-            cap_cap = max(MIN_TEX, cap_cap // 2)
+        # Walk DOWN the ladder, keeping the LARGEST texture tier whose packaged
+        # estimate still fits under target — preserve as much of the supplier's
+        # detail as the cap allows, instead of cutting to a fixed low default.
+        for tier in TEX_LADDER:
+            if est_lens <= LENS_TARGET_BYTES:
+                break
+            if tier >= cap_cap or tier < MIN_TEX:
+                continue                        # only ever step down, respect the floor
+            cap_cap = tier
             for m in fit_meshes:
                 _optimize_textures(m, cap_cap)
             fitted["combined"] = _export_combined()
@@ -1748,10 +1763,12 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         # override the projected report with what actually happened
         if tex_before:
             meta["textures"] = {"beforePx": tex_before, "afterPx": tex_after,
-                                "resized": tex_resized, "cap": MAX_TEX}
+                                "resized": tex_resized,
+                                "cap": min(MAX_TEX, cap_cap) if fit_shrunk else MAX_TEX}
             if tex_resized:
-                meta["warnings"].append("Downscaled texture(s) %dpx -> %dpx for mobile "
-                                        "AR performance." % (tex_before, tex_after))
+                meta["warnings"].append("Kept textures at %dpx (down from %dpx) — the largest "
+                                        "resolution that fits Camera Kit's 8 MB lens cap."
+                                        % (tex_after, tex_before))
         if dec_before:
             applied = dec_after < dec_before
             # "heavy" = we removed the bulk of the triangles (>70%). Decimation to
