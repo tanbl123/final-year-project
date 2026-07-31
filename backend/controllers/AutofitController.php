@@ -107,6 +107,7 @@ function handleValidateSupplierModel(PDO $pdo, array $auth, array $config): void
 //   &side=left|right  (single-shoe base foot; default right)
 //   &length=<cm>      (real shoe length for scaling; default ~26)
 //   &files=0|1        (1 also returns the fitted per-foot .glb as base64)
+//   &maxTex=<px>      (admin texture cap; absent = keep supplier full resolution)
 //
 // Runs the uploaded model through the ML auto-fit and returns the analysis so
 // the admin can QC it and download the fitted model for Lens Studio.
@@ -139,6 +140,10 @@ function handleAdminProductAutofit(PDO $pdo, string $id, array $config): void {
   // since uploads are usually already upright and re-guessing can flip them.
   // The admin opts in to auto-straightening with ?orient=1 for a mis-oriented model.
   $straighten = ((string) ($_GET['orient'] ?? '0')) === '1';
+  // Optional admin texture cap (px). Absent/0 -> keep the supplier's full
+  // resolution (the faithful default). Set (2048/1024/512) to downscale textures
+  // so an over-cap shoe can be previewed at a cap-fitting size instead of rejected.
+  $maxTex = isset($_GET['maxTex']) && ctype_digit((string) $_GET['maxTex']) ? (int) $_GET['maxTex'] : 0;
 
   $payload = [
     'modelUrl'     => $modelUrl,
@@ -149,6 +154,7 @@ function handleAdminProductAutofit(PDO $pdo, string $id, array $config): void {
   ];
   if ($countRaw === '1' || $countRaw === '2') { $payload['count'] = (int) $countRaw; }  // else auto-detect
   if ($lengthCm !== null && $lengthCm > 0)    { $payload['lengthCm'] = $lengthCm; }
+  if ($maxTex > 0)                            { $payload['maxTex'] = $maxTex; }
 
   $result = mlAutofit($config, $payload);
   if (isset($result['__error'])) {

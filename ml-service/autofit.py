@@ -239,6 +239,40 @@ def _estimated_lens_bytes(meshes, total_faces):
             + LENS_OVERHEAD_BYTES)
 
 
+def _texture_footprint_at(meshes, cap):
+    """Estimated packaged texture cost if every texture were capped at `cap` px on
+    its longest edge (aspect preserved). Used to suggest the largest texture size
+    that would fit the lens cap, without actually resizing anything."""
+    seen, total = set(), 0
+    for mesh in meshes:
+        mat = getattr(getattr(mesh, "visual", None), "material", None)
+        if mat is None:
+            continue
+        for a in _TEX_ATTRS:
+            img = getattr(mat, a, None)
+            if img is None or not hasattr(img, "size") or id(img) in seen:
+                continue
+            seen.add(id(img))
+            w, h = img.size
+            longest = max(int(w), int(h)) or 1
+            s = min(1.0, float(cap) / longest)
+            total += int(w) * int(h) * s * s * TEX_BYTES_PER_PX
+    return int(total)
+
+
+def _suggest_tex_cap(meshes, n_feet):
+    """Largest standard texture edge (px) whose packaged estimate fits the 8 MB cap,
+    assuming the geometry floor. Lets the admin panel offer "reduce to Npx" for an
+    over-cap model instead of a blanket reject. None if it already fits at full res
+    with no image over 2048, or if nothing sensible fits."""
+    faces = max(1, int(n_feet)) * TRI_FLOOR
+    base = faces * GEOM_BYTES_PER_FACE + LENS_OVERHEAD_BYTES
+    for tier in (2048, 1024, 512, 256):
+        if base + _texture_footprint_at(meshes, tier) <= LENS_MAX_BYTES:
+            return tier
+    return 256
+
+
 def _adaptive_tri_target(meshes, n_feet):
     """Per-foot triangle target: keep as many triangles as the 8 MB cap allows
     AFTER the full-resolution textures, so light-texture models get smoother
@@ -1391,8 +1425,15 @@ def _combine_pair(left_mesh, right_mesh, lr_known=True):
 
 def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                     declared_side="right", mirror_single=True, auto_orient=True,
-                    build_files=True, count_declared=True):
+                    build_files=True, count_declared=True, max_tex=None):
     """Validate + auto-fit a shoe model.
+
+    max_tex: optional admin override (px). None (default) keeps the supplier's
+    textures at full resolution — the faithful default. When the model is over the
+    8 MB lens cap at full res, the admin can set this (e.g. 2048/1024/512) to
+    downscale textures to that edge and preview the smaller, cap-fitting result,
+    deciding per shoe whether the reduced version still looks like the product or
+    should be rejected. meta.textures.suggestPx reports the largest size that fits.
 
     count_declared: whether the caller has actually chosen the number of shoes.
     True (default, and for the admin's Auto-detect) -> emit the count-specific
@@ -1691,15 +1732,26 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
               % (int(len(mesh.faces)), _has_uv_texture(mesh), declared_count, tex_px, auto_orient))
         dec_before = dec_after = tex_before = tex_after = 0
         dec_skipped_tex = [False]
+        # Admin texture override: None = keep supplier resolution (faithful default);
+        # a number downscales textures to that edge so an over-cap shoe can be
+        # previewed at a cap-fitting size and approved/rejected on how it looks.
+        try:
+            cap_px = int(max_tex) if max_tex else None
+        except (TypeError, ValueError):
+            cap_px = None
 
         def _prep(shoe):
             nonlocal tex_before, tex_after
-            # Keep textures at the supplier's resolution (visible product identity);
-            # only MEASURE them here. Geometry is decimated AFTER normalising, once
-            # the texture footprint is known and the adaptive triangle budget is set.
-            px = _max_texture_px(shoe)
-            tex_before = max(tex_before, px)
-            tex_after = max(tex_after, px)
+            # Measure textures. By default keep them at the supplier's resolution
+            # (visible product identity); only downscale if the admin explicitly
+            # capped them. Geometry is decimated AFTER normalising, once the texture
+            # footprint is known and the adaptive triangle budget is set.
+            before = _max_texture_px(shoe)
+            tex_before = max(tex_before, before)
+            after = before
+            if cap_px and before > cap_px:
+                _b, after, _r = _optimize_textures(shoe, cap_px)
+            tex_after = max(tex_after, after)
             return shoe
 
         # re-split the TEXTURED mesh for the actual bake (analysis used geo)
@@ -1793,8 +1845,19 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
 
         # override the projected report with what actually happened
         if tex_before:
+            reduced = tex_after < tex_before          # admin capped the textures
             meta["textures"] = {"beforePx": tex_before, "afterPx": tex_after,
-                                "resized": 0, "cap": None, "kept": True}
+                                "resized": 1 if reduced else 0,
+                                "cap": cap_px, "kept": not reduced,
+                                # largest edge that would fit the cap — the panel
+                                # offers this when a full-res model is over budget
+                                "suggestPx": _suggest_tex_cap(fit_meshes, len(fit_meshes))}
+            if reduced:
+                meta["warnings"].append("Textures downscaled %dpx -> %dpx at the admin's "
+                                        "request to fit Camera Kit's %d MB lens cap. Check the "
+                                        "Fitted-pair preview still looks like the product; if "
+                                        "detail is lost, Reject and ask for smaller source art."
+                                        % (tex_before, tex_after, LENS_MAX_BYTES // (1024*1024)))
         if dec_before:
             applied = dec_after < dec_before
             # "heavy" = we removed the bulk of the triangles (>70%). Decimation to
@@ -1846,17 +1909,17 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                                     "for smaller textures."
                                     % (lens_bytes / 1048576.0, LENS_MAX_BYTES // 1048576))
         if not within:
-            # Textures are deliberately NOT downscaled (they'd change how the product
-            # looks), so an over-cap model is the supplier's to fix. Flag it for the
-            # admin to reject and request a compliant re-export.
+            # Over cap at the current texture resolution. The admin has two moves:
+            # drop the textures to the suggested size and re-check how it looks, or
+            # reject and ask the supplier for smaller source art. We surface both.
+            sug = meta.get("textures", {}).get("suggestPx")
             meta["warnings"].append("Estimated fitted lens is ~%.1f MB, over Camera Kit's "
-                                    "%d MB cap. Textures are kept at the supplier's "
-                                    "resolution (%dpx) so the try-on matches the product, so "
-                                    "this can't be shipped as-is — Reject and ask the supplier "
-                                    "to re-export with smaller/fewer textures (aim for one "
-                                    "≤2048px map, or ≤1024px if the pair shares two)."
+                                    "%d MB cap at %dpx textures. Either reduce the textures%s "
+                                    "and re-check the preview, or Reject and ask the supplier "
+                                    "for smaller source art."
                                     % (lens_bytes / 1048576.0, LENS_MAX_BYTES // 1048576,
-                                       tex_before))
+                                       tex_after,
+                                       (" to %dpx" % sug) if sug else ""))
 
     meta["ok"] = True
     return meta, fitted

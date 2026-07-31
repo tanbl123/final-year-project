@@ -107,6 +107,7 @@ def autofit_endpoint():
             auto_orient=bool(body.get('autoOrient', True)),
             count_declared=bool(body.get('countDeclared', True)),  # supplier sets False pre-choice
             build_files=want_files,   # skip the heavy bake/export for analysis-only
+            max_tex=(int(body['maxTex']) if body.get('maxTex') else None),  # admin texture cap
         )
     except Exception as e:
         import traceback

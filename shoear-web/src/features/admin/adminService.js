@@ -118,9 +118,12 @@ export function setProductArLens(productId, arLensId) {
 // 'auto' | 1 | 2; side is 'left' | 'right'; length is the real shoe length (cm).
 // straighten=true auto-straightens the model (guess sole-down/toe-forward);
 // default false keeps the supplier's original orientation.
-export function getProductAutofit(productId, { count = 'auto', side = 'right', length, files = false, straighten = false } = {}) {
+// textureCap (px) downscales textures to that edge to fit the 8 MB lens cap;
+// omit/0 keeps the supplier's full resolution (the faithful default).
+export function getProductAutofit(productId, { count = 'auto', side = 'right', length, files = false, straighten = false, textureCap } = {}) {
   const qs = new URLSearchParams({ count: String(count), side, files: files ? '1' : '0', orient: straighten ? '1' : '0' });
   if (length) { qs.set('length', String(length)); }
+  if (textureCap) { qs.set('maxTex', String(textureCap)); }
   return apiGet(`/admin/products/${productId}/autofit?${qs}`, getToken());
 }
 

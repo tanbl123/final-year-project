@@ -100,6 +100,7 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
   const [generating, setGenerating] = useState(false);
   const [savingOrig, setSavingOrig] = useState(false);  // fetching the raw upload for download
   const [showFitted, setShowFitted] = useState(false);  // preview: original vs fitted pair
+  const [textureCap, setTextureCap] = useState(0);      // 0 = supplier full-res; else px cap the admin picked
   const blobUrls = useRef([]);                    // track for revocation
   const mvRef = useRef(null);                     // the <model-viewer> element
 
@@ -126,6 +127,7 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
       side: ctrl.side,
       length: ctrl.length ? Number(ctrl.length) : undefined,
       straighten: ctrl.straighten,
+      textureCap: textureCap || undefined,   // 0/undefined = keep supplier full-res
       ...extra,
     };
   }
@@ -142,10 +144,13 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
     }
   }
 
-  async function generate() {
+  // capOverride: px to cap textures at for THIS run (undefined = use current state).
+  // Passed explicitly so the texture buttons can regenerate before React state settles.
+  async function generate(capOverride) {
+    const cap = capOverride === undefined ? textureCap : capOverride;
     setGenerating(true); setErr(''); revokeBlobs();
     try {
-      const res = await getProductAutofit(productId, opts({ files: true }));
+      const res = await getProductAutofit(productId, opts({ files: true, textureCap: cap || undefined }));
       setMeta(res);
       if (res.fitted?.combined) {
         const url = b64ToBlobUrl(res.fitted.combined);
@@ -158,6 +163,12 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
     } finally {
       setGenerating(false);
     }
+  }
+
+  // Admin picks a texture resolution -> remember it and regenerate the preview.
+  function pickTextureCap(cap) {
+    setTextureCap(cap);
+    generate(cap);
   }
 
   function download() {
@@ -474,9 +485,33 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
               </div>
             )}
 
+            {/* texture resolution — faithful full-res by default; the admin reduces
+                ONLY to fit an over-cap shoe, then checks the preview still looks right */}
+            <div className="d-flex align-items-center gap-2 mt-3 flex-wrap">
+              <span className="small text-muted">Textures</span>
+              <div className="btn-group btn-group-sm" role="group" aria-label="Texture resolution">
+                {[{ v: 0, l: 'Original' }, { v: 2048, l: '2048' }, { v: 1024, l: '1024' }, { v: 512, l: '512' }].map((o) => (
+                  <button key={o.v} type="button"
+                    className={`btn btn-outline-secondary${textureCap === o.v ? ' active' : ''}`}
+                    onClick={() => pickTextureCap(o.v)} disabled={generating}>{o.l}{o.v ? 'px' : ''}</button>
+                ))}
+              </div>
+              {meta?.lens && !meta.lens.withinCap && meta?.textures?.suggestPx && (
+                <button type="button" className="btn btn-sm btn-warning"
+                  onClick={() => pickTextureCap(meta.textures.suggestPx)} disabled={generating}
+                  title="Downscale textures to the largest size that fits Camera Kit's 8 MB cap, then check the preview">
+                  Reduce to {meta.textures.suggestPx}px to fit
+                </button>
+              )}
+            </div>
+            <div className="text-muted small mt-1">
+              Textures stay at the supplier's resolution by default so the try-on matches the product.
+              Reduce them only if the shoe is over the 8 MB cap — then check the preview still looks like the product before approving.
+            </div>
+
             {/* generate + download */}
             <div className="d-flex gap-2 mt-3">
-              <button type="button" className="btn btn-sm btn-primary" onClick={generate} disabled={generating}>
+              <button type="button" className="btn btn-sm btn-primary" onClick={() => generate()} disabled={generating}>
                 {generating ? 'Generating…' : fitted ? 'Regenerate' : 'Generate fitted model'}
               </button>
               {fitted?.url && (
