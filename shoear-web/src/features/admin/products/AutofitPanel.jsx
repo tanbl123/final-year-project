@@ -425,8 +425,8 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                 <div className="col-md-6">
                   <Row label="Lens size">
                     {meta.lens.withinCap
-                      ? <span><span className="text-success">✓</span> {(meta.lens.bytes / 1048576).toFixed(1)} MB <span className="text-muted">/ {Math.round(meta.lens.capBytes / 1048576)} MB cap</span></span>
-                      : <span className="text-danger">⚠ {(meta.lens.bytes / 1048576).toFixed(1)} MB — over {Math.round(meta.lens.capBytes / 1048576)} MB cap</span>}
+                      ? <span><span className="text-success">✓</span> {meta.lens.estimated ? '~' : ''}{(meta.lens.bytes / 1048576).toFixed(1)} MB <span className="text-muted">/ {Math.round(meta.lens.capBytes / 1048576)} MB cap{meta.lens.estimated ? ', packaged est.' : ''}</span></span>
+                      : <span className="text-danger">⚠ ~{(meta.lens.bytes / 1048576).toFixed(1)} MB — over {Math.round(meta.lens.capBytes / 1048576)} MB cap</span>}
                   </Row>
                 </div>
               )}
