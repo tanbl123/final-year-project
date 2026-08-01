@@ -192,6 +192,13 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
   const srcTris = meta?.decimation?.before || 0;
   // Already at/under the optimized budget? Then "Optimized" is a no-op (nothing to reduce).
   const alreadyOptimal = srcTris > 0 && srcTris <= OPTIMIZED_PAIR_TRIS;
+  // When the analysis shows the model is already within the ~100k budget, "Optimized"
+  // is a disabled no-op, so make "Keep supplier's" the active default (still the same
+  // result — nothing to reduce — but the selection now matches what actually happens).
+  // Only nudges the untouched default (triCap === 0); an explicit admin choice stands.
+  useEffect(() => {
+    if (alreadyOptimal && triCap === 0) setTriCap(KEEP_TRIS);
+  }, [alreadyOptimal, triCap]);
   // Effective source texture resolution = what "Original" yields (supplier px, capped at
   // Lens Studio's 2048). A px preset >= this wouldn't reduce anything, so it's disabled.
   const texEffPx = meta?.textures?.beforePx ? Math.min(meta.textures.beforePx, LS_TEX_CAP) : 0;
@@ -538,7 +545,9 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
             <div className="d-flex align-items-center gap-2 mt-3 flex-wrap">
               <span className="small text-muted">Textures</span>
               <div className="btn-group btn-group-sm" role="group" aria-label="Texture resolution">
-                {[{ v: 0, l: 'Original' }, { v: 2048, l: '2048' }, { v: 1024, l: '1024' }, { v: 512, l: '512' }].map((o) => {
+                {/* No 2048 preset: "Original" is already capped at 2048 on Lens Studio
+                    import, so a 2048 button would do exactly what Original does. */}
+                {[{ v: 0, l: 'Original' }, { v: 1024, l: '1024' }, { v: 512, l: '512' }].map((o) => {
                   // a px preset >= the model's own resolution wouldn't reduce anything
                   const noop = o.v !== 0 && texEffPx > 0 && o.v >= texEffPx;
                   return (
