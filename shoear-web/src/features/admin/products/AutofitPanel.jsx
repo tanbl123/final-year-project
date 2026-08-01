@@ -116,7 +116,6 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
   const [triCap, setTriCap] = useState(0);              // PAIR target: 0 = ~100k default; KEEP_TRIS = keep supplier's; else custom
   const [customTris, setCustomTris] = useState('');     // admin's custom pair-triangle input (text)
   const [swapLr, setSwapLr] = useState(false);          // flip which foot is Shoe_L vs Shoe_R (fix a wrong guess)
-  const [genSettings, setGenSettings] = useState(null); // {textureCap, triCap, swapLr} the current preview was built with
   const blobUrls = useRef([]);                    // track for revocation
   const mvRef = useRef(null);                     // the <model-viewer> element
 
@@ -175,7 +174,6 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
         blobUrls.current.push(url);
         setFitted({ url });
         setShowFitted(true);
-        setGenSettings({ textureCap, triCap, swapLr });   // remember what this preview was built with
       }
     } catch (e) {
       setErr(e.message || 'Could not generate the fitted model.');
@@ -213,11 +211,6 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
     if (!customTrisValid) return;
     setTriCap(customTrisNum);   // selects the custom detail; Generate applies it
   }
-  // The current preview is stale if the selected texture/detail differs from what it
-  // was built with — prompt the admin to (re)generate.
-  const settingsChanged = !!fitted && !!genSettings
-    && (genSettings.textureCap !== textureCap || genSettings.triCap !== triCap
-        || genSettings.swapLr !== swapLr);
 
   function download() {
     if (!fitted?.url) return;
@@ -672,13 +665,6 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                 </button>
               )}
             </div>
-            {settingsChanged && !generating && (
-              <div className="small mt-1">
-                <span className="badge text-bg-warning">Settings changed</span>{' '}
-                the preview was built with different settings — click <strong>Regenerate</strong> to apply your changes.
-              </div>
-            )}
-
             {/* Lens Studio steps tucked away — available, not in the way */}
             <details className="mt-2">
               <summary className="small text-primary" style={{ cursor: 'pointer' }}>How to use this in Lens Studio</summary>
