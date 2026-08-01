@@ -572,11 +572,14 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
             <div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
               <span className="small text-muted">Detail</span>
               <div className="btn-group btn-group-sm" role="group" aria-label="Triangle detail">
-                <button type="button"
-                  className={`btn btn-outline-secondary${triCap === 0 ? ' active' : ''}`}
-                  onClick={() => pickTriCap(0)} disabled={generating || alreadyOptimal}
-                  title={alreadyOptimal ? 'Already under ~100k triangles — nothing to reduce' : undefined}>
-                  Optimized (~100k)</button>
+                {/* Hide "Optimized" when the model is already under ~100k — it would do
+                    nothing to reduce (same idea as the no-op texture presets). */}
+                {!alreadyOptimal && (
+                  <button type="button"
+                    className={`btn btn-outline-secondary${triCap === 0 ? ' active' : ''}`}
+                    onClick={() => pickTriCap(0)} disabled={generating}>
+                    Optimized (~100k)</button>
+                )}
                 <button type="button"
                   className={`btn btn-outline-secondary${triCap === KEEP_TRIS ? ' active' : ''}`}
                   onClick={() => pickTriCap(KEEP_TRIS)} disabled={generating}>Keep supplier's</button>
