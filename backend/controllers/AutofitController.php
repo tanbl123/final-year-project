@@ -109,7 +109,6 @@ function handleValidateSupplierModel(PDO $pdo, array $auth, array $config): void
 //   &files=0|1        (1 also returns the fitted per-foot .glb as base64)
 //   &maxTex=<px>      (admin texture cap; absent = keep supplier full resolution)
 //   &maxTris=<n>      (admin PAIR triangle total; absent = ~100k default; huge = keep supplier's)
-//   &swapLR=0|1       (1 swaps Shoe_L/Shoe_R for an unlabeled pair the auto guess got backwards)
 //
 // Runs the uploaded model through the ML auto-fit and returns the analysis so
 // the admin can QC it and download the fitted model for Lens Studio.
@@ -150,9 +149,6 @@ function handleAdminProductAutofit(PDO $pdo, string $id, array $config): void {
   // A custom value lets the admin dial the detail to fit the lens; a huge value means
   // "keep the supplier's geometry" (no reduction). The ML service splits it across feet.
   $maxTris = isset($_GET['maxTris']) && ctype_digit((string) $_GET['maxTris']) ? (int) $_GET['maxTris'] : 0;
-  // Optional admin manual L/R override for an unlabeled pair: swaps which shoe is
-  // Shoe_L vs Shoe_R when the auto guess put them on the wrong feet.
-  $swapLR = ((string) ($_GET['swapLR'] ?? '0')) === '1';
 
   $payload = [
     'modelUrl'     => $modelUrl,
@@ -165,7 +161,6 @@ function handleAdminProductAutofit(PDO $pdo, string $id, array $config): void {
   if ($lengthCm !== null && $lengthCm > 0)    { $payload['lengthCm'] = $lengthCm; }
   if ($maxTex > 0)                            { $payload['maxTex'] = $maxTex; }
   if ($maxTris > 0)                           { $payload['maxTris'] = $maxTris; }
-  if ($swapLR)                                { $payload['swapLR'] = true; }
 
   $result = mlAutofit($config, $payload);
   if (isset($result['__error'])) {
