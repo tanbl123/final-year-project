@@ -675,7 +675,7 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
             {settingsChanged && !generating && (
               <div className="small mt-1">
                 <span className="badge text-bg-warning">Settings changed</span>{' '}
-                the preview was built with different texture/detail — click <strong>Regenerate</strong> to apply your changes.
+                the preview was built with different settings — click <strong>Regenerate</strong> to apply your changes.
               </div>
             )}
 
