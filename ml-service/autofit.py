@@ -1382,13 +1382,8 @@ def _combine_pair(left_mesh, right_mesh, lr_known=True):
     laid out side by side as a pair. This is what Lens Studio wants at publish:
     import a single file, bind each named node to its foot, publish the pair to
     the lens group. Each node's geometry stays centred/seated at its own origin
-    (so the suggested anchor still applies).
-
-    The side-by-side offset that separates the two shoes for a clean preview is
-    put on a PARENT frame (Pair_L / Pair_R), NOT on the Shoe_L/Shoe_R nodes: the
-    shoe nodes keep an IDENTITY local transform, so Lens Studio shows them at
-    Position 0 and binding one to a foot needs no manual "zero the X" step, while
-    the preview still shows the pair spread apart (the parent carries the offset).
+    (so the suggested anchor still applies); the side-by-side offset is a node
+    transform for a clean pair preview and is reset when binding to a foot.
 
     Layout depends on whether we actually KNOW which shoe is left vs right:
       lr_known=True  — named parts, shape-identified, or a single shoe mirrored
@@ -1405,15 +1400,8 @@ def _combine_pair(left_mesh, right_mesh, lr_known=True):
     left_x = off if lr_known else -off        # known L/R -> as-worn (left on viewer's right)
     t_left = np.eye(4); t_left[0, 3] = left_x
     t_right = np.eye(4); t_right[0, 3] = -left_x
-    # Mesh nodes are children of offset parent frames with an identity local
-    # transform (so each shoe reads Position 0 in Lens Studio); the parent frames
-    # carry the preview offset.
-    scene.add_geometry(left_mesh, node_name="Shoe_L", geom_name="Shoe_L",
-                       parent_node_name="Pair_L", transform=np.eye(4))
-    scene.add_geometry(right_mesh, node_name="Shoe_R", geom_name="Shoe_R",
-                       parent_node_name="Pair_R", transform=np.eye(4))
-    scene.graph.update(frame_from="world", frame_to="Pair_L", matrix=t_left)
-    scene.graph.update(frame_from="world", frame_to="Pair_R", matrix=t_right)
+    scene.add_geometry(left_mesh, node_name="Shoe_L", geom_name="Shoe_L", transform=t_left)
+    scene.add_geometry(right_mesh, node_name="Shoe_R", geom_name="Shoe_R", transform=t_right)
     return scene.export(file_type="glb")
 
 
