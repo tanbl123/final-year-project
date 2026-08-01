@@ -62,7 +62,7 @@ CREATE TABLE `user` (
     fullName      VARCHAR(120) NOT NULL,
     phoneNumber   VARCHAR(20)  NULL,                     -- NULL for Google users until collected at checkout
     avatarUrl     VARCHAR(255) NULL,                     -- profile picture URL (NULL = initials fallback)
-    role          ENUM('Admin','Supplier','Customer','DeliveryPersonnel') NOT NULL,
+    role          ENUM('Admin','Supplier','Customer','DeliveryPersonnel','ArSpecialist') NOT NULL,
     -- Pending  : supplier/delivery awaiting admin approval
     -- Active    : approved & usable (customers are Active immediately)
     -- Rejected  : registration rejected — supplier may fix & resubmit
@@ -87,6 +87,17 @@ CREATE TABLE admin (
     PRIMARY KEY (adminId),
     UNIQUE KEY uq_admin_user (userId),
     CONSTRAINT fk_admin_user FOREIGN KEY (userId) REFERENCES `user`(userId)
+        ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- AR Specialist: internal staff who prepare products for AR (auto-fit QC + set
+-- the Camera Kit lens). Admin-provisioned, mirrors the `admin` extension table.
+CREATE TABLE ar_specialist (
+    arSpecialistId VARCHAR(10) NOT NULL,                    -- ARS0001
+    userId         VARCHAR(10) NOT NULL,
+    PRIMARY KEY (arSpecialistId),
+    UNIQUE KEY uq_ar_specialist_user (userId),
+    CONSTRAINT fk_ar_specialist_user FOREIGN KEY (userId) REFERENCES `user`(userId)
         ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
@@ -264,6 +275,8 @@ CREATE TABLE product_model (
     arLensId        VARCHAR(64)  NULL,                    -- Snapchat Camera Kit lens id (set by admin after building the lens)
     arLensUpdatedAt TIMESTAMP    NULL,                    -- bumped whenever the admin saves the lens; the app clears its on-device
                                                           -- lens cache when this changes, so a re-published SAME lens id still refreshes
+    arReadyAt       TIMESTAMP    NULL,                    -- "AR is prepared" marker: stamped when an AR Specialist saves a valid
+                                                          -- lens, cleared when the lens is removed. Drives the AR work queue.
     PRIMARY KEY (productModelId),
     KEY idx_model_product (productId),
     CONSTRAINT fk_model_product FOREIGN KEY (productId) REFERENCES product(productId)
