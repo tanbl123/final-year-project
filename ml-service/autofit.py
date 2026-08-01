@@ -942,11 +942,12 @@ def _orient_canonical(mesh, straighten=True):
                "method": "pca"}
 
 
-# Convention for this pipeline's oriented frame (sole -Y, heel -Z, toe +Z, width X),
-# a right-handed system: the MEDIAL (big-toe) side of a right foot ends up on +X.
-# So medial-on-+X => RIGHT shoe, medial-on--X => LEFT. If a real L/R-known test shows
-# the guess inverted, flip this one constant (do not touch the cue maths).
-_MEDIAL_POS_X_IS = "right"
+# Convention for this pipeline's oriented frame (sole -Y, heel -Z, toe +Z, width X).
+# The a-priori derivation said medial-on-+X => RIGHT shoe, but a real L/R-known test
+# on device showed the guess inverted (a left/right handedness in the oriented frame
+# the derivation missed), so per the documented procedure we flip this ONE constant
+# (the cue maths are untouched): medial-on-+X now => LEFT shoe, medial-on--X => RIGHT.
+_MEDIAL_POS_X_IS = "left"
 
 
 def _lr_from_geometry(m):
