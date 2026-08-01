@@ -954,18 +954,22 @@ def _lr_from_geometry(m):
     """Guess LEFT vs RIGHT from an already-oriented shoe (sole -Y, toe +Z, width X).
 
     Only meaningful when the orientation is resolved (auto-straighten), because L/R
-    depends on knowing toe-forward and sole-down. Two soft, foot-anatomy cues, both
+    depends on knowing toe-forward and sole-down. Three soft, foot-anatomy cues, all
     pointing at the MEDIAL (big-toe) side; the medial side then maps to a side via
     the convention above:
 
       1. ARCH TILT (primary) — the arch sits on the medial side, so at the MIDFOOT
          the outsole rides HIGHER on the medial side than the lateral side.
-      2. TOE-APEX OFFSET (backup) — the toe's forward-most point leans toward the
-         medial (big-toe) side of the centre line.
+      2. TOE-APEX OFFSET — the toe's forward-most point leans toward the medial
+         (big-toe) side of the centre line.
+      3. ARCH NOTCH (silhouette) — the medial edge is pinched IN at the midfoot
+         (the arch), so its midfoot:forefoot half-width ratio is smaller than the
+         lateral side's. Cues 1-2 need real 3D shape; this one reads the top-down
+         outline, so it still works on a FLAT-soled model.
 
-    Deliberately conservative: returns (None, 0.0) when the sole is flat/symmetric
-    (no arch, centred toe) — many AR models simplify the sole to a flat slab, and a
-    wrong guess must never override the supplier. Otherwise returns (side, conf)."""
+    Deliberately conservative: returns (None, 0.0) when the shoe is too symmetric for
+    any cue to fire — some AR models are near-symmetric slabs, and a wrong guess must
+    never override the supplier. Otherwise returns (side, conf)."""
     tc = np.asarray(m.triangles_center, dtype=np.float64)
     if len(tc) < 12:
         return None, 0.0
@@ -1002,6 +1006,27 @@ def _lr_from_geometry(m):
         conf = min(1.0, abs(ax) / (0.5 * wx) / 0.30)
         if conf > 0.0:
             votes[_medial_to_side(ax > 0)] += 0.5 * conf
+
+    # 3. arch notch (top-down silhouette — works even on a FLAT sole, where cues 1-2
+    #    can't). The MEDIAL edge is pinched inward at the midfoot (the arch), so its
+    #    half-width there is small RELATIVE to the forefoot/ball (where the foot is
+    #    widest); the LATERAL edge stays comparatively full. So the side with the
+    #    smaller midfoot:forefoot half-width ratio is the medial one.
+    def _halfwidth(zmask, pos_side):
+        sel = zmask & ((x > xmid) if pos_side else (x < xmid))
+        if int(sel.sum()) < 4:
+            return None
+        return float(np.percentile(np.abs(x[sel] - xmid), 90))   # robust edge extent
+    fore = z >= zmax - 0.35 * lz                        # forefoot / ball (widest)
+    midf = np.abs(z - zmid) <= 0.12 * lz                # midfoot (arch)
+    fp, mp = _halfwidth(fore, True), _halfwidth(midf, True)
+    fn, mn = _halfwidth(fore, False), _halfwidth(midf, False)
+    r_pos = (mp / fp) if (fp and mp and fp > 1e-9) else None
+    r_neg = (mn / fn) if (fn and mn and fn > 1e-9) else None
+    if r_pos is not None and r_neg is not None:
+        conf = min(1.0, abs(r_pos - r_neg) / 0.15)
+        if conf > 0.0:
+            votes[_medial_to_side(r_pos < r_neg)] += 0.75 * conf   # smaller ratio = medial
 
     side = max(votes, key=votes.get)
     net = votes[side] - votes["left" if side == "right" else "right"]
