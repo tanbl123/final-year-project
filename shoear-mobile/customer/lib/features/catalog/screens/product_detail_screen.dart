@@ -252,7 +252,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               return;
                             }
                             try {
-                              await _ar.open(p.arLensId!);
+                              await _ar.open(p.arLensId!, version: p.arLensUpdatedAt);
                             } catch (e) {
                               if (mounted) context.showSnack('Could not open AR try-on: $e');
                             }

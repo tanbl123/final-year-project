@@ -37,9 +37,11 @@ class ArTryOnService implements CameraKitFlutterEvents {
   static const _seenLensKey = 'ar_seen_lens_ids';
 
   /// Launches Camera Kit with [lensId] applied. Requests camera/mic first.
-  Future<void> open(String lensId) async {
+  /// [version] is the lens's save timestamp (product.arLensUpdatedAt); passing it
+  /// lets us also refresh when the admin re-publishes NEW content under the SAME id.
+  Future<void> open(String lensId, {String? version}) async {
     await [Permission.camera, Permission.microphone].request();
-    await _refreshCacheIfNewLens(lensId);
+    await _refreshCacheIfNewLens(lensId, version);
     await _cameraKit.openCameraKitWithSingleLens(
       lensId: lensId,
       groupId: kCameraKitGroupId,
@@ -49,16 +51,18 @@ class ArTryOnService implements CameraKitFlutterEvents {
 
   /// Camera Kit caches the group's lens content, so a re-published shoe can stay
   /// stale. Rather than clearing on every launch, we clear ONLY when opening a lens
-  /// id we haven't cached before — i.e. a new/changed lens (our admin publishes a new
-  /// lens id per update). Same lens id again -> cache is already fresh, no clear, so
+  /// we haven't cached before. We key on the lens id AND its save version, so BOTH a
+  /// brand-new id AND a re-published same id (the admin re-saved -> newer version)
+  /// force one fresh fetch; opening the same id+version again skips the clear, so
   /// normal try-ons stay fast. Best-effort: never blocks or fails the AR open.
-  Future<void> _refreshCacheIfNewLens(String lensId) async {
+  Future<void> _refreshCacheIfNewLens(String lensId, String? version) async {
     try {
+      final token = '$lensId@${version ?? ''}';   // id + version identifies the cached content
       final prefs = await SharedPreferences.getInstance();
       final seen = prefs.getStringList(_seenLensKey) ?? <String>[];
-      if (seen.contains(lensId)) return;      // already cached this lens
-      await clearCameraKitLensCache();         // new/changed lens -> force a fresh fetch
-      seen.add(lensId);
+      if (seen.contains(token)) return;        // already cached this exact lens+version
+      await clearCameraKitLensCache();         // new id or newer version -> force a fresh fetch
+      seen.add(token);
       await prefs.setStringList(_seenLensKey, seen);
     } catch (_) {/* never let cache housekeeping stop a try-on */}
   }

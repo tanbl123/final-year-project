@@ -112,6 +112,8 @@ class ProductDetail {
   final List<String> images;
   final String? modelUrl;
   final String? arLensId; // Snapchat Camera Kit lens id — AR try-on is available when set
+  final String? arLensUpdatedAt; // when the admin last saved the lens — a version token so
+  // the app refreshes its cached lens even when the SAME id gets re-published
   final List<ProductVariant> variants;
   final List<ProductReview> reviews;
   final double ratingAverage;
@@ -137,6 +139,7 @@ class ProductDetail {
     required this.images,
     this.modelUrl,
     this.arLensId,
+    this.arLensUpdatedAt,
     required this.variants,
     required this.reviews,
     required this.ratingAverage,
@@ -155,6 +158,7 @@ class ProductDetail {
         images: ((j['images'] as List?) ?? []).map((e) => e.toString()).toList(),
         modelUrl: j['modelUrl'] as String?,
         arLensId: (j['arLensId'] as String?)?.isNotEmpty == true ? j['arLensId'] as String : null,
+        arLensUpdatedAt: (j['arLensUpdatedAt'] as String?)?.isNotEmpty == true ? j['arLensUpdatedAt'] as String : null,
         variants: ((j['variants'] as List?) ?? [])
             .map((e) => ProductVariant.fromJson(e as Map<String, dynamic>))
             .toList(),

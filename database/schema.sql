@@ -262,6 +262,8 @@ CREATE TABLE product_model (
     modelSide       VARCHAR(5)   NULL,                    -- for a single shoe: 'left' / 'right'
     modelLengthCm   DECIMAL(4,1) NULL,                    -- real shoe length (cm) for AR scaling
     arLensId        VARCHAR(64)  NULL,                    -- Snapchat Camera Kit lens id (set by admin after building the lens)
+    arLensUpdatedAt TIMESTAMP    NULL,                    -- bumped whenever the admin saves the lens; the app clears its on-device
+                                                          -- lens cache when this changes, so a re-published SAME lens id still refreshes
     PRIMARY KEY (productModelId),
     KEY idx_model_product (productId),
     CONSTRAINT fk_model_product FOREIGN KEY (productId) REFERENCES product(productId)

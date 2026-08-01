@@ -366,7 +366,14 @@ function handleSetAdminProductArLens(PDO $pdo, string $id): void {
       'message' => 'This product has no 3D model to attach an AR lens to.']);
   }
 
-  $upd = $pdo->prepare('UPDATE product_model SET arLensId = :lens WHERE productModelId = :mid');
+  // Bump arLensUpdatedAt on every save (even the same id) so the customer app,
+  // which keys its on-device lens-cache clear on (arLensId + arLensUpdatedAt),
+  // refreshes when the admin re-publishes NEW content under the SAME lens id.
+  // Clearing the lens (empty) also clears the version — no lens, nothing to track.
+  $upd = $pdo->prepare(
+    'UPDATE product_model
+        SET arLensId = :lens, arLensUpdatedAt = ' . ($lensId !== '' ? 'NOW()' : 'NULL') . '
+      WHERE productModelId = :mid');
   $upd->execute(['lens' => $lensId !== '' ? $lensId : null, 'mid' => $modelId]);
 
   sendJson(200, true, ['productId' => $id, 'arLensId' => $lensId !== '' ? $lensId : null]);
@@ -466,7 +473,7 @@ function handleUpdateProduct(PDO $pdo, array $auth, string $id): void {
   $curImgs->execute(['id' => $id]);
   $currentImages = array_column($curImgs->fetchAll(), 'productImageUrl');
 
-  $curMdl = $pdo->prepare('SELECT productModelId, productModelUrl, arLensId FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
+  $curMdl = $pdo->prepare('SELECT productModelId, productModelUrl, arLensId, arLensUpdatedAt FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
   $curMdl->execute(['id' => $id]);
   $curModelRow  = $curMdl->fetch();
   $currentModel = (string) ($curModelRow['productModelUrl'] ?? '');
@@ -577,13 +584,17 @@ function handleUpdateProduct(PDO $pdo, array $auth, string $id): void {
     if ($modelUrl === '') {
       $pdo->prepare('DELETE FROM product_model WHERE productId = :id')->execute(['id' => $id]);
     } elseif ($curModelRow) {
-      $keepLens = ($currentModel === $modelUrl) ? ($curModelRow['arLensId'] ?? null) : null;
+      // Keep the lens (and its saved-at version) only while the model is unchanged;
+      // a changed model makes the old lens stale, so drop both.
+      $keepLens   = ($currentModel === $modelUrl) ? ($curModelRow['arLensId'] ?? null) : null;
+      $keepLensTs = ($currentModel === $modelUrl) ? ($curModelRow['arLensUpdatedAt'] ?? null) : null;
       $pdo->prepare(
-        'UPDATE product_model SET productModelUrl = :url, arLensId = :lens,
+        'UPDATE product_model SET productModelUrl = :url, arLensId = :lens, arLensUpdatedAt = :lensTs,
              shoeCount = :cnt, modelSide = :side, modelLengthCm = :len
            WHERE productModelId = :mid'
-      )->execute(['url' => $modelUrl, 'lens' => $keepLens, 'cnt' => $mCount, 'side' => $mSide,
-                  'len' => $mLen, 'mid' => $curModelRow['productModelId']]);
+      )->execute(['url' => $modelUrl, 'lens' => $keepLens, 'lensTs' => $keepLensTs,
+                  'cnt' => $mCount, 'side' => $mSide, 'len' => $mLen,
+                  'mid' => $curModelRow['productModelId']]);
     } else {
       $mid = nextId($pdo, 'product_model', 'productModelId', 'MOD');
       $pdo->prepare(
