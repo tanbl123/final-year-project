@@ -545,19 +545,19 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
             <div className="d-flex align-items-center gap-2 mt-3 flex-wrap">
               <span className="small text-muted">Textures</span>
               <div className="btn-group btn-group-sm" role="group" aria-label="Texture resolution">
-                {/* No 2048 preset: "Original" is already capped at 2048 on Lens Studio
-                    import, so a 2048 button would do exactly what Original does. */}
-                {[{ v: 0, l: 'Original' }, { v: 1024, l: '1024' }, { v: 512, l: '512' }].map((o) => {
-                  // a px preset >= the model's own resolution wouldn't reduce anything
-                  const noop = o.v !== 0 && texEffPx > 0 && o.v >= texEffPx;
-                  return (
+                {/* Only ever show presets that would actually REDUCE the textures. "Original"
+                    always shows (and is capped at 2048 on Lens Studio import, so there's no
+                    separate 2048 button). A px preset >= the model's own resolution wouldn't
+                    change anything, so it's hidden — e.g. a 1024 supplier texture hides the
+                    1024 button, since "Original" already yields 1024. */}
+                {[{ v: 0, l: 'Original' }, { v: 1024, l: '1024' }, { v: 512, l: '512' }]
+                  .filter((o) => o.v === 0 || !(texEffPx > 0 && o.v >= texEffPx))
+                  .map((o) => (
                     <button key={o.v} type="button"
                       className={`btn btn-outline-secondary${textureCap === o.v ? ' active' : ''}`}
-                      onClick={() => pickTextureCap(o.v)} disabled={generating || noop}
-                      title={noop ? `Textures are ${texEffPx}px — this wouldn't reduce them` : undefined}>
+                      onClick={() => pickTextureCap(o.v)} disabled={generating}>
                       {o.l}{o.v ? 'px' : ''}</button>
-                  );
-                })}
+                  ))}
               </div>
             </div>
             <div className="text-muted small mt-1">
