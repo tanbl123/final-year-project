@@ -115,7 +115,8 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
   const [textureCap, setTextureCap] = useState(0);      // 0 = supplier full-res; else px cap the admin picked
   const [triCap, setTriCap] = useState(0);              // PAIR target: 0 = ~100k default; KEEP_TRIS = keep supplier's; else custom
   const [customTris, setCustomTris] = useState('');     // admin's custom pair-triangle input (text)
-  const [genSettings, setGenSettings] = useState(null); // {textureCap, triCap} the current preview was built with
+  const [swapLR, setSwapLR] = useState(false);          // manual L/R override for an unlabeled pair
+  const [genSettings, setGenSettings] = useState(null); // {textureCap, triCap, swapLR} the current preview was built with
   const blobUrls = useRef([]);                    // track for revocation
   const mvRef = useRef(null);                     // the <model-viewer> element
 
@@ -144,6 +145,7 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
       straighten: ctrl.straighten,
       textureCap: textureCap || undefined,   // 0/undefined = keep supplier full-res
       triCap: triCap || undefined,           // 0/undefined = ~50k/foot default
+      swapLR: swapLR || undefined,           // manual L/R override for an unlabeled pair
       ...extra,
     };
   }
@@ -173,7 +175,7 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
         blobUrls.current.push(url);
         setFitted({ url });
         setShowFitted(true);
-        setGenSettings({ textureCap, triCap });   // remember what this preview was built with
+        setGenSettings({ textureCap, triCap, swapLR });   // remember what this preview was built with
       }
     } catch (e) {
       setErr(e.message || 'Could not generate the fitted model.');
@@ -214,7 +216,8 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
   // The current preview is stale if the selected texture/detail differs from what it
   // was built with — prompt the admin to (re)generate.
   const settingsChanged = !!fitted && !!genSettings
-    && (genSettings.textureCap !== textureCap || genSettings.triCap !== triCap);
+    && (genSettings.textureCap !== textureCap || genSettings.triCap !== triCap
+        || genSettings.swapLR !== swapLR);
 
   function download() {
     if (!fitted?.url) return;
@@ -623,6 +626,24 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                     8 MB cap this way). Or set a custom target and re-check the real Lens Size in Lens Studio —
                     pick the highest that still fits. Numbers are for the pair (both shoes), matching Lens Studio.</>}
             </div>
+
+            {/* manual L/R override — only for a pair (a single shoe uses the declared side).
+                Auto-detect can put an UNLABELED pair on the wrong feet; this flips
+                Shoe_L / Shoe_R so the admin can correct it without asking the supplier. */}
+            {meta?.shoeCount === 2 && (
+              <div className="d-flex align-items-center gap-2 mt-2 flex-wrap">
+                <span className="small text-muted">Left / Right</span>
+                <button type="button"
+                  className={`btn btn-sm btn-outline-secondary${swapLR ? ' active' : ''}`}
+                  onClick={() => setSwapLR((v) => !v)} disabled={generating}>
+                  {swapLR ? 'Swapped ⇄' : 'Swap L/R'}
+                </button>
+                <span className="text-muted small">
+                  If the shoes came out on the wrong feet, swap and Regenerate. (Shoes sit centred
+                  in the preview, so confirm the swap in Lens Studio or on-device.)
+                </span>
+              </div>
+            )}
 
             {/* generate + download — selections above only take effect when this runs */}
             <div className="d-flex gap-2 mt-3">

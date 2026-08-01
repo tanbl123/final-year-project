@@ -109,6 +109,7 @@ def autofit_endpoint():
             build_files=want_files,   # skip the heavy bake/export for analysis-only
             max_tex=(int(body['maxTex']) if body.get('maxTex') else None),   # admin texture cap
             tri_target=(int(body['maxTris']) if body.get('maxTris') else None),  # admin PAIR triangle total
+            swap_lr=bool(body.get('swapLR', False)),   # admin manual L/R override for an unlabeled pair
         )
     except Exception as e:
         import traceback

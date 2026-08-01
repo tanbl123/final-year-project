@@ -1378,36 +1378,28 @@ def _normalise(mesh, target_length_m, mirror=False, straighten=True):
 
 
 def _combine_pair(left_mesh, right_mesh, lr_known=True):
-    """Pack both fitted shoes into ONE .glb as two named nodes (Shoe_L / Shoe_R),
-    laid out side by side as a pair. This is what Lens Studio wants at publish:
-    import a single file, bind each named node to its foot, publish the pair to
-    the lens group. Each node's geometry stays centred/seated at its own origin
-    (so the suggested anchor still applies); the side-by-side offset is a node
-    transform for a clean pair preview and is reset when binding to a foot.
+    """Pack both fitted shoes into ONE .glb as two named nodes (Shoe_L / Shoe_R).
+    This is what Lens Studio wants at publish: import a single file, bind each
+    named node to its foot, publish the pair to the lens group.
 
-    Layout depends on whether we actually KNOW which shoe is left vs right:
-      lr_known=True  — named parts, shape-identified, or a single shoe mirrored
-        from a declared side. Show it as worn facing the viewer: the LEFT shoe on
-        the viewer's RIGHT (+X), the right shoe on the left.
-      lr_known=False — an unnamed pair whose left/right was only GUESSED by
-        position. Don't impose the facing convention (it would mirror the pair
-        vs the upload and look wrong); keep the file's own left-right order and
-        let the "verify" flag prompt a human. Cosmetic only either way — each
-        foot binds by its named node."""
+    Both nodes are left CENTRED at the origin (Position 0). Previously we added a
+    side-by-side X offset so the pair looked spread out in the preview, but that
+    offset was exactly the value the admin then had to zero on every shoe when
+    binding it to a foot in Lens Studio. Centring removes that manual step — the
+    shoe imports already at Position 0 and sits straight on the foot. Trade-off:
+    the two shoes overlap in the pair preview (they occupy the same origin). The
+    `lr_known` argument no longer affects the layout; it's kept for caller compat.
+    Left/right is carried purely by the node NAMES, which each foot binds to."""
     scene = trimesh.Scene()
-    w = float(max(left_mesh.extents[0], right_mesh.extents[0]))
-    off = w / 2.0 + 0.02                      # 2 cm gap so they don't touch
-    left_x = off if lr_known else -off        # known L/R -> as-worn (left on viewer's right)
-    t_left = np.eye(4); t_left[0, 3] = left_x
-    t_right = np.eye(4); t_right[0, 3] = -left_x
-    scene.add_geometry(left_mesh, node_name="Shoe_L", geom_name="Shoe_L", transform=t_left)
-    scene.add_geometry(right_mesh, node_name="Shoe_R", geom_name="Shoe_R", transform=t_right)
+    scene.add_geometry(left_mesh, node_name="Shoe_L", geom_name="Shoe_L")
+    scene.add_geometry(right_mesh, node_name="Shoe_R", geom_name="Shoe_R")
     return scene.export(file_type="glb")
 
 
 def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                     declared_side="right", mirror_single=True, auto_orient=True,
-                    build_files=True, count_declared=True, max_tex=None, tri_target=None):
+                    build_files=True, count_declared=True, max_tex=None, tri_target=None,
+                    swap_lr=False):
     """Validate + auto-fit a shoe model.
 
     max_tex: optional admin override (px). None (default) keeps the supplier's
@@ -1857,7 +1849,11 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
 
         def _export_combined():
             if left_norm is not None and right_norm is not None:
-                return _combine_pair(left_norm, right_norm, lr_known=lr_known)
+                # Admin manual override: swap which shoe is Shoe_L vs Shoe_R when the
+                # auto guess (shape/position) put them on the wrong feet. Only the node
+                # NAMES swap; the meshes are unchanged.
+                l_out, r_out = (right_norm, left_norm) if swap_lr else (left_norm, right_norm)
+                return _combine_pair(l_out, r_out, lr_known=lr_known)
             if primary_norm is not None:
                 return primary_norm.export(file_type="glb")
             return b""
