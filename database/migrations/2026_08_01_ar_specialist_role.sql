@@ -26,3 +26,11 @@ CREATE TABLE ar_specialist (
 
 ALTER TABLE product_model
   ADD COLUMN arReadyAt TIMESTAMP NULL AFTER arLensUpdatedAt;
+
+-- Backfill: any product that ALREADY has a lens was prepared before this role
+-- existed, so mark it AR-ready — otherwise those (often already-approved)
+-- products would wrongly reappear in the new AR work queue. Use the lens's own
+-- save time where known, else now.
+UPDATE product_model
+   SET arReadyAt = COALESCE(arLensUpdatedAt, CURRENT_TIMESTAMP)
+ WHERE arLensId IS NOT NULL AND arReadyAt IS NULL;
