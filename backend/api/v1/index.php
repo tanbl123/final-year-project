@@ -835,7 +835,7 @@ if ($method === 'POST' && preg_match('#^/admin/products/([^/]+)/reject$#', $path
 // the try-on lens in Lens Studio). Declared before the generic GET detail route.
 if ($method === 'PUT' && preg_match('#^/admin/products/([^/]+)/ar-lens$#', $path, $m)) {
   $auth = requireAuth($secret);
-  requireAdmin($auth);
+  requireStaff($auth);   // Admin or AR Specialist
   $pdo  = getPDO();
   handleSetAdminProductArLens($pdo, $m[1]);
 }
@@ -846,11 +846,20 @@ if ($method === 'PUT' && preg_match('#^/admin/products/([^/]+)/ar-lens$#', $path
 // browser). Gating it behind admin auth keeps the token out of the public app.
 if ($method === 'GET' && $path === '/admin/ar/camerakit-config') {
   $auth = requireAuth($secret);
-  requireAdmin($auth);
+  requireStaff($auth);   // Admin or AR Specialist
   sendJson(200, true, [
     'apiToken' => (string) ($config['camerakit_api_token'] ?? ''),
     'groupId'  => (string) ($config['camerakit_group_id'] ?? ''),
   ]);
+}
+
+// AR work queue: try-on products still needing AR preparation (no lens recorded
+// yet). Both Admin and AR Specialist can view it — it's the specialist's inbox.
+if ($method === 'GET' && $path === '/ar/queue') {
+  $auth = requireAuth($secret);
+  requireStaff($auth);   // Admin or AR Specialist
+  $pdo  = getPDO();
+  handleListArQueue($pdo);
 }
 
 // admin AR auto-fit: run the product's 3D model through the ML auto-fit and
@@ -858,7 +867,7 @@ if ($method === 'GET' && $path === '/admin/ar/camerakit-config') {
 // generic GET detail route so the more specific path wins.
 if ($method === 'GET' && preg_match('#^/admin/products/([^/]+)/autofit$#', $path, $m)) {
   $auth = requireAuth($secret);
-  requireAdmin($auth);
+  requireStaff($auth);   // Admin or AR Specialist
   $pdo  = getPDO();
   handleAdminProductAutofit($pdo, $m[1], $config);
 }
@@ -867,7 +876,7 @@ if ($method === 'GET' && preg_match('#^/admin/products/([^/]+)/autofit$#', $path
 // Declared after /pending + /approve + /reject so those specific routes win.
 if ($method === 'GET' && preg_match('#^/admin/products/([^/]+)$#', $path, $m)) {
   $auth = requireAuth($secret);
-  requireAdmin($auth);
+  requireStaff($auth);   // Admin or AR Specialist (both need product detail to prep AR)
   $pdo  = getPDO();
   handleGetAdminProduct($pdo, $m[1]);
 }
@@ -929,6 +938,15 @@ if ($method === 'PATCH' && preg_match('#^/admin/users/([^/]+)/status$#', $path, 
   requireAdmin($auth);
   $pdo  = getPDO();
   handleSetUserStatus($pdo, $auth, $m[1]);
+}
+
+// admin provisions an internal-staff account (currently AR Specialist only).
+// Staff are created by an admin — there is no public sign-up for them.
+if ($method === 'POST' && $path === '/admin/staff') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleCreateStaff($pdo);
 }
 
 // ── admin delivery dispatch (require an Admin token) ──

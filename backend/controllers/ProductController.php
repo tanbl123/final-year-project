@@ -370,9 +370,14 @@ function handleSetAdminProductArLens(PDO $pdo, string $id): void {
   // which keys its on-device lens-cache clear on (arLensId + arLensUpdatedAt),
   // refreshes when the admin re-publishes NEW content under the SAME lens id.
   // Clearing the lens (empty) also clears the version — no lens, nothing to track.
+  //
+  // arReadyAt is the "AR prepared" marker that drives the AR work queue: saving a
+  // valid lens marks the product AR-ready (drops it out of the queue); clearing
+  // the lens marks it not-ready again (returns it to the queue).
+  $stamp = $lensId !== '' ? 'NOW()' : 'NULL';
   $upd = $pdo->prepare(
     'UPDATE product_model
-        SET arLensId = :lens, arLensUpdatedAt = ' . ($lensId !== '' ? 'NOW()' : 'NULL') . '
+        SET arLensId = :lens, arLensUpdatedAt = ' . $stamp . ', arReadyAt = ' . $stamp . '
       WHERE productModelId = :mid');
   $upd->execute(['lens' => $lensId !== '' ? $lensId : null, 'mid' => $modelId]);
 

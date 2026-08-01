@@ -21,6 +21,30 @@ function requireAdmin(array $auth): void {
   }
 }
 
+// Ensure the caller is INTERNAL STAFF — Admin or AR Specialist (or 403). Used on
+// the AR-preparation routes (auto-fit, lens, product detail, AR queue) that both
+// roles share; listing approval (approve/reject) stays Admin-only.
+function requireStaff(array $auth): void {
+  $role = $auth['role'] ?? '';
+  if ($role !== 'Admin' && $role !== 'ArSpecialist') {
+    sendJson(403, false, null, ['code' => 'FORBIDDEN', 'message' => 'Staff access only.']);
+  }
+}
+
+// Ensure the caller is an AR Specialist and return their id (or 403).
+function requireArSpecialistId(PDO $pdo, array $auth): string {
+  if (($auth['role'] ?? '') !== 'ArSpecialist') {
+    sendJson(403, false, null, ['code' => 'FORBIDDEN', 'message' => 'AR Specialist access only.']);
+  }
+  $stmt = $pdo->prepare('SELECT arSpecialistId FROM ar_specialist WHERE userId = :userId');
+  $stmt->execute(['userId' => $auth['userId']]);
+  $row = $stmt->fetch();
+  if (!$row) {
+    sendJson(403, false, null, ['code' => 'NO_AR_SPECIALIST', 'message' => 'No AR specialist profile for this user.']);
+  }
+  return $row['arSpecialistId'];
+}
+
 // Ensure the caller is a Customer and return their customerId (or 403).
 function requireCustomerId(PDO $pdo, array $auth): string {
   if (($auth['role'] ?? '') !== 'Customer') {

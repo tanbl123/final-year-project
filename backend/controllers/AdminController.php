@@ -260,7 +260,7 @@ function handleListUsers(PDO $pdo): void {
   $status = $_GET['status'] ?? '';
   $search = trim($_GET['search'] ?? '');
 
-  $allowedRoles    = ['Admin', 'Supplier', 'Customer', 'DeliveryPersonnel'];
+  $allowedRoles    = ['Admin', 'Supplier', 'Customer', 'DeliveryPersonnel', 'ArSpecialist'];
   $allowedStatuses = ['Pending', 'Active', 'Rejected', 'Suspended', 'Deleted'];
 
   $where = [];
@@ -306,6 +306,8 @@ function handleGetUser(PDO $pdo, string $userId): void {
     $p = $pdo->prepare('SELECT customerId, shippingAddress FROM customer WHERE userId = :id');
   } elseif ($u['role'] === 'DeliveryPersonnel') {
     $p = $pdo->prepare('SELECT deliveryPersonnelId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate FROM delivery_personnel WHERE userId = :id');
+  } elseif ($u['role'] === 'ArSpecialist') {
+    $p = $pdo->prepare('SELECT arSpecialistId FROM ar_specialist WHERE userId = :id');
   } else {
     $p = null;
   }
@@ -341,6 +343,93 @@ function handleSetUserStatus(PDO $pdo, array $auth, string $userId): void {
   $upd = $pdo->prepare('UPDATE `user` SET status = :s WHERE userId = :id');
   $upd->execute(['s' => $status, 'id' => $userId]);
   sendJson(200, true, ['userId' => $userId, 'status' => $status]);
+}
+
+// POST /admin/staff — an admin provisions an internal-staff account. There is no
+// public sign-up for staff (admins are seeded, suppliers self-register), so this
+// is the only creation path. Currently the sole staff role is AR Specialist.
+// Body: { username, email, fullName, password, role? }.
+function handleCreateStaff(PDO $pdo): void {
+  $body     = getJsonBody();
+  $username = trim($body['username'] ?? '');
+  $email    = trim($body['email'] ?? '');
+  $fullName = trim($body['fullName'] ?? '');
+  $password = (string) ($body['password'] ?? '');
+  $role     = trim($body['role'] ?? 'ArSpecialist');
+
+  // Only AR Specialist is provisionable here for now (guard against creating
+  // Admins or anything else through this endpoint).
+  if ($role !== 'ArSpecialist') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Unsupported staff role.']);
+  }
+  if ($username === '' || $fullName === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Username and full name are required.']);
+  }
+  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid email is required.']);
+  }
+  if (strlen($password) < 8) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Password must be at least 8 characters.']);
+  }
+
+  // username/email must be unique (same constraint as registration)
+  $chk = $pdo->prepare('SELECT userId FROM `user` WHERE username = :u OR email = :e LIMIT 1');
+  $chk->execute(['u' => $username, 'e' => $email]);
+  if ($chk->fetchColumn()) {
+    sendJson(409, false, null, ['code' => 'DUPLICATE', 'message' => 'That username or email is already in use.']);
+  }
+
+  $userId = nextId($pdo, 'user', 'userId', 'USR');
+  $arsId  = nextId($pdo, 'ar_specialist', 'arSpecialistId', 'ARS');
+  $hash   = password_hash($password, PASSWORD_BCRYPT);
+
+  $pdo->beginTransaction();
+  try {
+    $pdo->prepare(
+      "INSERT INTO `user` (userId, username, password, email, fullName, role, status)
+       VALUES (:id, :u, :pw, :e, :fn, 'ArSpecialist', 'Active')"
+    )->execute(['id' => $userId, 'u' => $username, 'pw' => $hash, 'e' => $email, 'fn' => $fullName]);
+
+    $pdo->prepare('INSERT INTO ar_specialist (arSpecialistId, userId) VALUES (:aid, :uid)')
+        ->execute(['aid' => $arsId, 'uid' => $userId]);
+    $pdo->commit();
+  } catch (Throwable $e) {
+    $pdo->rollBack();
+    sendJson(500, false, null, ['code' => 'CREATE_FAILED', 'message' => 'Could not create the staff account.']);
+  }
+
+  sendJson(201, true, [
+    'userId'         => $userId,
+    'arSpecialistId' => $arsId,
+    'username'       => $username,
+    'email'          => $email,
+    'fullName'       => $fullName,
+    'role'           => 'ArSpecialist',
+    'status'         => 'Active',
+  ]);
+}
+
+// GET /ar/queue — try-on products still awaiting AR preparation: virtual try-on
+// is enabled, a 3D model exists, and no AR-ready marker is set yet. This is the
+// AR Specialist's work inbox (Admins can see it too). Approved products that
+// already have their lens are excluded (their model row is stamped arReadyAt).
+function handleListArQueue(PDO $pdo): void {
+  $stmt = $pdo->query(
+    "SELECT p.productId, p.productName, p.productBrand, c.categoryName,
+            s.companyName, p.productStatus, p.created_at,
+            (SELECT pm.arLensId FROM product_model pm
+              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arLensId
+       FROM product p
+       JOIN supplier s ON s.supplierId = p.supplierId
+       JOIN category c ON c.categoryId = p.categoryId
+      WHERE p.virtualTryOnEnable = 1
+        AND p.productStatus IN ('Pending', 'Approved')
+        AND EXISTS (SELECT 1 FROM product_model pm WHERE pm.productId = p.productId)
+        AND (SELECT pm.arReadyAt FROM product_model pm
+              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) IS NULL
+      ORDER BY p.created_at ASC"
+  );
+  sendJson(200, true, ['products' => $stmt->fetchAll()]);
 }
 
 // ── supplier business-detail change requests ─────────────────────────
