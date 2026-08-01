@@ -1797,8 +1797,13 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                     left_src, right_src = lr_ordered[0], lr_ordered[1]
                     lr_known = True                    # shape identified the feet
                 else:
+                    # Position can't tell a foot from anatomy, but suppliers export a
+                    # pair laid out as WORN FACING THE VIEWER, so the shoe on the
+                    # viewer's LEFT (smaller X) is the person's RIGHT foot and vice
+                    # versa. Assign right = smaller X, left = larger X. Still flagged
+                    # "verify" — a file laid out the other way can still be swapped.
                     ordered = sorted(build_halves, key=lambda c: float(c.centroid[0]))
-                    left_src, right_src = ordered[0], ordered[-1]
+                    right_src, left_src = ordered[0], ordered[-1]
                     lr_known = False                   # position only — may be swapped
             left_norm = _normalise(_prep(left_src), target_m, straighten=auto_orient)
             _blog("left foot prepped+oriented at %.2fs" % (time.time() - _t0))
