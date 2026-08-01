@@ -1009,6 +1009,50 @@ def _lr_from_geometry(m):
     return side, round(min(1.0, net), 2)
 
 
+# Minimum separation between the two feet's signed L/R scores before we trust a
+# shape-based assignment. Below this the soles are too flat/symmetric to tell the
+# feet apart, so the caller falls back to a positional guess (and its warning).
+LR_PAIR_MARGIN = 0.4
+
+
+def _pair_lr_by_shape(halves):
+    """For an UNNAMED pair, decide which half is the LEFT foot and which is the RIGHT
+    from each shoe's SHAPE — the same arch/big-toe cue used to verify a single shoe —
+    instead of assuming left = smaller X (position tells us nothing about the foot).
+
+    Each half is straightened to a canonical toe-forward/sole-down frame (forced, so
+    this works even when the build keeps the supplier's orientation) and scored as
+    right-looking (+) or left-looking (-). The more right-looking half is the right
+    foot. We only commit when BOTH halves orient confidently AND their scores are
+    clearly separated; a flat/symmetric sole yields no signal, so we return None and
+    let the caller fall back to position. Returns ([left, right], confidence) or
+    (None, 0.0). Never raises."""
+    if not halves or len(halves) < 2:
+        return None, 0.0
+
+    def _right_score(h):
+        try:
+            oriented, oc = _orient_canonical(h, straighten=True)
+        except Exception:
+            return None
+        # L/R needs a resolved upright frame; skip if sole-down/toe-forward is unclear.
+        if (oc.get("sole") or 0.0) < 0.4 or (oc.get("toe") or 0.0) < 0.4:
+            return None
+        side, conf = _lr_from_geometry(oriented)
+        if side == "right":
+            return conf
+        if side == "left":
+            return -conf
+        return 0.0                                   # oriented fine but shape symmetric
+
+    a, b = halves[0], halves[1]
+    ra, rb = _right_score(a), _right_score(b)
+    if ra is None or rb is None or abs(ra - rb) < LR_PAIR_MARGIN:
+        return None, 0.0                             # can't tell the feet apart -> position
+    left, right = (b, a) if ra > rb else (a, b)      # higher right-score is the right foot
+    return [left, right], round(min(1.0, abs(ra - rb)), 2)
+
+
 # --------------------------------------------------------------------------- #
 #  Pair separation (structure-first) + count detection
 # --------------------------------------------------------------------------- #
@@ -1492,6 +1536,18 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
             meta["split"] = {"method": split_method, "confidence": split_conf,
                              "lrFromNames": named_pair}
             pair_halves = sorted(halves_geo, key=lambda c: float(c.centroid[0]))
+            # How is left/right decided? Supplier names (reliable) > shoe-shape cue
+            # (arch/toe) > position (a bare guess). Recorded so the warning + the
+            # build path agree, and so the light analysis already tells the admin.
+            if named_pair:
+                meta["split"]["lrMethod"] = "names"
+            else:
+                _lr_ord, _lr_conf = _pair_lr_by_shape(pair_halves)
+                if _lr_ord is not None:
+                    meta["split"]["lrMethod"] = "shape"
+                    meta["split"]["lrConf"] = _lr_conf
+                else:
+                    meta["split"]["lrMethod"] = "position"
             measure = pair_halves[0]
             # the split-quality note is deferred to step 7 so it can also use the
             # measured shoe's proportions + the cluster count (overlap detection).
@@ -1631,10 +1687,17 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                 meta["warnings"].append("Two shoes were found and separated automatically. For the "
                                         "cleanest split, name the two parts Shoe_L and Shoe_R when "
                                         "exporting.")
+            elif meta["split"].get("lrMethod") == "shape":
+                meta["warnings"].append("You uploaded a pair without labelling the shoes, so left and "
+                                        "right were worked out automatically from the shoe shape (the "
+                                        "arch and toe). This is a best guess — to be certain each shoe "
+                                        "ends up on the correct foot, name the two parts Shoe_L and "
+                                        "Shoe_R when exporting and re-upload.")
             else:
-                meta["warnings"].append("Left and right were assigned by position, so the two shoes "
-                                        "may be swapped. Name the two parts Shoe_L and Shoe_R to "
-                                        "place each on the correct foot.")
+                meta["warnings"].append("You uploaded a pair without labelling the shoes, and the shape "
+                                        "was too flat/symmetric to tell the feet apart, so left and right "
+                                        "were assigned by position and the two shoes may be swapped. Name "
+                                        "the two parts Shoe_L and Shoe_R when exporting and re-upload.")
 
         if detected is not None and declared_count == 1 and detected >= 2:
             meta["warnings"].append("This is marked as one shoe, but the file has %d separate "
@@ -1725,10 +1788,18 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                 left_src, right_src = build_halves[0], build_halves[1]
                 lr_known = True
             else:
-                # no labels -> we can only guess left/right by position (flagged above)
-                ordered = sorted(build_halves, key=lambda c: float(c.centroid[0]))
-                left_src, right_src = ordered[0], ordered[-1]
-                lr_known = False
+                # no labels -> prefer the shoe-SHAPE cue (arch/toe) to tell the feet
+                # apart; only fall back to a bare positional guess when the shape is
+                # too flat/symmetric to read. Either way the supplier warning above
+                # asks them to label the parts for certainty.
+                lr_ordered, _lr_conf = _pair_lr_by_shape(build_halves)
+                if lr_ordered is not None:
+                    left_src, right_src = lr_ordered[0], lr_ordered[1]
+                    lr_known = True                    # shape identified the feet
+                else:
+                    ordered = sorted(build_halves, key=lambda c: float(c.centroid[0]))
+                    left_src, right_src = ordered[0], ordered[-1]
+                    lr_known = False                   # position only — may be swapped
             left_norm = _normalise(_prep(left_src), target_m, straighten=auto_orient)
             _blog("left foot prepped+oriented at %.2fs" % (time.time() - _t0))
             right_norm = _normalise(_prep(right_src), target_m, straighten=auto_orient)

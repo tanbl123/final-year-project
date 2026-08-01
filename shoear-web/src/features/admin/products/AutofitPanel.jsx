@@ -255,6 +255,7 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
   const facingOk = meta?.orientation && meta.orientation.sole >= 0.4 && meta.orientation.toe >= 0.4;
   const splitClean = meta?.split && meta.split.confidence >= 0.8;
   const lrFromNames = meta?.split?.lrFromNames;   // left/right came from Shoe_L/Shoe_R labels
+  const lrMethod = meta?.split?.lrMethod;         // 'names' | 'shape' | 'position' — how L/R was decided
   const splitSuspect = meta?.split?.suspect;      // separated shoe has odd proportions — likely overlap/bad split
 
   // The warnings from the service mostly repeat facts already shown as rows
@@ -268,6 +269,7 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
     /orientation was kept|face forward and sit flat/i, // shown in "Facing"
     /decimat/i,                             // shown in "Detail"
     /assigned by position/i,                // shown in "Pair split"
+    /uploaded a pair without labelling/i,   // L/R (shape or position) — shown in "Pair split"
   ];
   // ...but a lens-size / cap message is an action item (reject, or confirm in Lens
   // Studio), not a restatement of a row — always keep it even if it mentions textures.
@@ -443,9 +445,11 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                       ? <span className="text-success">✓ L/R from labels</span>
                       : splitSuspect
                         ? <span className="text-danger">⚠ Odd shape — likely overlap</span>
-                        : splitClean
-                          ? <span className="text-warning">⚠ L/R by position — verify</span>
-                          : <span className="text-warning">⚠ Check split</span>}
+                        : lrMethod === 'shape'
+                          ? <span className="text-warning">⚠ L/R from shape — verify</span>
+                          : splitClean
+                            ? <span className="text-warning">⚠ L/R by position — verify</span>
+                            : <span className="text-warning">⚠ Check split</span>}
                   </Row>
                 </div>
               )}
