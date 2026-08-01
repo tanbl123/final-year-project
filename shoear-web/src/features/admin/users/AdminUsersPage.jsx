@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getUsers, getUser, setUserStatus } from '../adminService';
+import { getUsers, getUser, setUserStatus, createStaff } from '../adminService';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Toast from '../../../components/Toast';
 import Pagination from '../../../components/Pagination';
@@ -9,14 +9,16 @@ import { usePagination } from '../../../hooks/usePagination';
 import { useTableSort } from '../../../hooks/useTableSort';
 
 const PAGE_SIZE = 10;
-const ROLES = ['Admin', 'Supplier', 'Customer', 'DeliveryPersonnel'];
+const ROLES = ['Admin', 'ArSpecialist', 'Supplier', 'Customer', 'DeliveryPersonnel'];
 const STATUSES = ['Pending', 'Active', 'Suspended', 'Rejected', 'Deleted'];
 
 const STATUS_COLORS = {
   Active: 'success', Pending: 'warning', Suspended: 'secondary',
   Rejected: 'danger', Deleted: 'dark',
 };
-const roleLabel = (r) => (r === 'DeliveryPersonnel' ? 'Delivery' : r);
+const roleLabel = (r) => (r === 'DeliveryPersonnel' ? 'Delivery' : r === 'ArSpecialist' ? 'AR Specialist' : r);
+
+const EMPTY_STAFF = { username: '', fullName: '', email: '', password: '' };
 
 function AdminUsersPage() {
   const [users, setUsers] = useState([]);
@@ -31,6 +33,10 @@ function AdminUsersPage() {
   const [confirm, setConfirm] = useState(null);     // { user, status, title, message, color }
   const [detail, setDetail] = useState(null);       // fetched user for the modal
   const [detailLoading, setDetailLoading] = useState(false);
+
+  const [createForm, setCreateForm] = useState(null); // AR-specialist create form (null = closed)
+  const [creating, setCreating] = useState(false);
+  const [createErr, setCreateErr] = useState('');
 
   const sort = useTableSort(users, {
     initialKey: 'created_at',
@@ -90,6 +96,22 @@ function AdminUsersPage() {
     });
   }
 
+  async function submitCreate(e) {
+    e.preventDefault();
+    setCreating(true);
+    setCreateErr('');
+    try {
+      const created = await createStaff(createForm);
+      setCreateForm(null);
+      setToast(`AR Specialist “${created.fullName}” created.`);
+      load();
+    } catch (err) {
+      setCreateErr(err.message || 'Could not create the account.');
+    } finally {
+      setCreating(false);
+    }
+  }
+
   async function openDetail(userId) {
     setDetailLoading(true);
     setDetail({});                       // open the modal in a loading state
@@ -130,8 +152,17 @@ function AdminUsersPage() {
 
   return (
     <div className="container py-4 text-start">
-      <h1 className="mb-1">👥 User Management</h1>
-      <p className="text-muted">View and manage every account on the platform.</p>
+      <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+          <h1 className="mb-1">👥 User Management</h1>
+          <p className="text-muted">View and manage every account on the platform.</p>
+        </div>
+        {/* Staff have no public sign-up, so an admin provisions them here.
+            Currently the only provisionable staff role is AR Specialist. */}
+        <button className="btn btn-primary" onClick={() => { setCreateErr(''); setCreateForm({ ...EMPTY_STAFF }); }}>
+          + Add AR Specialist
+        </button>
+      </div>
 
       {error && (
         <div className="alert alert-danger py-2 d-flex justify-content-between align-items-center">
@@ -264,6 +295,12 @@ function AdminUsersPage() {
                         </dd>
                       </>
                     )}
+                    {detail.role === 'ArSpecialist' && detail.profile && (
+                      <>
+                        <dt className="col-4">Staff ID</dt>
+                        <dd className="col-8">{detail.profile.arSpecialistId}</dd>
+                      </>
+                    )}
                     <dt className="col-4">Joined</dt>
                     <dd className="col-8">{new Date(detail.created_at).toLocaleString()}</dd>
                   </dl>
@@ -273,6 +310,55 @@ function AdminUsersPage() {
                 <button type="button" className="btn btn-secondary" onClick={() => setDetail(null)}>Close</button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* create AR Specialist */}
+      {createForm && (
+        <div className="modal show d-block" tabIndex="-1" style={{ background: 'rgba(0,0,0,.5)' }}
+          onClick={() => !creating && setCreateForm(null)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <form className="modal-content" onSubmit={submitCreate}>
+              <div className="modal-header">
+                <h5 className="modal-title">Add AR Specialist</h5>
+                <button type="button" className="btn-close" onClick={() => setCreateForm(null)} disabled={creating}></button>
+              </div>
+              <div className="modal-body">
+                <p className="text-muted small">
+                  Creates an active internal-staff account. They sign in at the staff login and
+                  land in the AR queue. Share the password with them to change after first login.
+                </p>
+                {createErr && <div className="alert alert-danger py-2">{createErr}</div>}
+                <div className="mb-2">
+                  <label className="form-label small mb-1">Full name</label>
+                  <input className="form-control" value={createForm.fullName} required
+                    onChange={(e) => setCreateForm((f) => ({ ...f, fullName: e.target.value }))} />
+                </div>
+                <div className="mb-2">
+                  <label className="form-label small mb-1">Username</label>
+                  <input className="form-control" value={createForm.username} required
+                    onChange={(e) => setCreateForm((f) => ({ ...f, username: e.target.value }))} />
+                </div>
+                <div className="mb-2">
+                  <label className="form-label small mb-1">Email</label>
+                  <input type="email" className="form-control" value={createForm.email} required
+                    onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))} />
+                </div>
+                <div className="mb-1">
+                  <label className="form-label small mb-1">Temporary password</label>
+                  <input type="text" className="form-control" value={createForm.password} required minLength={8}
+                    onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))} />
+                  <div className="form-text">At least 8 characters.</div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-light" onClick={() => setCreateForm(null)} disabled={creating}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={creating}>
+                  {creating ? 'Creating…' : 'Create account'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -1,9 +1,13 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
 
+// Internal-staff roles — they share the staff login (/admin/login) and portal.
+const STAFF_ROLES = ['Admin', 'ArSpecialist'];
+
 // Where a logged-in user belongs by default, based on their role + status.
 export function homePathFor(user) {
   if (user?.role === 'Admin') return '/admin';
+  if (user?.role === 'ArSpecialist') return '/ar';
   // a supplier who isn't approved yet can only reach the resubmit/status page
   if (user?.role === 'Supplier' && user?.status && user.status !== 'Active') {
     return '/resubmit';
@@ -16,9 +20,10 @@ export function homePathFor(user) {
 function ProtectedRoute({ children, role, allowInactive = false }) {
   const { user } = useAuth();
 
-  // not logged in? bounce to the matching login page.
+  // not logged in? bounce to the matching login page. Staff roles (Admin,
+  // AR Specialist) use the shared staff login; suppliers use /login.
   if (!user) {
-    return <Navigate to={role === 'Admin' ? '/admin/login' : '/login'} replace />;
+    return <Navigate to={STAFF_ROLES.includes(role) ? '/admin/login' : '/login'} replace />;
   }
 
   // logged in but wrong role? send them to their own home.

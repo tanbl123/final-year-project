@@ -8,7 +8,12 @@ const rm = (n) => 'RM ' + Number(n || 0).toLocaleString('en-MY', { minimumFracti
 // Full-product preview the admin opens from the approval queue, so they can SEE
 // the product (images, description, sizes/stock, 3D model) before deciding.
 // Approve / Reject live in the footer and call back to the parent.
-function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, title = 'Review product' }) {
+// mode: 'admin' (default) shows the full commercial detail (price, supplier,
+// stock) for approval; 'ar' is the slim AR-prep view for an AR Specialist —
+// it hides the commercial/supplier blocks and keeps only what's needed to
+// prepare the try-on (images, name/brand/category, the model + lens).
+function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, mode = 'admin', title = 'Review product' }) {
+  const arMode = mode === 'ar';
   const [product, setProduct] = useState(null);
   const [error, setError] = useState('');
   const [activeImage, setActiveImage] = useState('');
@@ -95,27 +100,34 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, tit
                     <div className="col-md-7">
                       <h4 className="mb-1">{product.name}</h4>
                       <div className="text-muted mb-2">{product.brand}</div>
-                      <div className="fs-5 fw-semibold mb-2">{rm(product.price)}</div>
+                      {/* price is commercial info — hidden in the AR-prep view */}
+                      {!arMode && <div className="fs-5 fw-semibold mb-2">{rm(product.price)}</div>}
                       <div className="mb-2">
                         <span className="badge text-bg-light border me-1">{product.categoryName}</span>
-                        <span className="badge text-bg-light border">{product.supplierName}</span>
+                        {/* supplier identity is hidden from AR staff */}
+                        {!arMode && <span className="badge text-bg-light border">{product.supplierName}</span>}
                         {product.virtualTryOnEnable && <span className="badge text-bg-info ms-1">AR try-on</span>}
                       </div>
                       {product.description
                         ? <p className="mb-2" style={{ whiteSpace: 'pre-wrap' }}>{product.description}</p>
                         : <p className="text-muted fst-italic mb-2">No description provided.</p>}
 
-                      <div className="fw-semibold small text-uppercase text-muted mt-3 mb-1">Sizes &amp; stock</div>
-                      {product.variants?.length ? (
-                        <div className="d-flex flex-wrap gap-1">
-                          {product.variants.map((v) => (
-                            <span key={v.size} className="badge text-bg-light border">
-                              {v.size}: {v.stock}
-                            </span>
-                          ))}
-                        </div>
-                      ) : <span className="text-muted small">No sizes.</span>}
-                      <div className="text-muted small mt-1">Total stock: {product.totalStock}</div>
+                      {/* sizes/stock is inventory info — hidden in the AR-prep view */}
+                      {!arMode && (
+                        <>
+                          <div className="fw-semibold small text-uppercase text-muted mt-3 mb-1">Sizes &amp; stock</div>
+                          {product.variants?.length ? (
+                            <div className="d-flex flex-wrap gap-1">
+                              {product.variants.map((v) => (
+                                <span key={v.size} className="badge text-bg-light border">
+                                  {v.size}: {v.stock}
+                                </span>
+                              ))}
+                            </div>
+                          ) : <span className="text-muted small">No sizes.</span>}
+                          <div className="text-muted small mt-1">Total stock: {product.totalStock}</div>
+                        </>
+                      )}
                     </div>
                   </div>
 

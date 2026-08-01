@@ -37,6 +37,7 @@ import AdminCourierPayoutsPage from './features/admin/payouts/AdminCourierPayout
 import AdminDeliveriesPage from './features/admin/deliveries/AdminDeliveriesPage';
 import AdminDeliveryIssuesPage from './features/admin/deliveries/AdminDeliveryIssuesPage';
 import AdminIntegrationsPage from './features/admin/integrations/AdminIntegrationsPage';
+import ArQueuePage from './features/ar/ArQueuePage';
 import ProfilePage from './features/profile/ProfilePage';
 import PayoutsPage from './features/supplier/payouts/PayoutsPage';
 import Avatar from './components/Avatar';
@@ -209,6 +210,11 @@ const router = createBrowserRouter(
       } />
       <Route path="/admin/integrations" element={
         <ProtectedRoute role="Admin"><AdminIntegrationsPage /></ProtectedRoute>
+      } />
+
+      {/* AR Specialist (internal staff) */}
+      <Route path="/ar" element={
+        <ProtectedRoute role="ArSpecialist"><ArQueuePage /></ProtectedRoute>
       } />
 
       {/* any signed-in user's own profile */}

@@ -61,10 +61,26 @@ const SUPPLIER_PENDING_NAV = [
   ] },
 ];
 
+// AR Specialist: a focused workspace — just the AR preparation queue.
+const AR_NAV = [
+  { group: 'AR', items: [
+    { to: '/ar', label: 'AR Queue', icon: '🕶️', end: true },
+  ] },
+];
+
 function navFor(user) {
   if (user.role === 'Admin') return ADMIN_NAV;
+  if (user.role === 'ArSpecialist') return AR_NAV;
   if (user.role === 'Supplier') return user.status === 'Active' ? SUPPLIER_NAV : SUPPLIER_PENDING_NAV;
   return [];
+}
+
+// The portal label under the brand — named after the person's own workspace
+// (they've already passed the shared "Staff" login by this point).
+function portalLabel(role) {
+  if (role === 'Admin') return 'Admin Portal';
+  if (role === 'ArSpecialist') return 'AR Studio';
+  return 'Supplier Portal';
 }
 
 // Poll the admin work-queue counts so sidebar badges stay roughly live without
@@ -97,7 +113,6 @@ function useBadgeCounts(role) {
 
 function Sidebar({ user, collapsed }) {
   const groups = navFor(user);
-  const isAdmin = user.role === 'Admin';
   const counts = useBadgeCounts(user.role);
 
   return (
@@ -106,7 +121,7 @@ function Sidebar({ user, collapsed }) {
         <span className="brand-icon">👟</span>
         <span className="nav-label">
           <span className="fw-bold d-block lh-1">ShoeAR</span>
-          <span className="small text-secondary">{isAdmin ? 'Admin Portal' : 'Supplier Portal'}</span>
+          <span className="small text-secondary">{portalLabel(user.role)}</span>
         </span>
       </div>
 

@@ -88,6 +88,18 @@ export function getPendingProducts() {
   return apiGet('/admin/products/pending', getToken());
 }
 
+// AR work queue: try-on products still needing AR preparation (no lens yet).
+// Visible to internal staff (Admin + AR Specialist). Returns { products: [...] }.
+export function getArQueue() {
+  return apiGet('/ar/queue', getToken());
+}
+
+// Admin provisions an internal-staff account (currently AR Specialist only).
+// { username, email, fullName, password } → the created account.
+export function createStaff({ username, email, fullName, password, role = 'ArSpecialist' }) {
+  return apiPost('/admin/staff', { username, email, fullName, password, role }, getToken());
+}
+
 // Full product detail (images, description, sizes, 3D model) for review before
 // approving/rejecting. Works for any status, unlike the customer catalog.
 export function getAdminProduct(productId) {

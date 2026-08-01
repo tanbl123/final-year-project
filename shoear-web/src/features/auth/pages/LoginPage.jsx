@@ -21,11 +21,14 @@ function validateForm(form) {
 // an admin account" apart from "wrong password" (no account/role enumeration).
 const GENERIC_LOGIN_ERROR = 'Invalid email/username or password.';
 
-// Per-variant config so one component serves both the supplier and admin
-// login pages (same form, different branding + which role may sign in here).
+// Per-variant config so one component serves both the supplier and staff login
+// pages (same form, different branding + which roles may sign in here). The
+// staff variant is shared by all INTERNAL roles (Admin + AR Specialist) — after
+// login each is routed to their own home by role, so "Staff" (not "Admin") is
+// the right label for this shared door.
 const VARIANTS = {
-  supplier: { badge: '👟', subtitle: 'Supplier Portal', allowedRole: 'Supplier' },
-  admin:    { badge: '🛡️', subtitle: 'Admin Portal',    allowedRole: 'Admin' },
+  supplier: { badge: '👟', subtitle: 'Supplier Portal', allowedRoles: ['Supplier'] },
+  admin:    { badge: '🛡️', subtitle: 'Staff Portal',    allowedRoles: ['Admin', 'ArSpecialist'] },
 };
 
 function LoginPage({ variant = 'supplier' }) {
@@ -92,7 +95,7 @@ function LoginPage({ variant = 'supplier' }) {
       // each login page only accepts its own role — but bounce the wrong role
       // with the SAME generic error as a bad password, so we never reveal that
       // the credentials were valid or what role the account is.
-      if (result.user.role !== config.allowedRole) {
+      if (!config.allowedRoles.includes(result.user.role)) {
         logout();   // undo the session login() just established
         setCredsInvalid(true);
         setFormError(GENERIC_LOGIN_ERROR);
@@ -128,7 +131,7 @@ function LoginPage({ variant = 'supplier' }) {
       <ul className="nav nav-pills nav-justified mb-3">
         <li className="nav-item">
           <Link to="/admin/login" className={`nav-link ${variant === 'admin' ? 'active' : ''}`}>
-            Admin login
+            Staff login
           </Link>
         </li>
         <li className="nav-item">
