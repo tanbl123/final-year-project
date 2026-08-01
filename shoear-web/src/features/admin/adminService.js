@@ -122,11 +122,14 @@ export function setProductArLens(productId, arLensId) {
 // omit/0 keeps the supplier's full resolution (the faithful default).
 // triCap (PAIR triangle total, both feet) — omit/0 uses the ~100k default; a custom
 // value dials the detail to fit; a huge value keeps the supplier's full geometry.
-export function getProductAutofit(productId, { count = 'auto', side = 'right', length, files = false, straighten = false, textureCap, triCap } = {}) {
+// swapLr=true flips the L/R assignment when the auto-guess put the shoes on the
+// wrong feet (a one-click fix for a bad shape/position guess).
+export function getProductAutofit(productId, { count = 'auto', side = 'right', length, files = false, straighten = false, textureCap, triCap, swapLr = false } = {}) {
   const qs = new URLSearchParams({ count: String(count), side, files: files ? '1' : '0', orient: straighten ? '1' : '0' });
   if (length) { qs.set('length', String(length)); }
   if (textureCap) { qs.set('maxTex', String(textureCap)); }
   if (triCap) { qs.set('maxTris', String(triCap)); }
+  if (swapLr) { qs.set('swapLr', '1'); }
   return apiGet(`/admin/products/${productId}/autofit?${qs}`, getToken());
 }
 

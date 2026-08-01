@@ -1432,7 +1432,8 @@ def _combine_pair(left_mesh, right_mesh, lr_known=True):
 
 def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
                     declared_side="right", mirror_single=True, auto_orient=True,
-                    build_files=True, count_declared=True, max_tex=None, tri_target=None):
+                    build_files=True, count_declared=True, max_tex=None, tri_target=None,
+                    swap_lr=False):
     """Validate + auto-fit a shoe model.
 
     max_tex: optional admin override (px). None (default) keeps the supplier's
@@ -1448,6 +1449,13 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
     geometry; "keep supplier's" passes a very large value so nothing is removed. The value
     is split evenly across the feet for the actual per-mesh decimation. A source already
     under the target is kept untouched; truly degenerate files are caught by HARD_MAX_FACES.
+
+    swap_lr: admin override that flips the left/right assignment. When the
+    auto-detected L/R (by shape or position) is wrong, the admin ticks this and
+    the geometry baked into Shoe_L / Shoe_R is exchanged — turning a wrong guess
+    into a one-click fix instead of a re-model/re-upload. A human has now
+    confirmed the sides, so the pair is laid out as-worn (lr_known) and the meta
+    records lrSwapped so the panel can reflect it. No effect on detection.
 
     count_declared: whether the caller has actually chosen the number of shoes.
     True (default, and for the admin's Auto-detect) -> emit the count-specific
@@ -1879,6 +1887,14 @@ def analyze_and_fit(glb_bytes, declared_count=None, declared_length_cm=None,
         _redec = lambda m: (decimated.get(id(m), m) if m is not None else None)
         left_norm, right_norm = _redec(left_norm), _redec(right_norm)
         primary_norm = _redec(primary_norm)
+
+        # Admin "Swap L/R": the auto-assigned sides were wrong, so exchange the
+        # geometry that goes into Shoe_L / Shoe_R. A human has now decided, so
+        # treat L/R as known (as-worn layout). Only meaningful for a true pair.
+        if swap_lr and left_norm is not None and right_norm is not None:
+            left_norm, right_norm = right_norm, left_norm
+            lr_known = True
+        meta["lrSwapped"] = bool(swap_lr and left_norm is not None and right_norm is not None)
 
         def _export_combined():
             if left_norm is not None and right_norm is not None:

@@ -115,7 +115,8 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
   const [textureCap, setTextureCap] = useState(0);      // 0 = supplier full-res; else px cap the admin picked
   const [triCap, setTriCap] = useState(0);              // PAIR target: 0 = ~100k default; KEEP_TRIS = keep supplier's; else custom
   const [customTris, setCustomTris] = useState('');     // admin's custom pair-triangle input (text)
-  const [genSettings, setGenSettings] = useState(null); // {textureCap, triCap} the current preview was built with
+  const [swapLr, setSwapLr] = useState(false);          // flip which foot is Shoe_L vs Shoe_R (fix a wrong guess)
+  const [genSettings, setGenSettings] = useState(null); // {textureCap, triCap, swapLr} the current preview was built with
   const blobUrls = useRef([]);                    // track for revocation
   const mvRef = useRef(null);                     // the <model-viewer> element
 
@@ -144,6 +145,7 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
       straighten: ctrl.straighten,
       textureCap: textureCap || undefined,   // 0/undefined = keep supplier full-res
       triCap: triCap || undefined,           // 0/undefined = ~50k/foot default
+      swapLr: swapLr || undefined,           // flip L/R when the auto-guess is wrong
       ...extra,
     };
   }
@@ -173,7 +175,7 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
         blobUrls.current.push(url);
         setFitted({ url });
         setShowFitted(true);
-        setGenSettings({ textureCap, triCap });   // remember what this preview was built with
+        setGenSettings({ textureCap, triCap, swapLr });   // remember what this preview was built with
       }
     } catch (e) {
       setErr(e.message || 'Could not generate the fitted model.');
@@ -214,7 +216,8 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
   // The current preview is stale if the selected texture/detail differs from what it
   // was built with — prompt the admin to (re)generate.
   const settingsChanged = !!fitted && !!genSettings
-    && (genSettings.textureCap !== textureCap || genSettings.triCap !== triCap);
+    && (genSettings.textureCap !== textureCap || genSettings.triCap !== triCap
+        || genSettings.swapLr !== swapLr);
 
   function download() {
     if (!fitted?.url) return;
@@ -623,6 +626,33 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                     8 MB cap this way). Or set a custom target and re-check the real Lens Size in Lens Studio —
                     pick the highest that still fits. Numbers are for the pair (both shoes), matching Lens Studio.</>}
             </div>
+
+            {/* Swap L/R — the fix for a wrong auto-guess. L/R by shape or position is a
+                best guess; if the fitted preview shows the shoes on the wrong feet, tick
+                this and Regenerate to exchange which geometry is baked into Shoe_L / Shoe_R.
+                Only meaningful for a pair; hidden for a single (its side is declared). */}
+            {meta.shoeCount === 2 && (
+              <div className="mt-3">
+                <div className="form-check form-switch">
+                  <input className="form-check-input" type="checkbox" role="switch" id="swapLrSwitch"
+                    checked={swapLr} onChange={(e) => setSwapLr(e.target.checked)} disabled={generating} />
+                  <label className="form-check-label small" htmlFor="swapLrSwitch">
+                    Swap left / right
+                    <span className="text-muted">
+                      {lrFromNames
+                        ? " — L/R came from the file's Shoe_L / Shoe_R labels, so this usually isn't needed."
+                        : ' — left/right was auto-guessed. If the Fitted-pair preview shows the shoes on the wrong feet, tick this and Regenerate.'}
+                    </span>
+                  </label>
+                </div>
+                {meta.lrSwapped && (
+                  <div className="small mt-1">
+                    <span className="badge text-bg-info">L/R swapped</span>{' '}
+                    the fitted model has the two feet exchanged.
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* generate + download — selections above only take effect when this runs */}
             <div className="d-flex gap-2 mt-3">
