@@ -19,7 +19,6 @@
 import 'package:camerakit_flutter/camerakit_flutter.dart';
 import 'package:camerakit_flutter/lens_model.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:customer/features/ar/ar_lens_cache.dart';
 
 /// The Camera Kit lens GROUP that holds all ShoeAR try-on lenses. Not a secret —
@@ -34,37 +33,27 @@ class ArTryOnService implements CameraKitFlutterEvents {
   late final CameraKitFlutterImpl _cameraKit =
       CameraKitFlutterImpl(cameraKitFlutterEvents: this);
 
-  static const _seenLensKey = 'ar_seen_lens_ids';
-
-  /// Launches Camera Kit with [lensId] applied. Requests camera/mic first.
-  /// [version] is the lens's save timestamp (product.arLensUpdatedAt); passing it
-  /// lets us also refresh when the admin re-publishes NEW content under the SAME id.
-  Future<void> open(String lensId, {String? version}) async {
+  /// Launches Camera Kit with [lensId] applied. Requests camera/mic first, then
+  /// wipes the on-device lens cache so the LATEST published lens always shows.
+  ///
+  /// We clear on EVERY try-on open — this is exactly what Android Settings >
+  /// "Clear cache" does, which reliably surfaces a re-published lens. We previously
+  /// tried clearing only on a detected change (a seen-list keyed on lens id +
+  /// version), but a same-id re-publish, and app updates that preserve that list,
+  /// could skip the clear and leave a stale shoe on the foot. Try-on is a deliberate
+  /// tap, so a fresh fetch (a few MB) is an acceptable cost for always showing the
+  /// current product. This runs ONLY here, never at app launch, so normal launches
+  /// stay fast. Best-effort: a cache failure never blocks or fails the AR open.
+  Future<void> open(String lensId) async {
     await [Permission.camera, Permission.microphone].request();
-    await _refreshCacheIfNewLens(lensId, version);
+    try {
+      await clearCameraKitLensCache();
+    } catch (_) {/* never let cache housekeeping stop a try-on */}
     await _cameraKit.openCameraKitWithSingleLens(
       lensId: lensId,
       groupId: kCameraKitGroupId,
       isHideCloseButton: false,
     );
-  }
-
-  /// Camera Kit caches the group's lens content, so a re-published shoe can stay
-  /// stale. Rather than clearing on every launch, we clear ONLY when opening a lens
-  /// we haven't cached before. We key on the lens id AND its save version, so BOTH a
-  /// brand-new id AND a re-published same id (the admin re-saved -> newer version)
-  /// force one fresh fetch; opening the same id+version again skips the clear, so
-  /// normal try-ons stay fast. Best-effort: never blocks or fails the AR open.
-  Future<void> _refreshCacheIfNewLens(String lensId, String? version) async {
-    try {
-      final token = '$lensId@${version ?? ''}';   // id + version identifies the cached content
-      final prefs = await SharedPreferences.getInstance();
-      final seen = prefs.getStringList(_seenLensKey) ?? <String>[];
-      if (seen.contains(token)) return;        // already cached this exact lens+version
-      await clearCameraKitLensCache();         // new id or newer version -> force a fresh fetch
-      seen.add(token);
-      await prefs.setStringList(_seenLensKey, seen);
-    } catch (_) {/* never let cache housekeeping stop a try-on */}
   }
 
 
