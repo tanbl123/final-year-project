@@ -641,7 +641,7 @@ function AutofitPanel({ productId, productName, modelUrl, declared = {} }) {
                     <span className="text-muted">
                       {lrFromNames
                         ? " — L/R came from the file's Shoe_L / Shoe_R labels, so this usually isn't needed."
-                        : ' — left/right was auto-guessed. If the Fitted-pair preview shows the shoes on the wrong feet, tick this and Regenerate.'}
+                        : ' — left/right was auto-guessed. If the Fitted-pair preview shows the shoes on the wrong feet, turn this on and Regenerate.'}
                     </span>
                   </label>
                 </div>
