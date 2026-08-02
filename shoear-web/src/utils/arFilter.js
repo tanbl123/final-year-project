@@ -10,9 +10,9 @@
 
 // Dropdown options ('' = no filter). Kept in one place so both pages match.
 export const AR_FILTER_OPTIONS = [
-  { value: '', label: 'All try-on' },
-  { value: 'ready', label: 'AR-ready (lens live)' },
-  { value: 'enabled', label: 'Try-on on, no lens yet' },
+  { value: '', label: 'All' },
+  { value: 'ready', label: 'Try-on live' },        // enabled + lens recorded → customers can try it
+  { value: 'enabled', label: 'Awaiting AR setup' },// enabled but no lens yet
   { value: 'off', label: 'Try-on off' },
 ];
 
