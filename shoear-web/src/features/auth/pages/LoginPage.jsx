@@ -6,12 +6,17 @@ import EyeIcon from '../../../components/EyeIcon';
 import ClearableInput from '../../../components/ClearableInput';
 import Toast from '../../../components/Toast';
 
-// Validate the login fields, returning a { field: message } object.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Validate the login fields, returning a { field: message } object. The web
+// portal only serves staff + suppliers (non-customers), who must sign in with
+// their email — only customers (mobile app) may use a username — so require a
+// well-formed email here.
 function validateForm(form) {
   const errors = {};
-  if (form.identifier.trim() === '') {
-    errors.identifier = 'Email or username is required.';
-  }
+  const id = form.identifier.trim();
+  if (id === '') errors.identifier = 'Email is required.';
+  else if (!EMAIL_RE.test(id)) errors.identifier = 'Please enter a valid email address.';
   if (form.password === '') errors.password = 'Password is required.';
   return errors;
 }
@@ -19,7 +24,7 @@ function validateForm(form) {
 // Generic failure message. Used for BOTH wrong credentials and a valid login on
 // the wrong portal — so an attacker can't tell "these creds are valid but it's
 // an admin account" apart from "wrong password" (no account/role enumeration).
-const GENERIC_LOGIN_ERROR = 'Invalid email/username or password.';
+const GENERIC_LOGIN_ERROR = 'Invalid email or password.';
 
 // Per-variant config so one component serves both the supplier and staff login
 // pages (same form, different branding + which roles may sign in here). The
@@ -143,11 +148,11 @@ function LoginPage({ variant = 'supplier' }) {
 
       <form onSubmit={handleSubmit} className="card card-body login-card text-start" noValidate>
         <div className="mb-3">
-          <label className="form-label">Email or username</label>
+          <label className="form-label">Email</label>
           <ClearableInput
-            type="text"
+            type="email"
             name="identifier"
-            autoComplete="username"
+            autoComplete="email"
             className={errors.identifier || credsInvalid ? 'is-invalid' : ''}
             value={form.identifier}
             onChange={handleChange}

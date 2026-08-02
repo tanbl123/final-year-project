@@ -902,7 +902,7 @@ function handleLogin(PDO $pdo, string $secret): void {
   // look up by email OR username (prepared statement → safe from SQL injection).
   // Two distinct placeholders: with emulation off, PDO won't reuse one twice.
   $stmt = $pdo->prepare(
-    'SELECT userId, password, role, fullName, phoneNumber, status, rejectionReason, mustChangePassword
+    'SELECT userId, email, password, role, fullName, phoneNumber, status, rejectionReason, mustChangePassword
        FROM `user` WHERE email = :email OR username = :username'
   );
   $stmt->execute(['email' => $identifier, 'username' => $identifier]);
@@ -910,6 +910,15 @@ function handleLogin(PDO $pdo, string $secret): void {
 
   // null password = Google-only account; same generic error so we don't leak
   if (!$user || $user['password'] === null || !password_verify($password, $user['password'])) {
+    sendJson(401, false, null, ['code' => 'AUTH', 'message' => 'Invalid email/username or password.']);
+  }
+
+  // Only CUSTOMERS may sign in with a username; all other roles (Admin, Supplier,
+  // DeliveryPersonnel, ArSpecialist) must use their email. If this login matched
+  // by username (identifier isn't the account's email) for a non-customer,
+  // reject with the same generic error (no account/role enumeration).
+  $byEmail = strcasecmp($identifier, (string) $user['email']) === 0;
+  if (!$byEmail && $user['role'] !== 'Customer') {
     sendJson(401, false, null, ['code' => 'AUTH', 'message' => 'Invalid email/username or password.']);
   }
 
