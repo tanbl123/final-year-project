@@ -79,7 +79,9 @@ function ArDashboardPage() {
               <div className="card h-100">
                 <div className="card-header d-flex justify-content-between align-items-center">
                   <span className="fw-semibold">Next in the queue</span>
-                  <Link to="/ar/queue" className="small">Go to queue{stats.awaiting > 0 ? ` (${stats.awaiting})` : ''}</Link>
+                  <Link to="/ar/queue" className="btn btn-sm btn-outline-primary">
+                    Go to queue{stats.awaiting > 0 ? ` (${stats.awaiting})` : ''}
+                  </Link>
                 </div>
                 <div className="list-group list-group-flush">
                   {nextUp.length === 0 ? (
@@ -109,7 +111,7 @@ function ArDashboardPage() {
               <div className="card h-100">
                 <div className="card-header d-flex justify-content-between align-items-center">
                   <span className="fw-semibold">Recently prepared</span>
-                  <Link to="/ar/completed" className="small">View all</Link>
+                  <Link to="/ar/completed" className="btn btn-sm btn-outline-secondary">View all</Link>
                 </div>
                 <div className="list-group list-group-flush">
                   {recentFive.length === 0 ? (

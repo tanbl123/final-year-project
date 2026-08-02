@@ -84,15 +84,13 @@ function ArQueuePage() {
         </div>
       ) : (
         <>
-          <div className="row g-2 align-items-center mb-2">
-            <div className="col-sm-6 col-md-5">
+          <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <div style={{ flex: '1 1 260px', maxWidth: 360 }}>
               <ClearableInput type="text" placeholder="Search product, brand or category"
                 value={search} onChange={(e) => setSearch(e.target.value)}
                 onClear={() => setSearch('')} />
             </div>
-            <div className="col-sm-6 text-sm-end">
-              <span className="badge text-bg-warning">{products.length} awaiting</span>
-            </div>
+            <span className="badge text-bg-warning">{products.length} awaiting</span>
           </div>
 
           {filtered.length === 0 ? (

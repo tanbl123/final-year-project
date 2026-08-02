@@ -72,16 +72,14 @@ function ArCompletedPage() {
       )}
 
       {/* team-wide vs my own work + search */}
-      <div className="row g-2 align-items-center mb-3">
-        <div className="col-auto">
-          <div className="btn-group btn-group-sm" role="group">
-            <button type="button" className={`btn btn-outline-secondary${scope === 'all' ? ' active' : ''}`}
-              onClick={() => setScope('all')}>All completed</button>
-            <button type="button" className={`btn btn-outline-secondary${scope === 'mine' ? ' active' : ''}`}
-              onClick={() => setScope('mine')}>Prepared by me</button>
-          </div>
+      <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
+        <div className="btn-group btn-group-sm" role="group">
+          <button type="button" className={`btn btn-outline-secondary${scope === 'all' ? ' active' : ''}`}
+            onClick={() => setScope('all')}>All completed</button>
+          <button type="button" className={`btn btn-outline-secondary${scope === 'mine' ? ' active' : ''}`}
+            onClick={() => setScope('mine')}>Prepared by me</button>
         </div>
-        <div className="col-sm-6 col-md-5">
+        <div style={{ flex: '1 1 260px', maxWidth: 360 }}>
           <ClearableInput type="text" placeholder="Search product, brand or category"
             value={search} onChange={(e) => setSearch(e.target.value)} onClear={() => setSearch('')} />
         </div>
