@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getAdminProduct, setProductArLens } from '../adminService';
+import { getAdminProduct, setProductArLens, flagProductArModel } from '../adminService';
 import LensPicker from './LensPicker';
 import AutofitPanel from './AutofitPanel';
 
@@ -12,7 +12,7 @@ const rm = (n) => 'RM ' + Number(n || 0).toLocaleString('en-MY', { minimumFracti
 // stock) for approval; 'ar' is the slim AR-prep view for an AR Specialist —
 // it hides the commercial/supplier blocks and keeps only what's needed to
 // prepare the try-on (images, name/brand/category, the model + lens).
-function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, mode = 'admin', title = 'Review product' }) {
+function ProductReviewModal({ productId, onClose, onApprove, onReject, onFlagged, busy, mode = 'admin', title = 'Review product' }) {
   const arMode = mode === 'ar';
   const [product, setProduct] = useState(null);
   const [error, setError] = useState('');
@@ -21,6 +21,10 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, mod
   const [savingLens, setSavingLens] = useState(false);
   const [lensMsg, setLensMsg] = useState('');     // transient save feedback
   const [lensReqMsg, setLensReqMsg] = useState(''); // shown at the field if Approve is clicked with a required lens missing
+  const [flagOpen, setFlagOpen] = useState(false); // AR reviewer's "report model issue" panel
+  const [flagNote, setFlagNote] = useState('');
+  const [flagging, setFlagging] = useState(false);
+  const [flagErr, setFlagErr] = useState('');
 
   useEffect(() => {
     if (!productId) return undefined;
@@ -54,6 +58,21 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, mod
       setLensMsg(err.message || 'Could not save the lens id.');
     } finally {
       setSavingLens(false);
+    }
+  }
+
+  async function saveFlag() {
+    const note = flagNote.trim();
+    if (!note) { setFlagErr('Please describe what is wrong with the model.'); return; }
+    setFlagging(true);
+    setFlagErr('');
+    try {
+      await flagProductArModel(productId, note);
+      onFlagged?.();   // let the parent refresh + toast
+      onClose();
+    } catch (err) {
+      setFlagErr(err.message || 'Could not report the issue.');
+      setFlagging(false);
     }
   }
 
@@ -221,6 +240,50 @@ function ProductReviewModal({ productId, onClose, onApprove, onReject, busy, mod
                         lens group — it then appears above to pick. Customers can use AR try-on once saved; clear it to disable.
                       </div>
                       {lensMsg && <div className="small mt-1">{lensMsg}</div>}
+                    </div>
+                  )}
+
+                  {/* A reviewer's reported model issue — surfaced in both views. */}
+                  {product.arFlagged && product.arFlagNote && (
+                    <div className="alert alert-warning mt-3 mb-0 py-2">
+                      <strong>⚠️ Model issue reported:</strong> {product.arFlagNote}
+                      {arMode
+                        ? <div className="small text-muted mt-1">Sent to the admin — awaiting rejection so the supplier can fix &amp; resubmit.</div>
+                        : <div className="small mt-1">Reject this product with this reason so the supplier can fix and resubmit.</div>}
+                    </div>
+                  )}
+
+                  {/* AR reviewer action: report an unusable model (wrong orientation,
+                      broken export, …) instead of setting a lens. Goes to the admin
+                      to reject → supplier fixes & resubmits. */}
+                  {arMode && product.modelUrl && !product.arFlagged && (
+                    <div className="mt-3">
+                      {!flagOpen ? (
+                        <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => setFlagOpen(true)}>
+                          ⚠ Report model issue
+                        </button>
+                      ) : (
+                        <div className="border rounded p-3">
+                          <div className="fw-semibold small text-uppercase text-muted mb-1">Report model issue</div>
+                          <p className="small text-muted mb-2">
+                            Describe what's wrong (e.g. the model is lying on its side, upside-down, or won't load).
+                            The admin will reject the product with your reason so the supplier can re-export and resubmit.
+                          </p>
+                          <textarea
+                            className={'form-control' + (flagErr ? ' is-invalid' : '')}
+                            rows={3} maxLength={255} value={flagNote}
+                            onChange={(e) => { setFlagNote(e.target.value); setFlagErr(''); }}
+                            placeholder="e.g. Model is on its side — please re-export it upright, sole down, toe forward." />
+                          {flagErr && <div className="invalid-feedback d-block">{flagErr}</div>}
+                          <div className="d-flex gap-2 mt-2">
+                            <button type="button" className="btn btn-danger btn-sm" disabled={flagging} onClick={saveFlag}>
+                              {flagging ? 'Sending…' : 'Send report to admin'}
+                            </button>
+                            <button type="button" className="btn btn-outline-secondary btn-sm" disabled={flagging}
+                              onClick={() => { setFlagOpen(false); setFlagNote(''); setFlagErr(''); }}>Cancel</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </>

@@ -30,6 +30,7 @@ function ArQueuePage() {
   const [error, setError] = useState('');
   const [reviewId, setReviewId] = useState('');   // product open in the modal
   const [search, setSearch] = useState('');
+  const [notice, setNotice] = useState('');       // transient feedback (e.g. after reporting a model issue)
 
   function load() {
     setLoading(true);
@@ -76,6 +77,13 @@ function ArQueuePage() {
         </div>
       )}
 
+      {notice && (
+        <div className="alert alert-success py-2 d-flex justify-content-between align-items-center">
+          <span>{notice}</span>
+          <button type="button" className="btn-close" onClick={() => setNotice('')}></button>
+        </div>
+      )}
+
       {error && (
         <div className="alert alert-danger py-2 d-flex justify-content-between align-items-center">
           <span>{error}</span>
@@ -119,6 +127,9 @@ function ArQueuePage() {
                         <td style={{ overflowWrap: 'anywhere' }}>
                           <div className="fw-semibold">{p.productName}</div>
                           <div className="text-muted small">{p.productBrand}</div>
+                          {p.arFlagged && (
+                            <span className="badge text-bg-warning mt-1" title={p.arFlagNote || ''}>⚠ Issue reported</span>
+                          )}
                         </td>
                         <td><span className="badge text-bg-light border">{p.categoryName}</span></td>
                         <td className="text-center">
@@ -134,8 +145,9 @@ function ArQueuePage() {
                           </span>
                         </td>
                         <td className="text-center">
-                          <button className="btn btn-primary btn-sm" onClick={() => setReviewId(p.productId)}>
-                            Prepare AR
+                          <button className={`btn btn-sm ${p.arFlagged ? 'btn-outline-secondary' : 'btn-primary'}`}
+                            onClick={() => setReviewId(p.productId)}>
+                            {p.arFlagged ? 'View' : 'Prepare AR'}
                           </button>
                         </td>
                       </tr>
@@ -157,6 +169,7 @@ function ArQueuePage() {
           mode="ar"
           title="Prepare AR try-on"
           onClose={closeReview}
+          onFlagged={() => setNotice('Model issue reported — the admin will reject it so the supplier can fix & resubmit.')}
         />
       )}
     </div>

@@ -136,6 +136,12 @@ export function setProductArLens(productId, arLensId) {
   return apiPut(`/admin/products/${productId}/ar-lens`, { arLensId }, getToken());
 }
 
+// Flag a product's 3D model as unusable for AR (with a reason), so the admin can
+// reject it and the supplier can fix + resubmit.
+export function flagProductArModel(productId, note) {
+  return apiPut(`/admin/products/${productId}/ar-flag`, { note }, getToken());
+}
+
 // Run the product's uploaded 3D model through the ML auto-fit and return the
 // analysis (dimensions, orientation confidence, anchor suggestion, occluder
 // note, warnings). Pass { files: true } to also get the fitted per-foot .glb

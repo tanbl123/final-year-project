@@ -833,6 +833,15 @@ if ($method === 'PUT' && preg_match('#^/admin/products/([^/]+)/ar-lens$#', $path
   handleSetAdminProductArLens($pdo, $auth, $m[1]);
 }
 
+// AR Specialist / admin flags a product's 3D model as unusable (with a reason),
+// so the admin can reject it and the supplier can fix + resubmit.
+if ($method === 'PUT' && preg_match('#^/admin/products/([^/]+)/ar-flag$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireStaff($auth);   // Admin or AR Specialist
+  $pdo  = getPDO();
+  handleFlagAdminProductArModel($pdo, $auth, $m[1]);
+}
+
 // admin AR-lens PICKER config: hand the Camera Kit staging token + group id to a
 // logged-in ADMIN so their browser's Camera Kit Web SDK can list the group's
 // lenses (Snap has no server-side lens list API, so the fetch must run in the

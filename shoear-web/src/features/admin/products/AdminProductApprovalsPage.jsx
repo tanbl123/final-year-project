@@ -12,6 +12,15 @@ import ProductReviewModal from './ProductReviewModal';
 
 const PAGE_SIZE = 10;
 
+// AR readiness of a pending try-on product, for the approvals list. Returns null
+// for non-try-on products (no AR needed).
+function arStatus(p) {
+  if (!p.virtualTryOnEnable) return null;
+  if (p.arFlagged) return { cls: 'text-bg-warning', label: '⚠ AR flagged' };
+  if (p.arReady || p.arLensId) return { cls: 'text-bg-success', label: '✅ AR ready' };
+  return { cls: 'text-bg-secondary', label: '⏳ Awaiting AR' };
+}
+
 function AdminProductApprovalsPage() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +58,17 @@ function AdminProductApprovalsPage() {
 
   const { page, setPage, totalPages, pageItems } = usePagination(sort.sorted, PAGE_SIZE);
 
+  // at-a-glance AR signal across all pending try-on products, so the admin knows
+  // which are ready to approve vs still awaiting AR vs flagged for rejection
+  const arCounts = products.reduce((a, p) => {
+    if (!p.virtualTryOnEnable) return a;
+    if (p.arFlagged) a.flagged++;
+    else if (p.arReady || p.arLensId) a.ready++;
+    else a.awaiting++;
+    return a;
+  }, { ready: 0, awaiting: 0, flagged: 0 });
+  const arTotal = arCounts.ready + arCounts.awaiting + arCounts.flagged;
+
   // load the pending queue on mount
   useEffect(() => {
     let active = true;
@@ -81,6 +101,17 @@ function AdminProductApprovalsPage() {
     <div className="container py-4">
       <h1 className="mb-1">📦 Product Approvals</h1>
       <p className="text-muted">Review products submitted by suppliers.</p>
+
+      {/* AR handoff signal: try-on products can't be approved until an AR
+          Specialist has prepared them (or has flagged the model for rejection). */}
+      {!loading && arTotal > 0 && (
+        <div className="mb-3 d-flex flex-wrap gap-2 align-items-center">
+          <span className="text-muted small">Virtual try-on products:</span>
+          {arCounts.ready > 0 && <span className="badge text-bg-success">✅ {arCounts.ready} AR ready to approve</span>}
+          {arCounts.awaiting > 0 && <span className="badge text-bg-secondary">⏳ {arCounts.awaiting} awaiting AR</span>}
+          {arCounts.flagged > 0 && <span className="badge text-bg-warning">⚠ {arCounts.flagged} flagged — reject &amp; ask to fix</span>}
+        </div>
+      )}
 
       {/* success confirmations are transient → toast (errors stay inline below) */}
       <Toast message={notice} onClose={() => setNotice('')} />
@@ -137,6 +168,10 @@ function AdminProductApprovalsPage() {
                       {p.productName}
                     </button>
                     <div className="text-muted small">{p.productBrand}</div>
+                    {(() => {
+                      const s = arStatus(p);
+                      return s ? <span className={`badge ${s.cls} mt-1`} title={p.arFlagged ? (p.arFlagNote || '') : ''}>{s.label}</span> : null;
+                    })()}
                   </td>
                   <td>{p.companyName}</td>
                   <td className="text-center"><span className="badge text-bg-light">{p.categoryName}</span></td>
@@ -168,7 +203,7 @@ function AdminProductApprovalsPage() {
                     <button
                       className="btn btn-outline-danger btn-sm"
                       disabled={busyId === p.productId}
-                      onClick={() => { setRejectReason(''); setRejecting(p); }}
+                      onClick={() => { setRejectReason(p.arFlagNote || ''); setRejecting(p); }}
                     >
                       Reject
                     </button>
@@ -188,7 +223,7 @@ function AdminProductApprovalsPage() {
         busy={busyId === reviewId}
         onClose={() => setReviewId('')}
         onApprove={(prod) => { setReviewId(''); setApproving({ productId: prod.id, productName: prod.name }); }}
-        onReject={(prod) => { setReviewId(''); setRejectReason(''); setRejecting({ productId: prod.id, productName: prod.name }); }}
+        onReject={(prod) => { setReviewId(''); setRejectReason(prod.arFlagNote || ''); setRejecting({ productId: prod.id, productName: prod.name }); }}
       />
 
       {/* Approve is now behind a confirm — it makes the product publicly visible. */}

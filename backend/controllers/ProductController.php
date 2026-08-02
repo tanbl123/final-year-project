@@ -253,7 +253,9 @@ function handleGetProduct(PDO $pdo, array $auth, string $id): void {
   $imgs->execute(['id' => $id]);
   $row['images'] = array_column($imgs->fetchAll(), 'productImageUrl');
 
-  $mdl = $pdo->prepare('SELECT productModelUrl, shoeCount, modelSide, modelLengthCm, arLensId FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
+  $mdl = $pdo->prepare('SELECT productModelUrl, shoeCount, modelSide, modelLengthCm, arLensId,
+                               arReadyAt, arFlaggedAt, arFlagNote
+                          FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
   $mdl->execute(['id' => $id]);
   $modelRow = $mdl->fetch();
   $row['modelUrl'] = $modelRow ? $modelRow['productModelUrl'] : null;
@@ -261,6 +263,9 @@ function handleGetProduct(PDO $pdo, array $auth, string $id): void {
   $row['modelSide'] = $modelRow ? $modelRow['modelSide'] : null;
   $row['modelLengthCm'] = $modelRow && $modelRow['modelLengthCm'] !== null ? (float) $modelRow['modelLengthCm'] : null;
   $row['arLensId'] = $modelRow ? $modelRow['arLensId'] : null;   // Camera Kit lens id (AR try-on)
+  $row['arReady']   = $modelRow ? ($modelRow['arReadyAt'] !== null) : false;
+  $row['arFlagged'] = $modelRow ? ($modelRow['arFlaggedAt'] !== null) : false;
+  $row['arFlagNote'] = $modelRow ? $modelRow['arFlagNote'] : null;
 
   $vars = $pdo->prepare('SELECT size, stockQuantity AS stock FROM product_variant WHERE productId = :id ORDER BY productVariantId');
   $vars->execute(['id' => $id]);
@@ -323,7 +328,9 @@ function handleGetAdminProduct(PDO $pdo, string $id): void {
   $imgs->execute(['id' => $id]);
   $row['images'] = array_column($imgs->fetchAll(), 'productImageUrl');
 
-  $mdl = $pdo->prepare('SELECT productModelUrl, shoeCount, modelSide, modelLengthCm, arLensId FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
+  $mdl = $pdo->prepare('SELECT productModelUrl, shoeCount, modelSide, modelLengthCm, arLensId,
+                               arReadyAt, arFlaggedAt, arFlagNote
+                          FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
   $mdl->execute(['id' => $id]);
   $modelRow = $mdl->fetch();
   $row['modelUrl'] = $modelRow ? $modelRow['productModelUrl'] : null;
@@ -331,6 +338,9 @@ function handleGetAdminProduct(PDO $pdo, string $id): void {
   $row['modelSide'] = $modelRow ? $modelRow['modelSide'] : null;
   $row['modelLengthCm'] = $modelRow && $modelRow['modelLengthCm'] !== null ? (float) $modelRow['modelLengthCm'] : null;
   $row['arLensId'] = $modelRow ? $modelRow['arLensId'] : null;   // Camera Kit lens id (AR try-on)
+  $row['arReady']   = $modelRow ? ($modelRow['arReadyAt'] !== null) : false;
+  $row['arFlagged'] = $modelRow ? ($modelRow['arFlaggedAt'] !== null) : false;
+  $row['arFlagNote'] = $modelRow ? $modelRow['arFlagNote'] : null;
 
   $vars = $pdo->prepare('SELECT size, stockQuantity AS stock FROM product_variant WHERE productId = :id ORDER BY productVariantId');
   $vars->execute(['id' => $id]);
@@ -383,10 +393,13 @@ function handleSetAdminProductArLens(PDO $pdo, array $auth, string $id): void {
   // WHO prepared it (the signed-in staff user) for the AR "Completed" history.
   $ready = $lensId !== '';
   $stamp = $ready ? 'NOW()' : 'NULL';
+  // Saving a valid lens resolves any "model issue" flag the reviewer had raised
+  // (the model is good after all); clearing the lens leaves the flag untouched.
+  $clearFlag = $ready ? ', arFlaggedAt = NULL, arFlagNote = NULL, arFlaggedBy = NULL' : '';
   $upd = $pdo->prepare(
     'UPDATE product_model
         SET arLensId = :lens, arLensUpdatedAt = ' . $stamp . ',
-            arReadyAt = ' . $stamp . ', arReadyBy = :by
+            arReadyAt = ' . $stamp . ', arReadyBy = :by' . $clearFlag . '
       WHERE productModelId = :mid');
   $upd->execute([
     'lens' => $ready ? $lensId : null,
@@ -395,6 +408,40 @@ function handleSetAdminProductArLens(PDO $pdo, array $auth, string $id): void {
   ]);
 
   sendJson(200, true, ['productId' => $id, 'arLensId' => $lensId !== '' ? $lensId : null]);
+}
+
+// PUT /admin/products/{id}/ar-flag — an AR Specialist (or admin) reports that the
+// product's 3D model can't be used for AR (wrong orientation, broken export, …).
+// This records a reason on the model and clears any AR-ready/lens state, so the
+// product surfaces on the admin approvals page as "flagged" for the admin to
+// reject with that reason. The supplier then fixes the model and resubmits.
+function handleFlagAdminProductArModel(PDO $pdo, array $auth, string $id): void {
+  $body = getJsonBody();
+  $note = trim((string) ($body['note'] ?? ''));
+  if ($note === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A reason is required so the supplier knows what to fix.']);
+  }
+  if (mb_strlen($note) > 255) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Reason is too long (max 255 characters).']);
+  }
+
+  $mdl = $pdo->prepare('SELECT productModelId FROM product_model WHERE productId = :id ORDER BY productModelId LIMIT 1');
+  $mdl->execute(['id' => $id]);
+  $modelId = $mdl->fetchColumn();
+  if (!$modelId) {
+    sendJson(400, false, null, ['code' => 'NO_MODEL', 'message' => 'This product has no 3D model to flag.']);
+  }
+
+  // Flagging a model also drops any lens / AR-ready marker it may have had — a
+  // flagged model is not ready and shouldn't advertise try-on.
+  $pdo->prepare(
+    'UPDATE product_model
+        SET arFlaggedAt = NOW(), arFlagNote = :note, arFlaggedBy = :by,
+            arReadyAt = NULL, arReadyBy = NULL, arLensId = NULL, arLensUpdatedAt = NULL
+      WHERE productModelId = :mid'
+  )->execute(['note' => $note, 'by' => $auth['userId'] ?? null, 'mid' => $modelId]);
+
+  sendJson(200, true, ['productId' => $id, 'arFlagged' => true, 'arFlagNote' => $note]);
 }
 
 // PUT /products/{id}  — edit one of this supplier's products. Mirrors create:
@@ -608,17 +655,24 @@ function handleUpdateProduct(PDO $pdo, array $auth, string $id): void {
     if ($modelUrl === '') {
       $pdo->prepare('DELETE FROM product_model WHERE productId = :id')->execute(['id' => $id]);
     } elseif ($curModelRow) {
-      // Keep the lens (and its saved-at version) only while the model is unchanged;
-      // a changed model makes the old lens stale, so drop both.
-      $keepLens   = ($currentModel === $modelUrl) ? ($curModelRow['arLensId'] ?? null) : null;
-      $keepLensTs = ($currentModel === $modelUrl) ? ($curModelRow['arLensUpdatedAt'] ?? null) : null;
-      $pdo->prepare(
-        'UPDATE product_model SET productModelUrl = :url, arLensId = :lens, arLensUpdatedAt = :lensTs,
-             shoeCount = :cnt, modelSide = :side, modelLengthCm = :len
-           WHERE productModelId = :mid'
-      )->execute(['url' => $modelUrl, 'lens' => $keepLens, 'lensTs' => $keepLensTs,
-                  'cnt' => $mCount, 'side' => $mSide, 'len' => $mLen,
-                  'mid' => $curModelRow['productModelId']]);
+      if ($currentModel === $modelUrl) {
+        // model unchanged → keep the lens, the AR-ready marker and any issue flag
+        $pdo->prepare(
+          'UPDATE product_model SET productModelUrl = :url, shoeCount = :cnt, modelSide = :side, modelLengthCm = :len
+             WHERE productModelId = :mid'
+        )->execute(['url' => $modelUrl, 'cnt' => $mCount, 'side' => $mSide, 'len' => $mLen,
+                    'mid' => $curModelRow['productModelId']]);
+      } else {
+        // model changed → the old lens, AR-ready marker and any issue flag are all
+        // stale; reset them so the new model re-enters the AR queue for a fresh review
+        $pdo->prepare(
+          'UPDATE product_model SET productModelUrl = :url, shoeCount = :cnt, modelSide = :side, modelLengthCm = :len,
+               arLensId = NULL, arLensUpdatedAt = NULL, arReadyAt = NULL, arReadyBy = NULL,
+               arFlaggedAt = NULL, arFlagNote = NULL, arFlaggedBy = NULL
+             WHERE productModelId = :mid'
+        )->execute(['url' => $modelUrl, 'cnt' => $mCount, 'side' => $mSide, 'len' => $mLen,
+                    'mid' => $curModelRow['productModelId']]);
+      }
     } else {
       $mid = nextId($pdo, 'product_model', 'productModelId', 'MOD');
       $pdo->prepare(

@@ -166,7 +166,11 @@ function handleListPendingProducts(PDO $pdo): void {
             (SELECT pm.arLensId FROM product_model pm
               WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arLensId,
             (SELECT pm.arReadyAt IS NOT NULL FROM product_model pm
-              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arReady
+              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arReady,
+            (SELECT pm.arFlaggedAt IS NOT NULL FROM product_model pm
+              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arFlagged,
+            (SELECT pm.arFlagNote FROM product_model pm
+              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arFlagNote
        FROM product p
        JOIN supplier s ON s.supplierId = p.supplierId
        JOIN category c ON c.categoryId = p.categoryId
@@ -176,11 +180,13 @@ function handleListPendingProducts(PDO $pdo): void {
   $rows = $stmt->fetchAll();
   // virtualTryOnEnable + arLensId let the approvals page warn when a try-on
   // product is about to be approved without a Camera Kit lens (AR won't work);
-  // arReady drives the Virtual try-on filter (mirrors the inventory/supplier lists).
+  // arReady drives the Virtual try-on filter; arFlagged/arFlagNote show when an
+  // AR Specialist reported the model as unusable so the admin can reject it.
   foreach ($rows as &$r) {
     $r['productPrice']       = (float) $r['productPrice'];
     $r['virtualTryOnEnable'] = (bool) $r['virtualTryOnEnable'];
     $r['arReady']            = (bool) $r['arReady'];
+    $r['arFlagged']          = (bool) $r['arFlagged'];
   }
   unset($r);
   sendJson(200, true, ['products' => $rows]);
@@ -468,7 +474,11 @@ function handleListArQueue(PDO $pdo): void {
             s.companyName, p.productStatus, p.created_at,
             COALESCE(p.submittedAt, p.created_at) AS submittedAt,
             (SELECT pm.arLensId FROM product_model pm
-              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arLensId
+              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arLensId,
+            (SELECT pm.arFlaggedAt IS NOT NULL FROM product_model pm
+              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arFlagged,
+            (SELECT pm.arFlagNote FROM product_model pm
+              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arFlagNote
        FROM product p
        JOIN supplier s ON s.supplierId = p.supplierId
        JOIN category c ON c.categoryId = p.categoryId
@@ -479,19 +489,26 @@ function handleListArQueue(PDO $pdo): void {
               WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) IS NULL
       ORDER BY COALESCE(p.submittedAt, p.created_at) ASC"
   );
-  sendJson(200, true, ['products' => $stmt->fetchAll()]);
+  $rows = $stmt->fetchAll();
+  foreach ($rows as &$r) { $r['arFlagged'] = (bool) $r['arFlagged']; }
+  unset($r);
+  sendJson(200, true, ['products' => $rows]);
 }
 
 // GET /ar/stats — headline numbers for the AR Specialist dashboard + the sidebar
 // badge: how many try-on products are awaiting prep, how many have been prepared
 // in total, and how many in the last 7 days.
 function handleArStats(PDO $pdo): void {
+  // "Awaiting prep" = real AR work still to do, so flagged models (handed off to
+  // the admin to reject) are excluded from the badge count.
   $awaiting = (int) $pdo->query(
     "SELECT COUNT(*) FROM product p
       WHERE p.virtualTryOnEnable = 1
         AND p.productStatus IN ('Pending', 'Approved')
         AND EXISTS (SELECT 1 FROM product_model pm WHERE pm.productId = p.productId)
         AND (SELECT pm.arReadyAt FROM product_model pm
+              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) IS NULL
+        AND (SELECT pm.arFlaggedAt FROM product_model pm
               WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) IS NULL"
   )->fetchColumn();
   $prepared = (int) $pdo->query(
