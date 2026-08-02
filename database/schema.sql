@@ -435,6 +435,7 @@ CREATE TABLE delivery (
     estimatedDeliveryTime DATETIME   NULL,
     otpCode             VARCHAR(10)  NULL,                -- customer confirmation OTP (per parcel)
     proofOfDelivery     VARCHAR(255) NULL,                -- photo path / URL
+    shipReminderSentAt  TIMESTAMP    NULL,                -- last "ship this Standard parcel" nudge to the supplier (auto-sweep re-arm)
     courierFee          DECIMAL(10,2) NOT NULL DEFAULT 0, -- earned by the courier on delivery (snapshot)
     courierPayoutId     VARCHAR(10)  NULL,                -- set once this delivery's fee is paid out
     PRIMARY KEY (deliveryId),

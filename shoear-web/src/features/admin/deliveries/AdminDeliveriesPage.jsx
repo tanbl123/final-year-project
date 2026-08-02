@@ -226,11 +226,24 @@ function AdminDeliveriesPage() {
                         offer a nudge; once shipped there's nothing for the admin to do. */}
                     {d.deliveryMethod === 'Standard' ? (
                       d.deliveryStatus === 'Pending' ? (
-                        <button className="btn btn-sm btn-outline-primary text-nowrap"
-                          disabled={remindingId === d.deliveryId}
-                          onClick={() => remind(d)}>
-                          {remindingId === d.deliveryId ? 'Sending…' : 'Remind supplier'}
-                        </button>
+                        (() => {
+                          // days waiting since the order was placed; the auto-reminder
+                          // kicks in around 2 days, so flag overdue parcels here too
+                          const wd = Math.max(0, Math.floor((Date.now() - new Date(d.orderDate).getTime()) / 86400000));
+                          const overdue = wd >= 2;
+                          return (
+                            <>
+                              <button className="btn btn-sm btn-outline-primary text-nowrap"
+                                disabled={remindingId === d.deliveryId}
+                                onClick={() => remind(d)}>
+                                {remindingId === d.deliveryId ? 'Sending…' : 'Remind supplier'}
+                              </button>
+                              <div className={'small mt-1 ' + (overdue ? 'text-danger fw-semibold' : 'text-muted')}>
+                                waiting {wd}d{overdue ? ' ⚠' : ''}
+                              </div>
+                            </>
+                          );
+                        })()
                       ) : (
                         <span className="text-muted">—</span>
                       )

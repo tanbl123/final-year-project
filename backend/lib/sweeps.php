@@ -170,6 +170,56 @@ function notifyCourierNewAssignment(PDO $pdo, string $deliveryPersonnelId, strin
   }
 }
 
+// How long a paid Standard (3PL) parcel may sit unshipped before the supplier is
+// auto-reminded, and how often to re-nudge while it's still not shipped. Tunable.
+const SHIP_REMINDER_AFTER_HOURS  = 48;
+const SHIP_REMINDER_REPEAT_HOURS = 48;
+
+// Auto-remind suppliers whose paid Standard parcel hasn't been shipped in time.
+// 3PL parcels are shipped by the supplier, so this is the automated counterpart
+// to the admin's manual "Remind supplier" button: email (the channel suppliers
+// see on the web) + a best-effort in-app notification. Deduped/re-armed via
+// delivery.shipReminderSentAt, so an unshipped parcel is nudged again every
+// SHIP_REMINDER_REPEAT_HOURS rather than on every sweep.
+function sweepStandardShipReminders(PDO $pdo, array $config): int {
+  try {
+    $stmt = $pdo->prepare(
+      "SELECT d.deliveryId, d.orderId, s.companyName, u.userId, u.email
+         FROM delivery d
+         JOIN `order`  o ON o.orderId = d.orderId
+         JOIN supplier s ON s.supplierId = d.supplierId
+         JOIN `user`   u ON u.userId = s.userId
+        WHERE d.deliveryMethod = 'Standard'
+          AND d.deliveryStatus = 'Pending'
+          AND o.orderDate <= (NOW() - INTERVAL :after HOUR)
+          AND (d.shipReminderSentAt IS NULL OR d.shipReminderSentAt <= (NOW() - INTERVAL :repeat HOUR))"
+    );
+    $stmt->execute(['after' => SHIP_REMINDER_AFTER_HOURS, 'repeat' => SHIP_REMINDER_REPEAT_HOURS]);
+    $rows = $stmt->fetchAll();
+  } catch (Throwable $e) {
+    return 0;
+  }
+
+  $mailOk = function_exists('mailConfigured') && mailConfigured($config);
+  $mark = $pdo->prepare('UPDATE delivery SET shipReminderSentAt = NOW() WHERE deliveryId = :id');
+  $sent = 0;
+  foreach ($rows as $r) {
+    if (function_exists('createNotification')) {
+      try {
+        createNotification($pdo, (string) $r['userId'], 'system', 'Order awaiting shipment 📦',
+          'Order ' . $r['orderId'] . ' is paid and still not shipped. Open it in Orders, book the courier and enter the tracking number.');
+      } catch (Throwable $e) { /* email below is the primary channel */ }
+    }
+    if ($mailOk && !empty($r['email']) && function_exists('sendShipReminderEmail')) {
+      try { sendShipReminderEmail($config, (string) $r['email'], (string) $r['companyName'], (string) $r['orderId']); }
+      catch (Throwable $e) { /* best-effort */ }
+    }
+    try { $mark->execute(['id' => $r['deliveryId']]); } catch (Throwable $e) { /* ignore */ }
+    $sent++;
+  }
+  return $sent;
+}
+
 // Run every time-based sweep. Returns per-sweep counts (handy for the demo).
 // Also tidies up expired unpaid orders (which notifies on auto-cancel).
 function runNotificationSweeps(PDO $pdo): array {
@@ -216,6 +266,7 @@ function sweepReloadRecommender(array $config): bool {
 // so they behave identically.
 function runAllSweeps(PDO $pdo, array $config): array {
   $result = runNotificationSweeps($pdo);
+  $result['shipReminders'] = sweepStandardShipReminders($pdo, $config);   // needs $config for email
   if (function_exists('sweepCourierPayouts')) {
     $result['courierPayouts'] = sweepCourierPayouts($pdo, $config);
   }
