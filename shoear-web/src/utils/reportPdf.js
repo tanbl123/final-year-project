@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { REPORT_LOGO_PNG } from './reportLogo';
 
 // Document-style PDF export for the admin/supplier reports (Report Generation
 // module). Renders a header (system name, report title, period, generated
@@ -54,12 +55,20 @@ export function buildReportDoc({
   const stamp = now.toLocaleString('en-MY');
 
   // ── Header ──────────────────────────────────────────────────────────────
+  // Logo mark on the left, then the wordmark + report title beside it.
+  const logoSize = 40;
+  const textX = margin + logoSize + 12;
+  try {
+    doc.addImage(REPORT_LOGO_PNG, 'PNG', margin, 30, logoSize, logoSize);
+  } catch {
+    // if the image can't be decoded for any reason, fall back to text-only
+  }
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
-  doc.text(BRAND, margin, 50);
+  doc.text(BRAND, textX, 50);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(13);
-  doc.text(title, margin, 70);
+  doc.text(title, textX, 70);
 
   doc.setFontSize(9);
   doc.setTextColor(110);
