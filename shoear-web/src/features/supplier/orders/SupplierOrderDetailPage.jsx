@@ -28,6 +28,7 @@ function SupplierOrderDetailPage() {
 
   // standard-shipping ship form
   const [carrier, setCarrier] = useState('');
+  const [customCarrier, setCustomCarrier] = useState('');   // typed name when carrier === 'Other'
   const [tracking, setTracking] = useState('');
   const [shipBusy, setShipBusy] = useState(false);
   const [shipErr, setShipErr] = useState('');       // action/API errors (alert)
@@ -49,15 +50,19 @@ function SupplierOrderDetailPage() {
   }, [orderId]);
 
   async function ship() {
+    // when "Other" is picked, the supplier types the courier name
+    const isOther = carrier === 'Other';
+    const effectiveCarrier = isOther ? customCarrier.trim() : carrier;
     // per-field validation shown inline under each field
-    const cErr = carrier ? '' : 'Please choose a courier.';
+    const cErr = !carrier ? 'Please choose a courier.'
+      : (isOther && !effectiveCarrier ? 'Enter the courier name.' : '');
     const tErr = tracking.trim() ? '' : 'Enter the tracking number.';
     setCarrierErr(cErr); setTrackingErr(tErr);
     if (cErr || tErr) return;
     setShipBusy(true); setShipErr('');
     try {
-      await shipStandardParcel(order.myDelivery.deliveryId, carrier, tracking.trim());
-      setCarrier(''); setTracking('');
+      await shipStandardParcel(order.myDelivery.deliveryId, effectiveCarrier, tracking.trim());
+      setCarrier(''); setCustomCarrier(''); setTracking('');
       setToast('Parcel marked as shipped.');
       load();
       refreshBadges();   // one fewer parcel awaiting shipment → update the sidebar
@@ -244,11 +249,17 @@ function SupplierOrderDetailPage() {
                 <div className="row g-2 align-items-start" style={{ maxWidth: 560 }}>
                   <div className="col-sm-5">
                     <label className="form-label small mb-1">Courier</label>
-                    <select className={'form-select' + (carrierErr ? ' is-invalid' : '')} value={carrier}
+                    <select className={'form-select' + (carrierErr && !carrier ? ' is-invalid' : '')} value={carrier}
                       onChange={(e) => { setCarrier(e.target.value); setCarrierErr(''); }} disabled={shipBusy}>
                       <option value="">Select a courier…</option>
                       {STANDARD_CARRIERS.map((c) => <option key={c} value={c}>{c}</option>)}
                     </select>
+                    {carrier === 'Other' && (
+                      <input className={'form-control mt-2' + (carrierErr && carrier === 'Other' ? ' is-invalid' : '')}
+                        value={customCarrier} maxLength={50} disabled={shipBusy}
+                        onChange={(e) => { setCustomCarrier(e.target.value); setCarrierErr(''); }}
+                        placeholder="Courier name" />
+                    )}
                     {carrierErr && <div className="invalid-feedback d-block">{carrierErr}</div>}
                   </div>
                   <div className="col-sm-5">

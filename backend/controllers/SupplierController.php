@@ -447,8 +447,10 @@ function handleShipStandardDelivery(PDO $pdo, array $config, array $auth, string
     $carrier  = $booked['carrier'];
     $tracking = $booked['tracking'];
   } else {
-    if (!in_array($carrier, STANDARD_CARRIERS, true)) {
-      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please choose a valid courier.']);
+    // A carrier from the standard list, or a free-text name the supplier typed
+    // when they picked "Other" (some couriers aren't in the preset list).
+    if ($carrier === '' || mb_strlen($carrier) > 50) {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please enter a valid courier (max 50 characters).']);
     }
     if ($tracking === '' || mb_strlen($tracking) > 64) {
       sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A tracking number is required (max 64 characters).']);
