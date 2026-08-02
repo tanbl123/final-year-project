@@ -110,9 +110,13 @@ function LoginPage({ variant = 'supplier' }) {
       navigate(homePathFor(result.user));   // success → admin or supplier home
     } catch (err) {
       // wrong email/password — show a generic message AND red-border both fields
-      // (mirrors the mobile app), since we can't tell which one was wrong.
+      // (mirrors the mobile app), since we can't tell which one was wrong. The
+      // backend's generic message says "email/username" (it serves the mobile
+      // customer app too); on this email-only web login, show the email-only
+      // wording instead, while keeping any specific status message as-is.
       setCredsInvalid(true);
-      setFormError(err.message || GENERIC_LOGIN_ERROR);
+      const msg = err.message || GENERIC_LOGIN_ERROR;
+      setFormError(/invalid email\/username or password/i.test(msg) ? GENERIC_LOGIN_ERROR : msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -185,9 +189,10 @@ function LoginPage({ variant = 'supplier' }) {
             </button>
             {errors.password && <div className="invalid-feedback">{errors.password}</div>}
           </div>
+          {/* login-failure message shown inline under the field (matches the
+              mobile app + the per-field validation style), not a banner */}
+          {formError && <div className="text-danger small mt-1">{formError}</div>}
         </div>
-
-        {formError && <div className="alert alert-danger py-2">{formError}</div>}
 
         <button type="submit" className="btn btn-primary w-100 text-center" disabled={isSubmitting}>
           {isSubmitting ? 'Logging in...' : 'Login'}
