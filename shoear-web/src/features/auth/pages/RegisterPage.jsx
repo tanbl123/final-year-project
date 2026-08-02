@@ -363,13 +363,14 @@ function RegisterPage() {
   }
 
   // small helper so every field renders the same way (input + inline error)
-  function field(name, label, type = 'text') {
+  function field(name, label, type = 'text', placeholder = '') {
     return (
       <div className="mb-3">
         <label className="form-label">{label}</label>
         <ClearableInput
           type={type}
           name={name}
+          placeholder={placeholder}
           className={errors[name] ? 'is-invalid' : ''}
           value={form[name]}
           onChange={handleChange}
@@ -474,7 +475,7 @@ function RegisterPage() {
         <hr className="my-3" />
         <h6 className="text-muted text-uppercase small fw-bold">Account login</h6>
         {field('email', 'Email', 'email')}
-        {field('phoneNumber', 'Phone number', 'tel')}
+        {field('phoneNumber', 'Phone number', 'tel', 'e.g. 0123456789')}
         {passwordField('password', 'Password')}
         {passwordField('confirm', 'Confirm password')}
 

@@ -231,7 +231,7 @@ function ResubmitApplicationPage() {
             }}
             errors={operationalErrors} />
         </div>
-        {field('phoneNumber', 'Phone number', 'tel')}
+        {field('phoneNumber', 'Phone number', 'tel', 'e.g. 0123456789')}
 
         <hr className="my-3" />
         <h6 className="text-muted text-uppercase small fw-bold">Business verification</h6>
@@ -268,13 +268,14 @@ function ResubmitApplicationPage() {
   );
 
   // small helper so every text field renders the same way (input + inline error)
-  function field(name, label, type = 'text') {
+  function field(name, label, type = 'text', placeholder = '') {
     return (
       <div className="mb-3">
         <label className="form-label">{label}</label>
         <ClearableInput
           type={type}
           name={name}
+          placeholder={placeholder}
           className={errors[name] ? 'is-invalid' : ''}
           value={form[name]}
           onChange={handleChange}
