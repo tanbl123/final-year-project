@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getArCompleted } from '../admin/adminService';
+import { useAuth } from '../auth/AuthContext';
 import ProductReviewModal from '../admin/products/ProductReviewModal';
 
 // AR "Completed" history: products that have been made AR-ready, newest first,
@@ -7,10 +8,12 @@ import ProductReviewModal from '../admin/products/ProductReviewModal';
 // AR review modal (read-only-ish: view the model + the saved lens; the lens can
 // still be updated here if a re-prep is needed).
 function ArCompletedPage() {
+  const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reviewId, setReviewId] = useState('');
+  const [scope, setScope] = useState('all');   // 'all' (team) | 'mine'
 
   function load() {
     setLoading(true);
@@ -30,6 +33,9 @@ function ArCompletedPage() {
   }
 
   const fmt = (d) => (d ? new Date(d).toLocaleString() : '—');
+  const shown = scope === 'mine'
+    ? products.filter((p) => p.preparedById && p.preparedById === user?.userId)
+    : products;
 
   return (
     <div className="container py-4 text-start">
@@ -45,10 +51,20 @@ function ArCompletedPage() {
         </div>
       )}
 
+      {/* team-wide vs my own work */}
+      <div className="btn-group btn-group-sm mb-3" role="group">
+        <button type="button" className={`btn btn-outline-secondary${scope === 'all' ? ' active' : ''}`}
+          onClick={() => setScope('all')}>All completed</button>
+        <button type="button" className={`btn btn-outline-secondary${scope === 'mine' ? ' active' : ''}`}
+          onClick={() => setScope('mine')}>Prepared by me</button>
+      </div>
+
       {loading ? (
         <p className="text-muted">Loading…</p>
-      ) : products.length === 0 ? (
-        <div className="card card-body text-center text-muted">Nothing prepared yet.</div>
+      ) : shown.length === 0 ? (
+        <div className="card card-body text-center text-muted">
+          {scope === 'mine' ? "You haven't prepared any products yet." : 'Nothing prepared yet.'}
+        </div>
       ) : (
         <div className="table-responsive">
           <table className="table align-middle">
@@ -62,7 +78,7 @@ function ArCompletedPage() {
               </tr>
             </thead>
             <tbody>
-              {products.map((p) => (
+              {shown.map((p) => (
                 <tr key={p.productId}>
                   <td style={{ overflowWrap: 'anywhere' }}>
                     <div className="fw-semibold">{p.productName}</div>

@@ -504,7 +504,7 @@ function handleArStats(PDO $pdo): void {
 function handleListArCompleted(PDO $pdo): void {
   $stmt = $pdo->query(
     "SELECT p.productId, p.productName, p.productBrand, c.categoryName, p.productStatus,
-            pm.arLensId, pm.arReadyAt, u.fullName AS preparedBy
+            pm.arLensId, pm.arReadyAt, pm.arReadyBy AS preparedById, u.fullName AS preparedBy
        FROM product_model pm
        JOIN product p  ON p.productId  = pm.productId
        JOIN category c ON c.categoryId = p.categoryId
