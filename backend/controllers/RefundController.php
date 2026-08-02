@@ -50,7 +50,7 @@ function handleSetRefundStatus(PDO $pdo, string $refundId, array $config = []): 
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Invalid status.']);
   }
 
-  $stmt = $pdo->prepare('SELECT orderId, customerId, refundStatus FROM refund WHERE refundId = :id');
+  $stmt = $pdo->prepare('SELECT orderId, customerId, refundStatus, refundAmount FROM refund WHERE refundId = :id');
   $stmt->execute(['id' => $refundId]);
   $refund = $stmt->fetch();
   if (!$refund) {
@@ -70,11 +70,15 @@ function handleSetRefundStatus(PDO $pdo, string $refundId, array $config = []): 
   }
 
   // Completing a refund returns the money for real via Stripe FIRST, so we only
-  // record 'Refunded' when money has actually gone back. Skips silently for
-  // non-Stripe/unconfigured demos; aborts if Stripe rejects the refund.
+  // record it once money has actually gone back. We refund exactly this refund's
+  // amount (a PARTIAL refund only returns that portion), accumulate it on the
+  // payment, and flip the payment to 'Refunded' only when the whole amount has
+  // been returned. Skips silently for non-Stripe/unconfigured demos; aborts if
+  // Stripe rejects the refund.
+  $refundAmount = round((float) $refund['refundAmount'], 2);
   if ($status === 'Completed') {
     try {
-      refundOrderPayment($pdo, $refund['orderId'], $config, 'requested_by_customer');
+      refundOrderPayment($pdo, $refund['orderId'], $config, 'requested_by_customer', $refundAmount);
     } catch (Throwable $e) {
       sendJson(502, false, null, ['code' => 'REFUND_FAILED',
         'message' => 'Could not process the refund with Stripe: ' . $e->getMessage()]);
@@ -88,8 +92,23 @@ function handleSetRefundStatus(PDO $pdo, string $refundId, array $config = []): 
 
     // money actually returned → reflect it on the payment record
     if ($status === 'Completed') {
-      $pdo->prepare("UPDATE payment SET paymentStatus = 'Refunded' WHERE orderId = :oid")
-          ->execute(['oid' => $refund['orderId']]);
+      // accumulate the refunded amount; a full refund (cumulative ≥ the amount
+      // paid) also flips the status to 'Refunded', a partial one leaves it
+      // 'Successful' so the un-refunded remainder still counts as a sale.
+      // Computed in PHP (not a self-referential UPDATE) to avoid depending on
+      // MySQL's SET evaluation order.
+      $pStmt = $pdo->prepare('SELECT paymentAmount, refundedAmount FROM payment WHERE orderId = :oid FOR UPDATE');
+      $pStmt->execute(['oid' => $refund['orderId']]);
+      if ($pay = $pStmt->fetch()) {
+        $paid        = round((float) $pay['paymentAmount'], 2);
+        $newRefunded = min($paid, round((float) $pay['refundedAmount'] + $refundAmount, 2));
+        $fully       = $newRefunded >= $paid;
+        $pdo->prepare(
+          "UPDATE payment
+              SET refundedAmount = :ref" . ($fully ? ", paymentStatus = 'Refunded'" : "") . "
+            WHERE orderId = :oid"
+        )->execute(['ref' => $newRefunded, 'oid' => $refund['orderId']]);
+      }
     }
     $pdo->commit();
   } catch (Throwable $e) {
@@ -193,14 +212,26 @@ function handleCreateRefund(PDO $pdo, array $auth, string $orderId): void {
   }
   $orderTotal = (float) $order['orderTotalAmount'];
 
-  $amount = $body['refundAmount'] ?? $orderTotal;       // default: full refund
-  if (!is_numeric($amount) || (float) $amount <= 0 || (float) $amount > $orderTotal) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Refund amount must be between 0 and the order total.']);
+  // how much of this order has already been refunded (completed refunds), so a
+  // customer can raise SEVERAL partial refunds but never more than the total.
+  $ra = $pdo->prepare("SELECT COALESCE(refundedAmount, 0) FROM payment WHERE orderId = :oid");
+  $ra->execute(['oid' => $orderId]);
+  $alreadyRefunded = round((float) $ra->fetchColumn(), 2);
+  $remaining = round($orderTotal - $alreadyRefunded, 2);
+  if ($remaining <= 0) {
+    sendJson(409, false, null, ['code' => 'CONFLICT', 'message' => 'This order has already been fully refunded.']);
+  }
+
+  $amount = $body['refundAmount'] ?? $remaining;        // default: refund whatever is left
+  if (!is_numeric($amount) || (float) $amount <= 0 || round((float) $amount, 2) > $remaining) {
+    sendJson(400, false, null, ['code' => 'VALIDATION',
+      'message' => "Refund amount must be between 0 and the remaining refundable balance (RM " . number_format($remaining, 2) . ")."]);
   }
   $amount = round((float) $amount, 2);
 
-  // don't allow a second active refund on the same order
-  $ex = $pdo->prepare("SELECT 1 FROM refund WHERE orderId = :oid AND refundStatus IN ('Pending','Approved','Completed') LIMIT 1");
+  // don't allow a second IN-PROGRESS refund on the same order (a completed
+  // partial refund is fine — the remaining balance can still be refunded).
+  $ex = $pdo->prepare("SELECT 1 FROM refund WHERE orderId = :oid AND refundStatus IN ('Pending','Approved') LIMIT 1");
   $ex->execute(['oid' => $orderId]);
   if ($ex->fetch()) {
     sendJson(409, false, null, ['code' => 'CONFLICT', 'message' => 'A refund for this order is already in progress.']);

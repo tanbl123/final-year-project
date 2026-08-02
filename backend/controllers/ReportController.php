@@ -32,6 +32,44 @@ function serviceTaxOn(float $commission): float {
   return round($commission * serviceTaxRate() / 100, 2);
 }
 
+// Partial-refund amounts attributable to each supplier over a paid-date window.
+// A PARTIAL refund lives on payment.refundedAmount while the payment is still
+// 'Successful' (a FULL refund flips it to 'Refunded' and the whole order drops
+// out of the gross queries, so it needs no adjustment here). Because a refund is
+// recorded at order level, we allocate it across the order's suppliers by their
+// share of the order's item subtotals. Returns [supplierId => allocatedRefund].
+function partialRefundsBySupplier(PDO $pdo, ?string $supplierId, ?string $fromDt, ?string $toDt): array {
+  $sql =
+    "SELECT p.supplierId,
+            SUM(oi.orderSubtotal) AS supplierSub,
+            pay.refundedAmount    AS refundedAmount,
+            ot.orderSub           AS orderSub
+       FROM payment pay
+       JOIN `order` o          ON o.orderId = pay.orderId
+       JOIN order_item oi       ON oi.orderId = o.orderId
+       JOIN product_variant pv  ON pv.productVariantId = oi.productVariantId
+       JOIN product p           ON p.productId = pv.productId
+       JOIN (SELECT orderId, SUM(orderSubtotal) AS orderSub FROM order_item GROUP BY orderId) ot
+         ON ot.orderId = o.orderId
+      WHERE pay.paymentStatus = 'Successful' AND pay.refundedAmount > 0";
+  $params = [];
+  if ($supplierId !== null) { $sql .= ' AND p.supplierId = :sid'; $params['sid'] = $supplierId; }
+  if ($fromDt !== null)     { $sql .= ' AND pay.paymentDate BETWEEN :from AND :to'; $params['from'] = $fromDt; $params['to'] = $toDt; }
+  $sql .= ' GROUP BY p.supplierId, pay.orderId, pay.refundedAmount, ot.orderSub';
+
+  $stmt = $pdo->prepare($sql);
+  $stmt->execute($params);
+  $out = [];
+  foreach ($stmt->fetchAll() as $r) {
+    $orderSub = (float) $r['orderSub'];
+    if ($orderSub <= 0) { continue; }
+    $share = (float) $r['refundedAmount'] * ((float) $r['supplierSub'] / $orderSub);
+    $sid = $r['supplierId'];
+    $out[$sid] = ($out[$sid] ?? 0.0) + $share;
+  }
+  return $out;
+}
+
 // Parse ?from=YYYY-MM-DD&to=YYYY-MM-DD into inclusive datetime bounds, or
 // [null, null] for an all-time report (no range given / invalid).
 function reportRange(): array {
@@ -137,7 +175,13 @@ function handleSupplierSalesReport(PDO $pdo, array $auth): void {
       'gross'       => round($g, 2),
     ];
   }
-  $commission = round($gross * $rate / 100, 2);
+  // partial refunds reduce the commissionable sale: net sales = gross − refunds,
+  // and the platform's commission (and the SST on it) are charged on net sales,
+  // so the supplier gets back the platform's cut on the refunded portion. (Fully
+  // refunded orders already dropped out of `gross` via the payment-status join.)
+  $refunds  = round(array_sum(partialRefundsBySupplier($pdo, $supplierId, $fromDt, $toDt)), 2);
+  $netSales = round($gross - $refunds, 2);
+  $commission = round($netSales * $rate / 100, 2);
   $serviceTax = serviceTaxOn($commission);   // SST 8% on the commission
 
   // distinct paid orders containing this supplier's products → average order value
@@ -177,10 +221,12 @@ function handleSupplierSalesReport(PDO $pdo, array $auth): void {
     'serviceTaxRate' => serviceTaxRate(),
     'summary' => [
       'grossSales'    => round($gross, 2),
-      'commission'    => $commission,
+      'refunds'       => $refunds,               // partial refunds returned to customers in this window
+      'netSales'      => $netSales,              // gross − partial refunds
+      'commission'    => $commission,            // charged on net sales
       'serviceTax'    => $serviceTax,
       'deliveryCost'  => $deliveryCost,
-      'netEarnings'   => round($gross - $commission - $serviceTax - $deliveryCost, 2),
+      'netEarnings'   => round($netSales - $commission - $serviceTax - $deliveryCost, 2),
       'unitsSold'     => $units,
       'orders'        => $orders,
       'avgOrderValue' => $orders > 0 ? round($gross / $orders, 2) : null,
@@ -968,14 +1014,23 @@ function handleAdminCommissionReport(PDO $pdo): void {
   $stmt->execute($params);
   $rows = $stmt->fetchAll();
 
-  $totalGross = 0.0; $totalCommission = 0.0; $totalServiceTax = 0.0;
+  // partial refunds allocated per supplier over the same window (a full refund
+  // already drops the order out of `gross` above). Commission/SST are charged on
+  // net sales (gross − refunds), so the platform returns its cut on the refunded
+  // portion and the supplier is credited too.
+  $refundMap = partialRefundsBySupplier($pdo, $supplierId, $fromDt, $toDt);
+
+  $totalGross = 0.0; $totalCommission = 0.0; $totalServiceTax = 0.0; $totalRefunds = 0.0;
   $bySupplier = [];
   foreach ($rows as $r) {
     $g = (float) $r['gross'];
-    $c = round($g * $rate / 100, 2);
+    $refund = round((float) ($refundMap[$r['supplierId']] ?? 0.0), 2);
+    $netSales = round($g - $refund, 2);
+    $c = round($netSales * $rate / 100, 2);
     $t = serviceTaxOn($c);              // SST 8% on this supplier's commission
     $o = (int) $r['orders'];
     $totalGross += $g;
+    $totalRefunds += $refund;
     $totalCommission += $c;
     $totalServiceTax += $t;
     $bySupplier[] = [
@@ -984,13 +1039,15 @@ function handleAdminCommissionReport(PDO $pdo): void {
       'units'       => (int) $r['units'],
       'orders'      => $o,
       'gross'       => round($g, 2),
+      'refunds'     => $refund,
       'commission'  => $c,
       'serviceTax'  => $t,
-      'net'         => round($g - $c - $t, 2),          // what this supplier actually receives
+      'net'         => round($netSales - $c - $t, 2),   // what this supplier actually receives
       'avgOrderValue' => $o > 0 ? round($g / $o, 2) : null,
       'sharePct'    => 0.0,                             // % of GMV — filled below
     ];
   }
+  $totalRefunds = round($totalRefunds, 2);
   // contribution share of GMV per supplier
   if ($totalGross > 0) {
     foreach ($bySupplier as $i => $s) {
@@ -1035,12 +1092,14 @@ function handleAdminCommissionReport(PDO $pdo): void {
     'serviceTaxRate' => serviceTaxRate(),
     'summary' => [
       'grossSales'      => round($totalGross, 2),
-      'totalCommission' => round($totalCommission, 2),
+      'totalRefunds'    => $totalRefunds,                 // partial refunds returned to customers
+      'netSales'        => round($totalGross - $totalRefunds, 2),
+      'totalCommission' => round($totalCommission, 2),    // charged on net sales
       'totalServiceTax' => round($totalServiceTax, 2),
       'totalDeliveryCost' => $totalDeliveryCost,
-      // what actually reaches suppliers after commission, the SST they bear, and
-      // the delivery cost recovered from them
-      'netToSuppliers'  => round($totalGross - $totalCommission - $totalServiceTax - $totalDeliveryCost, 2),
+      // what actually reaches suppliers after refunds, commission, the SST they
+      // bear, and the delivery cost recovered from them
+      'netToSuppliers'  => round($totalGross - $totalRefunds - $totalCommission - $totalServiceTax - $totalDeliveryCost, 2),
       'orders'          => $orders,
       'avgOrderValue'   => $orders > 0 ? round($totalGross / $orders, 2) : null,
       'suppliers'       => count($bySupplier),

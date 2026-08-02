@@ -34,6 +34,9 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
   const rate = data?.commissionRate ?? 0;
   const sstRate = data?.serviceTaxRate ?? 0;
   const serviceTax = data?.summary.totalServiceTax ?? 0;
+  const totalRefunds = data?.summary.totalRefunds ?? 0;
+  const netSales = data?.summary.netSales ?? (data?.summary.grossSales ?? 0);
+  const hasRefunds = totalRefunds > 0;
   const netToSuppliers = data
     ? (data.summary.netToSuppliers ?? (data.summary.grossSales - data.summary.totalCommission - serviceTax))
     : 0;
@@ -50,7 +53,11 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
       referencePrefix: 'GMV',
       summary: [
         { label: 'Gross merchandise value (GMV)', value: rm(data.summary.grossSales) },
-        { label: `Platform commission (${rate}%)`, value: rm(data.summary.totalCommission) },
+        ...(hasRefunds
+          ? [{ label: 'Less: refunds (partial)', value: '- ' + rm(totalRefunds) },
+             { label: 'Net sales', value: rm(netSales) }]
+          : []),
+        { label: `Platform commission (${rate}%${hasRefunds ? ' of net sales' : ''})`, value: rm(data.summary.totalCommission) },
         { label: `SST (${sstRate}%) on commission`, value: rm(serviceTax) },
         { label: 'Delivery cost (recovered from suppliers)', value: rm(data.summary.totalDeliveryCost ?? 0) },
         { label: 'Net paid to suppliers', value: rm(netToSuppliers) },
@@ -59,19 +66,22 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
         { label: 'Active selling suppliers', value: String(data.summary.suppliers) },
       ],
       orientation: 'landscape',
-      head: ['Supplier', 'Units', 'Orders', 'Gross (GMV)', 'AOV', '% GMV', `Commission (${rate}%)`, `SST (${sstRate}%)`, 'Net paid'],
+      head: ['Supplier', 'Units', 'Orders', 'Gross (GMV)', 'AOV', '% GMV',
+        ...(hasRefunds ? ['Refunds'] : []), `Commission (${rate}%)`, `SST (${sstRate}%)`, 'Net paid'],
       body: data.bySupplier.map((s) => [
         s.companyName, s.units, s.orders, rm(s.gross), s.avgOrderValue != null ? rm(s.avgOrderValue) : '—',
-        s.sharePct > 0 ? `${s.sharePct}%` : '—', rm(s.commission), rm(s.serviceTax), rm(s.net),
+        s.sharePct > 0 ? `${s.sharePct}%` : '—',
+        ...(hasRefunds ? [s.refunds > 0 ? '- ' + rm(s.refunds) : '—'] : []),
+        rm(s.commission), rm(s.serviceTax), rm(s.net),
       ]),
       foot: [['Total',
         data.bySupplier.reduce((a, s) => a + s.units, 0), data.summary.orders,
         rm(data.summary.grossSales), '', '',
+        ...(hasRefunds ? ['- ' + rm(totalRefunds)] : []),
         rm(data.summary.totalCommission), rm(serviceTax), rm(netToSuppliers)]],
-      columnStyles: {
-        1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' },
-        5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' },
-      },
+      columnStyles: Object.fromEntries(
+        Array.from({ length: hasRefunds ? 9 : 8 }, (_, i) => [i + 1, { halign: 'right' }]),
+      ),
     };
   }
 
@@ -102,7 +112,10 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
         <>
           <div className="row g-3 mb-4">
             <StatCard label="GMV" value={rm(data.summary.grossSales)} sub="gross merchandise value" />
-            <StatCard label={`Commission (${rate}%)`} value={rm(data.summary.totalCommission)} color="success" sub="platform revenue" />
+            {hasRefunds && (
+              <StatCard label="Refunds" value={'- ' + rm(totalRefunds)} color="danger" sub="partial refunds to customers" />
+            )}
+            <StatCard label={`Commission (${rate}%)`} value={rm(data.summary.totalCommission)} color="success" sub={hasRefunds ? 'platform revenue · on net sales' : 'platform revenue'} />
             <StatCard label={`SST (${sstRate}%)`} value={rm(serviceTax)} sub="on commission · remitted" />
             <StatCard label="Delivery cost" value={rm(data.summary.totalDeliveryCost ?? 0)} sub="recovered from suppliers" />
             <StatCard label="Paid to suppliers" value={rm(netToSuppliers)} sub="after commission, SST & delivery" />
@@ -122,6 +135,7 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
                   <th className="text-end">Gross (GMV)</th>
                   <th className="text-end">AOV</th>
                   <th className="text-end">% GMV</th>
+                  {hasRefunds && <th className="text-end">Refunds</th>}
                   <th className="text-end">Commission ({rate}%)</th>
                   <th className="text-end">SST ({sstRate}%)</th>
                   <th className="text-end">Net paid</th>
@@ -136,6 +150,7 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
                     <td className="text-end">{rm(s.gross)}</td>
                     <td className="text-end">{s.avgOrderValue != null ? rm(s.avgOrderValue) : '—'}</td>
                     <td className="text-end">{s.sharePct > 0 ? `${s.sharePct}%` : '—'}</td>
+                    {hasRefunds && <td className="text-end text-danger">{s.refunds > 0 ? '- ' + rm(s.refunds) : '—'}</td>}
                     <td className="text-end text-success">{rm(s.commission)}</td>
                     <td className="text-end text-muted">{rm(s.serviceTax)}</td>
                     <td className="text-end fw-semibold">{rm(s.net)}</td>
@@ -150,6 +165,7 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
                   <td className="text-end">{rm(data.summary.grossSales)}</td>
                   <td className="text-end"></td>
                   <td className="text-end"></td>
+                  {hasRefunds && <td className="text-end text-danger">{'- ' + rm(totalRefunds)}</td>}
                   <td className="text-end text-success">{rm(data.summary.totalCommission)}</td>
                   <td className="text-end text-muted">{rm(serviceTax)}</td>
                   <td className="text-end">{rm(netToSuppliers)}</td>

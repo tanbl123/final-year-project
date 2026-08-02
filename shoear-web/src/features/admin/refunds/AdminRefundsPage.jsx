@@ -83,7 +83,11 @@ function AdminRefundsPage() {
         <button className="btn btn-primary btn-sm" disabled={busy}
           onClick={() => setConfirm({
             refund: r, status: 'Completed', title: 'Mark as refunded?',
-            message: `Confirm ${money(r.refundAmount)} has been refunded for ${r.orderId}. This marks the payment as Refunded.`, color: 'primary',
+            message: `Confirm ${money(r.refundAmount)} has been refunded for ${r.orderId}. `
+              + (r.refundAmount < r.orderTotalAmount
+                  ? 'This is a partial refund — only this amount is returned and the payment stays active for the remaining balance.'
+                  : 'This fully refunds the order and marks the payment as Refunded.'),
+            color: 'primary',
           })}>Mark refunded</button>
       );
     }
@@ -142,7 +146,12 @@ function AdminRefundsPage() {
                   </td>
                   <td>{r.customerName}</td>
                   <td style={{ overflowWrap: 'anywhere' }}>{r.refundReason}</td>
-                  <td className="text-end fw-semibold">{money(r.refundAmount)}</td>
+                  <td className="text-end fw-semibold">
+                    {money(r.refundAmount)}
+                    {r.refundAmount < r.orderTotalAmount && (
+                      <div><span className="badge text-bg-warning">Partial</span></div>
+                    )}
+                  </td>
                   <td className="text-center">
                     <span className={`badge text-bg-${STATUS_COLORS[r.refundStatus] || 'secondary'}`}>{r.refundStatus}</span>
                   </td>

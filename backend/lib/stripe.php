@@ -46,8 +46,14 @@ function stripeApi(string $secret, string $method, string $path, array $params =
 // Issue a refund against a completed PaymentIntent (pi_...). Returns the Stripe
 // Refund object (re_...). Throws via stripeApi() if Stripe rejects it (e.g. the
 // payment was already fully refunded), so the caller can surface a real error.
-function stripeRefund(string $secret, string $paymentIntentId, string $reason = 'requested_by_customer'): array {
+function stripeRefund(string $secret, string $paymentIntentId, string $reason = 'requested_by_customer', ?float $amount = null): array {
   $params = ['payment_intent' => $paymentIntentId];
+  // A partial refund passes an amount (in the smallest currency unit — sen for
+  // MYR); omitting it refunds the payment in full. Stripe rejects amounts that
+  // exceed the remaining refundable balance.
+  if ($amount !== null && $amount > 0) {
+    $params['amount'] = (int) round($amount * 100);
+  }
   // Stripe only accepts these enum reasons; anything else is sent without one.
   if (in_array($reason, ['requested_by_customer', 'duplicate', 'fraudulent'], true)) {
     $params['reason'] = $reason;
@@ -60,7 +66,7 @@ function stripeRefund(string $secret, string $paymentIntentId, string $reason = 
 // non-Stripe payment, or no PaymentIntent on file — e.g. a demo without keys).
 // Throws (RuntimeException) only if Stripe actively REJECTS the refund, so the
 // caller can abort instead of marking an order 'Refunded' when no money moved.
-function refundOrderPayment(PDO $pdo, string $orderId, array $config, string $reason = 'requested_by_customer'): bool {
+function refundOrderPayment(PDO $pdo, string $orderId, array $config, string $reason = 'requested_by_customer', ?float $amount = null): bool {
   if (!stripeConfigured($config)) { return false; }
   // A completed payment is stored as 'Successful' (payment.paymentStatus enum is
   // Pending/Successful/Failed/Refunded — there is no 'Paid').
@@ -78,7 +84,7 @@ function refundOrderPayment(PDO $pdo, string $orderId, array $config, string $re
   if (($pay['paymentMethod'] ?? '') !== 'Stripe' || strncmp($intent, 'pi_', 3) !== 0) {
     return false;
   }
-  stripeRefund($config['stripe_secret'], $intent, $reason);
+  stripeRefund($config['stripe_secret'], $intent, $reason, $amount);
   return true;
 }
 

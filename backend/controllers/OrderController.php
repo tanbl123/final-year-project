@@ -710,7 +710,9 @@ function handleCancelOrder(PDO $pdo, array $auth, string $orderId, array $config
     }
     $pdo->prepare("UPDATE `order` SET orderStatus = 'Cancelled' WHERE orderId = :oid")
         ->execute(['oid' => $orderId]);
-    $pdo->prepare("UPDATE payment SET paymentStatus = 'Refunded' WHERE orderId = :oid")
+    // a cancel is a full refund: mark it Refunded and record the full amount
+    // refunded, so the order can't later be partially refunded again.
+    $pdo->prepare("UPDATE payment SET paymentStatus = 'Refunded', refundedAmount = paymentAmount WHERE orderId = :oid")
         ->execute(['oid' => $orderId]);
     // Void the parcel(s): cancellation is only allowed before anything ships, so
     // the delivery is still Pending/Assigned. Removing it keeps the cancelled

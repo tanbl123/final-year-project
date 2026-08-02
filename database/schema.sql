@@ -401,6 +401,7 @@ CREATE TABLE payment (
     paymentAmount  DECIMAL(10,2) NOT NULL,
     paymentDate    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     paymentStatus  ENUM('Pending','Successful','Failed','Refunded') NOT NULL DEFAULT 'Pending',
+    refundedAmount DECIMAL(10,2) NOT NULL DEFAULT 0,       -- cumulative amount refunded so far; status flips to 'Refunded' once this reaches paymentAmount (full refund)
     PRIMARY KEY (paymentId),
     UNIQUE KEY uq_payment_order (orderId),
     CONSTRAINT fk_payment_order FOREIGN KEY (orderId) REFERENCES `order`(orderId)

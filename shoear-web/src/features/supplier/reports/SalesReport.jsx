@@ -35,6 +35,9 @@ function SalesReport() {
   const sstRate = data?.serviceTaxRate ?? 0;
   const serviceTax = data?.summary.serviceTax ?? 0;
   const totalGross = data?.summary.grossSales ?? 0;
+  const refunds = data?.summary.refunds ?? 0;
+  const netSales = data?.summary.netSales ?? totalGross;
+  const hasRefunds = refunds > 0;
   // per-line breakdown of the gross → net waterfall
   const commOf = (gross) => (gross * rate) / 100;                       // platform commission
   const sstOf = (gross) => ((gross * rate) / 100) * (sstRate / 100);    // SST on that commission
@@ -53,7 +56,11 @@ function SalesReport() {
       referencePrefix: 'SR',
       summary: [
         { label: 'Gross sales', value: rm(data.summary.grossSales) },
-        { label: `Commission (${rate}%)`, value: rm(data.summary.commission) },
+        ...(hasRefunds
+          ? [{ label: 'Less: refunds (partial)', value: '- ' + rm(refunds) },
+             { label: 'Net sales', value: rm(netSales) }]
+          : []),
+        { label: `Commission (${rate}%${hasRefunds ? ' of net sales' : ''})`, value: rm(data.summary.commission) },
         { label: `SST (${sstRate}%) on commission`, value: rm(serviceTax) },
         { label: 'Delivery cost (3PL label / in-house courier)', value: rm(data.summary.deliveryCost ?? 0) },
         { label: 'Net earnings (after commission, SST & delivery)', value: rm(data.summary.netEarnings) },
@@ -72,7 +79,7 @@ function SalesReport() {
         rm(commOf(p.gross)), rm(sstOf(p.gross)), rm(netOf(p.gross)),
       ]),
       foot: [['Total', data.summary.unitsSold, '', rm(data.summary.grossSales),
-        rm(data.summary.commission), rm(serviceTax), rm(data.summary.netEarnings)]],
+        rm(commOf(totalGross)), rm(sstOf(totalGross)), rm(netOf(totalGross))]],
       columnStyles: {
         1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' },
         4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' },
@@ -112,7 +119,10 @@ function SalesReport() {
         <>
           <div className="row g-3 mb-4">
             <StatCard label="Gross sales" value={rm(data.summary.grossSales)} sub={`${data.summary.unitsSold} units sold`} />
-            <StatCard label={`Commission (${data.commissionRate}%)`} value={rm(data.summary.commission)} color="danger" />
+            {hasRefunds && (
+              <StatCard label="Refunds" value={'- ' + rm(refunds)} color="danger" sub="partial refunds to customers" />
+            )}
+            <StatCard label={`Commission (${data.commissionRate}%)`} value={rm(data.summary.commission)} color="danger" sub={hasRefunds ? 'on net sales' : undefined} />
             <StatCard label={`SST (${sstRate}%)`} value={rm(serviceTax)} color="danger" sub="on commission" />
             <StatCard label="Delivery cost" value={rm(data.summary.deliveryCost ?? 0)} color="danger" sub="3PL label / in-house courier" />
             <StatCard label="Net earnings" value={rm(data.summary.netEarnings)} color="success" sub="after commission, SST & delivery" />
@@ -154,9 +164,9 @@ function SalesReport() {
                   <td className="text-end">{data.summary.unitsSold}</td>
                   <td className="text-end"></td>
                   <td className="text-end">{rm(data.summary.grossSales)}</td>
-                  <td className="text-end text-danger">{rm(data.summary.commission)}</td>
-                  <td className="text-end text-muted">{rm(serviceTax)}</td>
-                  <td className="text-end text-success">{rm(data.summary.netEarnings)}</td>
+                  <td className="text-end text-danger">{rm(commOf(totalGross))}</td>
+                  <td className="text-end text-muted">{rm(sstOf(totalGross))}</td>
+                  <td className="text-end text-success">{rm(netOf(totalGross))}</td>
                 </tr>
               </tfoot>
             </table>
@@ -165,8 +175,11 @@ function SalesReport() {
               summary={`Page ${page} of ${totalPages} · ${rows.length} products · export includes all rows`} />
 
             <p className="text-muted small mt-2 mb-0">
-              Delivery is charged per parcel, not per product, so it's deducted once from
-              <strong> Net earnings</strong> in the summary above — not shown in this per-product table.
+              This table shows sales as booked. Delivery is charged per parcel (not per product),
+              {hasRefunds ? ' and partial refunds are settled at order level,' : ''} so
+              {hasRefunds ? ' both are' : ' it is'} deducted once from <strong>Net earnings</strong> in
+              the summary above rather than shown per product.
+              {hasRefunds && ' Commission and SST there are charged on net sales (after refunds), so the platform returns its cut on the refunded amount.'}
             </p>
           </div>
         </>
