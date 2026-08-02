@@ -55,7 +55,8 @@ function SalesReport() {
         { label: 'Gross sales', value: rm(data.summary.grossSales) },
         { label: `Commission (${rate}%)`, value: rm(data.summary.commission) },
         { label: `SST (${sstRate}%) on commission`, value: rm(serviceTax) },
-        { label: 'Net earnings (after commission & SST)', value: rm(data.summary.netEarnings) },
+        { label: 'Shipping (3PL, platform-booked)', value: rm(data.summary.shippingCost ?? 0) },
+        { label: 'Net earnings (after commission, SST & shipping)', value: rm(data.summary.netEarnings) },
         { label: 'Units sold', value: String(data.summary.unitsSold) },
         { label: 'Orders', value: String(data.summary.orders) },
         { label: 'Avg order value', value: data.summary.avgOrderValue != null ? rm(data.summary.avgOrderValue) : '—' },
@@ -113,7 +114,8 @@ function SalesReport() {
             <StatCard label="Gross sales" value={rm(data.summary.grossSales)} sub={`${data.summary.unitsSold} units sold`} />
             <StatCard label={`Commission (${data.commissionRate}%)`} value={rm(data.summary.commission)} color="danger" />
             <StatCard label={`SST (${sstRate}%)`} value={rm(serviceTax)} color="danger" sub="on commission" />
-            <StatCard label="Net earnings" value={rm(data.summary.netEarnings)} color="success" sub="after commission & SST" />
+            <StatCard label="Shipping (3PL)" value={rm(data.summary.shippingCost ?? 0)} color="danger" sub="platform-booked" />
+            <StatCard label="Net earnings" value={rm(data.summary.netEarnings)} color="success" sub="after commission, SST & shipping" />
             <StatCard label="Orders" value={data.summary.orders} />
             <StatCard label="Avg order value" value={data.summary.avgOrderValue != null ? rm(data.summary.avgOrderValue) : '—'} />
             <StatCard label="Products sold" value={data.summary.products} />

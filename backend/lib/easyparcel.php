@@ -330,5 +330,8 @@ function easyParcelBook(PDO $pdo, array $config, array $sender, array $receiver,
     'tracking'     => $awb,
     'tracking_url' => $ship['tracking_url'] ?? '',
     'awb_link'     => $ship['awb_url'] ?? '',
+    // label cost the platform paid — captured from the chosen quote so it can be
+    // recovered from the supplier's payout
+    'cost'         => round((float) ($svc['pricing']['total_amount'] ?? 0), 2),
   ];
 }

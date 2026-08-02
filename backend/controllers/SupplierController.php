@@ -429,6 +429,7 @@ function handleShipStandardDelivery(PDO $pdo, array $config, array $auth, string
   $carrier  = trim($body['carrier'] ?? '');
   $tracking = trim($body['trackingNumber'] ?? '');
   $auto     = !empty($body['auto']);
+  $cost     = 0.0;   // only auto-booked (platform-paid) parcels carry a shipping cost
 
   if ($auto) {
     if (!easyParcelEnabled($config)) {
@@ -446,6 +447,7 @@ function handleShipStandardDelivery(PDO $pdo, array $config, array $auth, string
     }
     $carrier  = $booked['carrier'];
     $tracking = $booked['tracking'];
+    $cost     = $booked['cost'] ?? 0.0;
   } else {
     // A carrier from the standard list, or a free-text name the supplier typed
     // when they picked "Other" (some couriers aren't in the preset list).
@@ -459,9 +461,9 @@ function handleShipStandardDelivery(PDO $pdo, array $config, array $auth, string
 
   $pdo->prepare(
     "UPDATE delivery
-        SET trackingCarrier = :c, trackingNumber = :t, deliveryStatus = 'OutForDelivery'
+        SET trackingCarrier = :c, trackingNumber = :t, shippingCost = :cost, deliveryStatus = 'OutForDelivery'
       WHERE deliveryId = :id"
-  )->execute(['c' => $carrier, 't' => $tracking, 'id' => $deliveryId]);
+  )->execute(['c' => $carrier, 't' => $tracking, 'cost' => $cost, 'id' => $deliveryId]);
 
   if (function_exists('recomputeOrderStatus')) { recomputeOrderStatus($pdo, $del['orderId']); }
   if (function_exists('notifyOrderCustomer')) {
@@ -484,9 +486,10 @@ function autoBookAndShipParcel(PDO $pdo, array $config, string $deliveryId, stri
     $b = easyParcelBook($pdo, $config, $sender, $receiver, $parcel);
     if (!$b) { return false; }
     $pdo->prepare(
-      "UPDATE delivery SET trackingCarrier = :c, trackingNumber = :t, deliveryStatus = 'OutForDelivery'
+      "UPDATE delivery SET trackingCarrier = :c, trackingNumber = :t, shippingCost = :cost,
+              deliveryStatus = 'OutForDelivery'
         WHERE deliveryId = :id"
-    )->execute(['c' => $b['carrier'], 't' => $b['tracking'], 'id' => $deliveryId]);
+    )->execute(['c' => $b['carrier'], 't' => $b['tracking'], 'cost' => $b['cost'] ?? 0, 'id' => $deliveryId]);
     if (function_exists('recomputeOrderStatus')) { recomputeOrderStatus($pdo, $orderId); }
     if (function_exists('notifyOrderCustomer')) {
       notifyOrderCustomer($pdo, $orderId, 'shipped', 'Your order has shipped 📦',
