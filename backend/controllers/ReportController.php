@@ -780,11 +780,14 @@ function handleAdminRefundReport(PDO $pdo): void {
   ]);
 }
 
-// GET /admin/reports/growth — new sign-ups by role over the period (customers,
-// suppliers, couriers), based on the user's created_at.
+// GET /admin/reports/growth — user acquisition over time: new sign-ups by role,
+// a time-series bucketed by day/week/month (chosen from the window length) with
+// per-bucket growth % and a cumulative running total, plus period-over-period
+// growth vs the immediately preceding window. Based on the user's created_at.
 function handleAdminGrowthReport(PDO $pdo): void {
   [$fromDt, $toDt] = reportRange();
 
+  // new users by role over the window
   $sql = "SELECT role, COUNT(*) AS n FROM `user`";
   $params = [];
   if ($fromDt !== null) { $sql .= ' WHERE created_at BETWEEN :from AND :to'; $params['from'] = $fromDt; $params['to'] = $toDt; }
@@ -798,14 +801,53 @@ function handleAdminGrowthReport(PDO $pdo): void {
     $total += (int) $r['n'];
   }
 
+  // pick the time bucket from the window length (all-time → monthly)
+  $days = ($fromDt !== null) ? (strtotime($toDt) - strtotime($fromDt)) / 86400 : null;
+  if     ($days === null || $days > 92) { $granularity = 'month'; $fmt = '%Y-%m'; }
+  elseif ($days > 21)                   { $granularity = 'week';  $fmt = '%x-W%v'; }
+  else                                  { $granularity = 'day';   $fmt = '%Y-%m-%d'; }
+
+  $sSql = "SELECT DATE_FORMAT(created_at, '$fmt') AS bucket, COUNT(*) AS n FROM `user`";
+  if ($fromDt !== null) { $sSql .= ' WHERE created_at BETWEEN :from AND :to'; }
+  $sSql .= ' GROUP BY bucket ORDER BY bucket ASC';
+  $sStmt = $pdo->prepare($sSql); $sStmt->execute($params);
+
+  // running cumulative + growth % vs the previous bucket
+  $series = []; $cum = 0; $prev = null;
+  foreach ($sStmt->fetchAll() as $r) {
+    $n = (int) $r['n']; $cum += $n;
+    $series[] = [
+      'period'     => $r['bucket'],
+      'count'      => $n,
+      'cumulative' => $cum,
+      'growthPct'  => ($prev !== null && $prev > 0) ? round(($n - $prev) / $prev * 100, 1) : null,
+    ];
+    $prev = $n;
+  }
+
+  // period-over-period: this window vs the immediately preceding equal-length window
+  $prevNewUsers = null; $growthPct = null;
+  if ($fromDt !== null) {
+    $len = strtotime($toDt) - strtotime($fromDt);
+    $prevFrom = date('Y-m-d H:i:s', strtotime($fromDt) - $len - 1);
+    $pStmt = $pdo->prepare("SELECT COUNT(*) FROM `user` WHERE created_at >= :pfrom AND created_at < :pto");
+    $pStmt->execute(['pfrom' => $prevFrom, 'pto' => $fromDt]);
+    $prevNewUsers = (int) $pStmt->fetchColumn();
+    $growthPct = $prevNewUsers > 0 ? round(($total - $prevNewUsers) / $prevNewUsers * 100, 1) : null;
+  }
+
   sendJson(200, true, [
+    'granularity' => $granularity,   // day | week | month
     'summary' => [
-      'newUsers'     => $total,
-      'newCustomers' => $byRole['Customer'],
-      'newSuppliers' => $byRole['Supplier'],
-      'newCouriers'  => $byRole['DeliveryPersonnel'],
+      'newUsers'      => $total,
+      'newCustomers'  => $byRole['Customer'],
+      'newSuppliers'  => $byRole['Supplier'],
+      'newCouriers'   => $byRole['DeliveryPersonnel'],
+      'prevNewUsers'  => $prevNewUsers,   // new users in the preceding window (null for all-time)
+      'growthPct'     => $growthPct,      // % change vs the preceding window
     ],
     'byRole' => $byRole,
+    'series' => $series,   // [{ period, count, cumulative, growthPct }] chronological
     'period' => [
       'from' => $fromDt !== null ? substr($fromDt, 0, 10) : null,
       'to'   => $toDt   !== null ? substr($toDt, 0, 10)   : null,

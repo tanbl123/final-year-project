@@ -30,6 +30,10 @@ function GrowthReport() {
   }, [range.from, range.to]);
 
   const has = !!data && data.summary.newUsers > 0;
+  const GRAN_LABEL = { day: 'Day', week: 'Week', month: 'Month' };
+  const periodLabel = GRAN_LABEL[data?.granularity] || 'Period';
+  const fmtGrowth = (g) => (g == null ? '—' : `${g > 0 ? '+' : ''}${g}%`);
+  const growthStr = data?.summary?.growthPct != null ? fmtGrowth(data.summary.growthPct) : '—';
 
   function buildReportOpts() {
     return {
@@ -42,11 +46,14 @@ function GrowthReport() {
         { label: 'New customers', value: String(data.summary.newCustomers) },
         { label: 'New suppliers', value: String(data.summary.newSuppliers) },
         { label: 'New couriers', value: String(data.summary.newCouriers) },
+        ...(data.summary.growthPct != null
+          ? [{ label: 'Growth vs previous period', value: `${growthStr} (was ${data.summary.prevNewUsers})` }]
+          : []),
       ],
-      head: ['Role', 'New sign-ups'],
-      body: Object.entries(data.byRole).map(([r, n]) => [ROLE_LABELS[r] || r, n]),
-      foot: [['Total', data.summary.newUsers]],
-      columnStyles: { 1: { halign: 'right' } },
+      head: [periodLabel, 'New users', 'Growth %', 'Cumulative'],
+      body: data.series.map((s) => [s.period, s.count, fmtGrowth(s.growthPct), s.cumulative]),
+      foot: [['Total', data.summary.newUsers, '', '']],
+      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
     };
   }
 
@@ -77,11 +84,53 @@ function GrowthReport() {
             <StatCard label="Customers" value={data.summary.newCustomers} color="success" />
             <StatCard label="Suppliers" value={data.summary.newSuppliers} />
             <StatCard label="Couriers" value={data.summary.newCouriers} />
+            {data.summary.growthPct != null && (
+              <StatCard
+                label="Growth vs prev."
+                value={growthStr}
+                sub={`was ${data.summary.prevNewUsers}`}
+                color={data.summary.growthPct >= 0 ? 'success' : 'danger'}
+              />
+            )}
+          </div>
+
+          <h5 className="mb-3">Sign-ups over time <span className="text-muted fs-6">(by {periodLabel.toLowerCase()})</span></h5>
+          <div className="table-responsive mb-4">
+            <table className="table align-middle">
+              <thead>
+                <tr>
+                  <th>{periodLabel}</th>
+                  <th className="text-end" style={{ width: 140 }}>New users</th>
+                  <th className="text-end" style={{ width: 120 }}>Growth %</th>
+                  <th className="text-end" style={{ width: 140 }}>Cumulative</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.series.map((s) => (
+                  <tr key={s.period}>
+                    <td>{s.period}</td>
+                    <td className="text-end">{s.count}</td>
+                    <td className={'text-end ' + (s.growthPct == null ? 'text-muted' : s.growthPct >= 0 ? 'text-success' : 'text-danger')}>
+                      {fmtGrowth(s.growthPct)}
+                    </td>
+                    <td className="text-end fw-semibold">{s.cumulative}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="fw-semibold border-top">
+                  <td>Total</td>
+                  <td className="text-end">{data.summary.newUsers}</td>
+                  <td></td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
 
           <h5 className="mb-3">By role</h5>
           <div className="table-responsive">
-            <table className="table align-middle">
+            <table className="table align-middle w-auto">
               <thead>
                 <tr>
                   <th>Role</th>
@@ -96,12 +145,6 @@ function GrowthReport() {
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr className="fw-semibold border-top">
-                  <td>Total</td>
-                  <td className="text-end">{data.summary.newUsers}</td>
-                </tr>
-              </tfoot>
             </table>
           </div>
         </>
