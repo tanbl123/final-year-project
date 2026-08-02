@@ -2,6 +2,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useEffect, useState } from 'react';
 import { getReportCompanies } from '../adminService';
+import SearchableSelect from '../../../components/SearchableSelect';
 
 export const ALL_TIME = { from: null, to: null, label: 'All time' };
 
@@ -22,9 +23,11 @@ export function StatCard({ label, value, sub, color = 'dark' }) {
   );
 }
 
-// "Company" filter dropdown for the platform reports. Controlled: `value` is the
-// selected supplierId ('' = all companies); onChange(supplierId, companyName).
-// Fetches the active-supplier list once on mount.
+// "Company" filter for the platform reports. Controlled: `value` is the selected
+// supplierId ('' = all companies); onChange(supplierId, companyName). Fetches the
+// active-supplier list once on mount. Uses a searchable combobox so the filter
+// stays usable when there are many suppliers (a flat <select> of hundreds is
+// unscrollable).
 export function CompanyFilter({ value, onChange }) {
   const [companies, setCompanies] = useState([]);
   useEffect(() => {
@@ -38,21 +41,14 @@ export function CompanyFilter({ value, onChange }) {
   return (
     <div>
       <label className="form-label small text-muted mb-1">Company</label>
-      <select
-        className="form-select form-select-sm"
-        style={{ width: 190 }}
+      <SearchableSelect
         value={value}
-        onChange={(e) => {
-          const id = e.target.value;
-          const name = companies.find((c) => c.supplierId === id)?.companyName || '';
-          onChange(id, name);
-        }}
-      >
-        <option value="">All companies</option>
-        {companies.map((c) => (
-          <option key={c.supplierId} value={c.supplierId}>{c.companyName}</option>
-        ))}
-      </select>
+        onChange={onChange}
+        options={companies.map((c) => ({ id: c.supplierId, label: c.companyName }))}
+        allLabel="All companies"
+        placeholder="Search company…"
+        width={220}
+      />
     </div>
   );
 }
