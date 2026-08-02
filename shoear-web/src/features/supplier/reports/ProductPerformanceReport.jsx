@@ -3,7 +3,11 @@ import { getProductReport } from './reportService';
 import { useAuth } from '../../auth/AuthContext';
 import ReportPeriodBar from '../../../components/ReportPeriodBar';
 import ReportPreviewModal from '../../../components/ReportPreviewModal';
+import Pagination from '../../../components/Pagination';
+import { usePagination } from '../../../hooks/usePagination';
 import { ALL_TIME, rm, StatCard } from './reportUtils';
+
+const PAGE_SIZE = 15;
 
 // Best → worst sellers, including products with zero sales ("dead stock").
 function ProductPerformanceReport() {
@@ -26,6 +30,12 @@ function ProductPerformanceReport() {
   }, [range.from, range.to]);
 
   const has = !!data && data.summary.products > 0;
+
+  // Paginate only the on-screen table (the export/PDF still gets every row via
+  // buildReportOpts). Ranking is preserved across pages via the page offset.
+  const rows = data?.byProduct ?? [];
+  const { page, setPage, totalPages, pageItems } = usePagination(rows, PAGE_SIZE, `${range.from}|${range.to}`);
+  const offset = (page - 1) * PAGE_SIZE;
 
   // display helpers for the optional/derived columns
   const pct = (n) => (n == null ? '—' : `${n}%`);
@@ -122,9 +132,9 @@ function ProductPerformanceReport() {
                 </tr>
               </thead>
               <tbody>
-                {data.byProduct.map((p, i) => (
+                {pageItems.map((p, i) => (
                   <tr key={p.productId}>
-                    <td className="text-muted">{i + 1}</td>
+                    <td className="text-muted">{offset + i + 1}</td>
                     <td className="fw-semibold">{p.productName}</td>
                     <td className="text-end">{p.units}</td>
                     <td className="text-end">{p.orders}</td>
@@ -148,6 +158,9 @@ function ProductPerformanceReport() {
                 ))}
               </tbody>
             </table>
+
+            <Pagination page={page} totalPages={totalPages} onChange={setPage}
+              summary={`Page ${page} of ${totalPages} · ${rows.length} products · export includes all rows`} />
           </div>
         </>
       )}
