@@ -37,7 +37,7 @@ function AddProductPage() {
       {payoutBlocked ? (
         <div className="alert alert-warning">
           💳 <strong>Connect your payout account to start listing products.</strong> You'll receive
-          your sales income through Stripe — <Link to="/payouts">set it up first</Link>.
+          your sales income through Stripe — <Link to="/profile">set it up first</Link>.
         </div>
       ) : (
         <ProductForm onAdd={addProduct} onCancel={() => navigate('/products')} onDirtyChange={setDirty} />

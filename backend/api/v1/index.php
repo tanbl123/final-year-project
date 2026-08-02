@@ -568,12 +568,6 @@ if ($method === 'POST' && $path === '/supplier/application/resubmit') {
   handleResubmitApplication($pdo, $auth);
 }
 
-if ($method === 'PUT' && $path === '/supplier/bank-account') {
-  $auth = requireAuth($secret);
-  $pdo  = getPDO();
-  handleUpdateBankAccount($pdo, $auth);
-}
-
 // ── supplier business details (post-approval changes via re-approval) ──
 if ($method === 'GET' && $path === '/supplier/business-details') {
   $auth = requireAuth($secret);

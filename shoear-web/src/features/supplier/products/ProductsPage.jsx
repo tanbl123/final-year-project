@@ -153,7 +153,7 @@ function ProductsPage() {
             💳 <strong>Connect your payout account to start listing products.</strong> You'll
             receive your sales income through Stripe — set it up first.
           </span>
-          <Link to="/payouts" className="btn btn-sm btn-warning text-nowrap">Go to Payouts</Link>
+          <Link to="/profile" className="btn btn-sm btn-warning text-nowrap">Set up payouts</Link>
         </div>
       )}
 

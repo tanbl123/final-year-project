@@ -44,8 +44,8 @@ function handleStripeOnboard(PDO $pdo, array $config, array $auth): void {
     $appUrl = rtrim($config['app_url'], '/');
     $link = stripeApi($secret, 'POST', '/v1/account_links', [
       'account'     => $accountId,
-      'refresh_url' => $appUrl . '/payouts?refresh=1',
-      'return_url'  => $appUrl . '/payouts?done=1',
+      'refresh_url' => $appUrl . '/profile?refresh=1',
+      'return_url'  => $appUrl . '/profile?done=1',
       'type'        => 'account_onboarding',
     ]);
 

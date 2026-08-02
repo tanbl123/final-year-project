@@ -58,7 +58,6 @@ const SUPPLIER_NAV = [
     { to: '/orders', label: 'Orders', icon: '🧾', badge: 'orders' },
     { to: '/refunds', label: 'Refunds', icon: '💸' },
     { to: '/reports', label: 'Reports', icon: '📊' },
-    { to: '/payouts', label: 'Payouts', icon: '🏦' },
   ] },
 ];
 

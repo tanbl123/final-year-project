@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getMe, updateMe, changePassword, updateBankAccount } from '../auth/authService';
+import { getMe, updateMe, changePassword } from '../auth/authService';
 import { useAuth } from '../auth/AuthContext';
 import Avatar from '../../components/Avatar';
 import Toast from '../../components/Toast';
@@ -8,19 +8,13 @@ import EyeIcon from '../../components/EyeIcon';
 import ClearableInput from '../../components/ClearableInput';
 import BusinessDetailsCard from './BusinessDetailsCard';
 import StoreNameCard from './StoreNameCard';
+import PayoutsCard from './PayoutsCard';
 
 const EMPTY_PW = { currentPassword: '', newPassword: '', confirmPassword: '' };
-const EMPTY_BANK = { bankName: '', bankAccountName: '', bankAccountNumber: '' };
 
 // Malaysian phone format the backend enforces (0xxxxxxxxx or +60xxxxxxxxx).
 const MY_PHONE = /^(0\d{8,10}|\+?60\d{8,10})$/;
 const PHONE_ERROR = 'Enter a valid phone number, e.g. 0123456789.';
-
-// Show only the last 4 digits of an account number, e.g. ••••5678.
-function maskAccount(no) {
-  if (!no) return '';
-  return '••••' + String(no).slice(-4);
-}
 
 // Mirrors the backend password policy so we can flag problems before submitting.
 function passwordPolicyError(pw) {
@@ -57,12 +51,7 @@ function ProfilePage() {
   const [pwShown, setPwShown] = useState({ currentPassword: false, newPassword: false, confirmPassword: false });
   const toggleShown = (name) => setPwShown((s) => ({ ...s, [name]: !s[name] }));
 
-  const [bankEditing, setBankEditing] = useState(false);
-  const [bankForm, setBankForm] = useState(EMPTY_BANK);
-  const [bankErrors, setBankErrors] = useState({});   // inline per-field messages
-  const [bankSaving, setBankSaving] = useState(false);
-
-  const [discard, setDiscard] = useState(null);   // 'profile' | 'password' | 'bank' when confirming a discard
+  const [discard, setDiscard] = useState(null);   // 'profile' | 'password' when confirming a discard
   const [storeNameOverride, setStoreNameOverride] = useState(null); // live store name after a save (suppliers)
 
   useEffect(() => {
@@ -164,70 +153,6 @@ function ProfilePage() {
     setCurrentPwError('');
   }
 
-  // ── bank account ──────────────────────────────────────────────────
-  function startBankEdit() {
-    const p = me.profile || {};
-    setBankForm({
-      bankName: p.bankName || '',
-      bankAccountName: p.bankAccountName || '',
-      bankAccountNumber: p.bankAccountNumber || '',
-    });
-    setBankErrors({});
-    setBankEditing(true);
-  }
-
-  // update a bank field and clear its inline error as the user fixes it
-  function setBankField(name, value) {
-    setBankForm((f) => ({ ...f, [name]: value }));
-    setBankErrors((be) => { if (!be[name]) return be; const n = { ...be }; delete n[name]; return n; });
-  }
-
-  const bankDirty = bankEditing && me.profile && (
-    bankForm.bankName.trim() !== (me.profile.bankName || '') ||
-    bankForm.bankAccountName.trim() !== (me.profile.bankAccountName || '') ||
-    bankForm.bankAccountNumber.trim() !== (me.profile.bankAccountNumber || '')
-  );
-
-  // live account-number format check (shown inline as the user types)
-  const bankNumberError = bankForm.bankAccountNumber && !/^\d{5,20}$/.test(bankForm.bankAccountNumber.trim())
-    ? 'Account number must be 5–20 digits.' : null;
-
-  function cancelBank() {
-    if (bankDirty) setDiscard('bank');
-    else setBankEditing(false);
-  }
-
-  async function saveBank(e) {
-    e.preventDefault();
-    // validate inline, under each field
-    const be = {};
-    if (!bankForm.bankName.trim()) be.bankName = 'Bank name is required.';
-    if (!bankForm.bankAccountName.trim()) be.bankAccountName = 'Account holder name is required.';
-    if (!bankForm.bankAccountNumber.trim()) be.bankAccountNumber = 'Account number is required.';
-    else if (bankNumberError) be.bankAccountNumber = bankNumberError;
-    if (Object.keys(be).length) { setBankErrors(be); return; }
-
-    if (!bankDirty) { setBankEditing(false); return; }
-    setBankSaving(true);
-    setError('');
-    try {
-      const saved = await updateBankAccount({
-        bankName: bankForm.bankName.trim(),
-        bankAccountName: bankForm.bankAccountName.trim(),
-        bankAccountNumber: bankForm.bankAccountNumber.trim(),
-      });
-      setMe((m) => ({ ...m, profile: { ...m.profile, ...saved } }));
-      setBankEditing(false);
-      setToast('Bank account updated.');
-    } catch (err) {
-      // a server account-number complaint lands under that field
-      if (/account number/i.test(err.message || '')) setBankErrors({ bankAccountNumber: err.message });
-      else setError(err.message);
-    } finally {
-      setBankSaving(false);
-    }
-  }
-
   // cancel: confirm first if there are unsaved edits, otherwise just close
   function cancelEdit() {
     if (dirty) setDiscard('profile');
@@ -241,7 +166,6 @@ function ProfilePage() {
   function confirmDiscard() {
     if (discard === 'profile') setEditing(false);
     if (discard === 'password') closePw();
-    if (discard === 'bank') setBankEditing(false);
     setDiscard(null);
   }
 
@@ -407,76 +331,9 @@ function ProfilePage() {
       {/* business details (suppliers only) — verified identity + re-approval flow */}
       {me.role === 'Supplier' && <BusinessDetailsCard onToast={setToast} />}
 
-      {/* bank account (suppliers only) — where their sales payouts are sent */}
-      {me.role === 'Supplier' && (
-        <div className="card mt-4">
-          <div className="card-body">
-            <div className="d-flex justify-content-between align-items-start">
-              <div>
-                <h5 className="mb-0">Bank account</h5>
-                <small className="text-muted">Where your sales payouts are sent.</small>
-              </div>
-              {!bankEditing && (
-                <button className="btn btn-outline-primary"
-                  onClick={startBankEdit}>
-                  {me.profile?.bankAccountNumber ? 'Edit' : 'Add bank account'}
-                </button>
-              )}
-            </div>
-
-            {bankEditing ? (
-              <form className="mt-3" onSubmit={saveBank} noValidate>
-                <div className="mb-3">
-                  <label className="form-label">Bank name</label>
-                  <ClearableInput type="text" maxLength="100" required autoFocus
-                    className={bankErrors.bankName ? 'is-invalid' : ''}
-                    value={bankForm.bankName}
-                    onChange={(e) => setBankField('bankName', e.target.value)}
-                    onClear={() => setBankField('bankName', '')} />
-                  {bankErrors.bankName && <div className="invalid-feedback d-block">{bankErrors.bankName}</div>}
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Account holder name</label>
-                  <ClearableInput type="text" maxLength="150" required
-                    className={bankErrors.bankAccountName ? 'is-invalid' : ''}
-                    value={bankForm.bankAccountName}
-                    onChange={(e) => setBankField('bankAccountName', e.target.value)}
-                    onClear={() => setBankField('bankAccountName', '')} />
-                  {bankErrors.bankAccountName && <div className="invalid-feedback d-block">{bankErrors.bankAccountName}</div>}
-                </div>
-                <div className="mb-3">
-                  <label className="form-label">Account number</label>
-                  <ClearableInput type="text" inputMode="numeric" maxLength="34" required
-                    className={(bankNumberError || bankErrors.bankAccountNumber) ? 'is-invalid' : ''}
-                    value={bankForm.bankAccountNumber}
-                    onChange={(e) => setBankField('bankAccountNumber', e.target.value)}
-                    onClear={() => setBankField('bankAccountNumber', '')} />
-                  {(bankNumberError || bankErrors.bankAccountNumber) &&
-                    <div className="invalid-feedback d-block">{bankNumberError || bankErrors.bankAccountNumber}</div>}
-                </div>
-                <div className="d-flex gap-2">
-                  <button type="submit" className="btn btn-primary" disabled={bankSaving || !bankDirty || !!bankNumberError}>
-                    {bankSaving ? 'Saving…' : 'Save bank account'}
-                  </button>
-                  <button type="button" className="btn btn-outline-secondary"
-                    onClick={cancelBank} disabled={bankSaving}>Cancel</button>
-                </div>
-              </form>
-            ) : me.profile?.bankAccountNumber ? (
-              <dl className="row mb-0 mt-3">
-                <dt className="col-sm-4">Bank</dt>
-                <dd className="col-sm-8">{me.profile.bankName}</dd>
-                <dt className="col-sm-4">Account holder</dt>
-                <dd className="col-sm-8">{me.profile.bankAccountName}</dd>
-                <dt className="col-sm-4">Account number</dt>
-                <dd className="col-sm-8">{maskAccount(me.profile.bankAccountNumber)}</dd>
-              </dl>
-            ) : (
-              <p className="text-muted mb-0 mt-3">No bank account added yet.</p>
-            )}
-          </div>
-        </div>
-      )}
+      {/* payouts (suppliers only) — Stripe Connect is the single source of truth
+          for where sales income is sent; Stripe verifies + holds the bank details */}
+      {me.role === 'Supplier' && <PayoutsCard />}
 
       {/* change password */}
       <div className="card mt-4">

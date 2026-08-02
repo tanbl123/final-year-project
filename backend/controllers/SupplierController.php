@@ -27,38 +27,6 @@ function handleGetApplication(PDO $pdo, array $auth): void {
   sendJson(200, true, $row);
 }
 
-// PUT /supplier/bank-account — the supplier sets/updates the bank account their
-// payouts are sent to. All three fields go together (you can't have a partial
-// account); the account number is digits only, 5–20 long.
-function handleUpdateBankAccount(PDO $pdo, array $auth): void {
-  requireSupplierId($pdo, $auth);
-
-  $body       = getJsonBody();
-  $bankName    = trim($body['bankName'] ?? '');
-  $accountName = trim($body['bankAccountName'] ?? '');
-  $accountNo   = trim($body['bankAccountNumber'] ?? '');
-
-  if ($bankName === '' || $accountName === '' || $accountNo === '') {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Bank name, account holder name and account number are all required.']);
-  }
-  if (!preg_match('/^\d{5,20}$/', $accountNo)) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Account number must be 5–20 digits.']);
-  }
-
-  $upd = $pdo->prepare(
-    'UPDATE supplier
-        SET bankName = :bn, bankAccountName = :an, bankAccountNumber = :no
-      WHERE userId = :id'
-  );
-  $upd->execute(['bn' => $bankName, 'an' => $accountName, 'no' => $accountNo, 'id' => $auth['userId']]);
-
-  sendJson(200, true, [
-    'bankName'          => $bankName,
-    'bankAccountName'   => $accountName,
-    'bankAccountNumber' => $accountNo,
-  ]);
-}
-
 // POST /supplier/application/resubmit — the supplier corrects the details an
 // admin flagged and resubmits. Only allowed from the 'Rejected' state; flips the
 // account back to 'Pending' for re-review and clears the old rejection reason.

@@ -42,7 +42,6 @@ import ArDashboardPage from './features/ar/ArDashboardPage';
 import ArQueuePage from './features/ar/ArQueuePage';
 import ArCompletedPage from './features/ar/ArCompletedPage';
 import ProfilePage from './features/profile/ProfilePage';
-import PayoutsPage from './features/supplier/payouts/PayoutsPage';
 import Avatar from './components/Avatar';
 import Sidebar from './components/Sidebar';
 import { runSweeps } from './features/admin/adminService';
@@ -263,9 +262,6 @@ const router = createBrowserRouter(
       } />
       <Route path="/reports" element={
         <ProtectedRoute role="Supplier"><ReportsPage /></ProtectedRoute>
-      } />
-      <Route path="/payouts" element={
-        <ProtectedRoute role="Supplier"><PayoutsPage /></ProtectedRoute>
       } />
     </Route>
   )

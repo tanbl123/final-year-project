@@ -247,7 +247,7 @@ function SupplierInventoryPage() {
       ) : rows.length === 0 ? (
         <div className="card card-body text-center text-muted">
           {payoutBlocked ? (
-            <>No products yet. <Link to="/payouts">Connect your payout account</Link> to start listing products.</>
+            <>No products yet. <Link to="/profile">Connect your payout account</Link> to start listing products.</>
           ) : (
             <>No products yet. <Link to="/products/new">Add a product</Link> to manage its stock.</>
           )}

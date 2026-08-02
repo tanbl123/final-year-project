@@ -72,11 +72,6 @@ export function resubmitApplication(data) {
   return apiPost('/supplier/application/resubmit', data, getToken());
 }
 
-// Set/update the supplier's payout bank account. Resolves with the saved fields.
-export function updateBankAccount(data) {
-  return apiPut('/supplier/bank-account', data, getToken());
-}
-
 // The supplier's verified business details + any open/last change request.
 export function getBusinessDetails() {
   return apiGet('/supplier/business-details', getToken());
