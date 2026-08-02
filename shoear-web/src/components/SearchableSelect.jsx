@@ -6,9 +6,10 @@
 // options; a much larger list would want server-side search instead.
 //
 // Controlled: `value` is the selected option id; `onChange(id, label)` fires on
-// pick. `options` is [{ id, label }]. Pass `allLabel` to show a reset row (e.g.
-// "All companies") whose id is '' — omit it for a required field, where an empty
-// value means "nothing chosen yet" and the placeholder shows instead.
+// pick (and with ('', '') when the field is cleared). `options` is
+// [{ id, label }]. Pass `allLabel` to show a reset row (e.g. "All companies")
+// whose id is '' — omit it for a required field, where an empty value means
+// "nothing chosen yet" and the placeholder shows instead.
 //
 // For form use: `invalid` toggles Bootstrap's is-invalid styling and `onBlur`
 // fires when focus leaves (so the field can be marked "touched" and validated).
@@ -40,6 +41,10 @@ function SearchableSelect({
     ? (options.find((o) => o.id === value)?.label ?? '')
     : allLabel;   // '' when there is no reset row → placeholder shows
 
+  // match the dropdown's text size to the input's (sm vs default) so the
+  // placeholder/selection and the list rows read as one control
+  const fontSize = size === 'sm' ? '0.875rem' : '1rem';
+
   // optional "reset" row + options filtered by the typed query (case-insensitive)
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -62,6 +67,12 @@ function SearchableSelect({
     setQuery('');
   }
 
+  function clear() {
+    onChange('', '');
+    setQuery('');
+    setOpen(false);
+  }
+
   function onKeyDown(e) {
     if (e.key === 'Escape') { setOpen(false); return; }
     if (!open && (e.key === 'ArrowDown' || e.key === 'Enter')) { setOpen(true); setHighlight(0); return; }
@@ -70,12 +81,16 @@ function SearchableSelect({
     else if (e.key === 'Enter') { e.preventDefault(); if (rows[highlight]) pick(rows[highlight]); }
   }
 
+  // show the clear "×" once something is selected (not while it's still empty)
+  const showClear = !!value;
+
   return (
     <div className="position-relative" style={{ width }}>
       <input
         id={id}
         // Bootstrap only has -sm / -lg; treat 'md' as the default (no suffix)
-        className={'form-control' + (size && size !== 'md' ? ` form-control-${size}` : '') + (invalid ? ' is-invalid' : '')}
+        className={'form-control' + (size && size !== 'md' ? ` form-control-${size}` : '')
+          + (showClear ? ' pe-5' : '') + (invalid ? ' is-invalid' : '')}
         role="combobox"
         aria-expanded={open}
         autoComplete="off"
@@ -86,22 +101,27 @@ function SearchableSelect({
         onKeyDown={onKeyDown}
         onBlur={() => { setTimeout(() => setOpen(false), 150); if (onBlur) onBlur(); }}
       />
+      {showClear && (
+        <button type="button" aria-label="Clear" className="btn-close position-absolute"
+          style={{ top: '50%', right: 12, transform: 'translateY(-50%)', fontSize: '0.7rem' }}
+          // onMouseDown (not onClick) so it fires before the input's blur closes things
+          onMouseDown={(e) => { e.preventDefault(); clear(); }} />
+      )}
       {open && (
         <ul ref={listRef} role="listbox"
-          className="list-group position-absolute shadow-sm"
-          // grow to fit the longest option (like a native <select> popup) rather
-          // than clamp to a narrow control, but never below the control's width
-          style={{ zIndex: 1000, minWidth: '100%', width: 'max-content', maxWidth: 360, maxHeight: 260, overflowY: 'auto' }}>
+          className="list-group position-absolute w-100 shadow-sm"
+          style={{ zIndex: 1000, maxHeight: 260, overflowY: 'auto', fontSize }}>
           {rows.length === 0 ? (
             <li className="list-group-item py-2 text-muted small">No matches.</li>
           ) : rows.map((row, i) => (
             <li key={row.id || '__all'} role="option" aria-selected={row.id === value}
-              className={'list-group-item list-group-item-action py-2 d-flex justify-content-between'
+              className={'list-group-item list-group-item-action py-2 d-flex justify-content-between align-items-start'
                 + (i === highlight ? ' active' : '')}
               style={{ cursor: 'pointer' }}
               onMouseEnter={() => setHighlight(i)}
               onMouseDown={(ev) => { ev.preventDefault(); pick(row); }}>
-              <span className="text-truncate">{row.label}</span>
+              {/* wrap long names onto a second line rather than truncating */}
+              <span style={{ overflowWrap: 'anywhere' }}>{row.label}</span>
               {row.id === value && <span className="ms-2">✓</span>}
             </li>
           ))}
