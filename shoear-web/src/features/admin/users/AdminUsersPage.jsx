@@ -136,7 +136,10 @@ function AdminUsersPage() {
         : `Invite re-sent to ${res.email}.`);
       closeResend();
     } catch (err) {
-      setResendErr(err.message);
+      // a duplicate-email rejection belongs under the Email field (consistent
+      // with the register/profile forms); anything else is a general banner
+      if (err.code === 'DUPLICATE') setResendErrors({ email: err.message });
+      else setResendErr(err.message || 'Could not resend the invite.');
     } finally {
       setResending(false);
     }
@@ -215,7 +218,9 @@ function AdminUsersPage() {
         : `AR Specialist “${created.fullName}” created — a set-password link was emailed to ${created.email}.`);
       load();
     } catch (err) {
-      setCreateErr(err.message || 'Could not create the account.');
+      // duplicate email → under the Email field (like register/profile); else banner
+      if (err.code === 'DUPLICATE') setStaffErrors({ email: err.message });
+      else setCreateErr(err.message || 'Could not create the account.');
     } finally {
       setCreating(false);
     }
