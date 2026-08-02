@@ -260,7 +260,9 @@ function AdminUsersPage() {
       btns.push(<button key="del" className="btn btn-outline-danger btn-sm" disabled={busy}
         onClick={() => askConfirm(u, 'Deleted', 'Delete')}>Delete</button>);
     }
-    return <div className="d-flex gap-2 justify-content-center flex-wrap">{btns}</div>;
+    // return the buttons as siblings (not a nested flex) so they share the cell's
+    // single flex-wrap row with the View button instead of stacking beneath it
+    return <>{btns}</>;
   }
 
   return (
@@ -321,11 +323,11 @@ function AdminUsersPage() {
           <table className="table align-middle" style={{ tableLayout: 'fixed' }}>
             <thead>
               <tr>
-                <SortableTh label="User" columnKey="fullName" sort={sort} />
-                <SortableTh label="Role" columnKey="role" sort={sort} style={{ width: 130 }} />
-                <SortableTh label="Status" columnKey="status" sort={sort} className="text-center" style={{ width: 110 }} />
-                <SortableTh label="Joined" columnKey="created_at" sort={sort} style={{ width: 110 }} />
-                <th className="text-center" style={{ width: 260 }}>Actions</th>
+                <SortableTh label="User" columnKey="fullName" sort={sort} style={{ maxWidth: 320 }} />
+                <SortableTh label="Role" columnKey="role" sort={sort} style={{ width: 120 }} />
+                <SortableTh label="Status" columnKey="status" sort={sort} className="text-center" style={{ width: 120 }} />
+                <SortableTh label="Joined" columnKey="created_at" sort={sort} style={{ width: 100 }} />
+                <th className="text-center" style={{ width: 300 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
