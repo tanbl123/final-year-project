@@ -97,15 +97,19 @@ function ProfilePage() {
     });
   }
 
+  // Only customers may change their own username; every other role's username
+  // is system-assigned and fixed.
+  const canEditUsername = me?.role === 'Customer';
+
   // has the user actually changed anything in the edit form?
   const dirty = editing && (
     form.fullName.trim() !== me.fullName ||
     form.phoneNumber.trim() !== (me.phoneNumber || '') ||
-    form.username.trim() !== (me.username || '')
+    (canEditUsername && form.username.trim() !== (me.username || ''))
   );
 
   // live username format check (uniqueness is verified by the server on save)
-  const usernameError = editing && form.username.trim() !== ''
+  const usernameError = canEditUsername && editing && form.username.trim() !== ''
     && !/^[A-Za-z0-9_]{3,20}$/.test(form.username.trim())
     ? 'Username must be 3–20 letters, numbers or underscores.' : null;
 
@@ -121,8 +125,10 @@ function ProfilePage() {
     if (!form.fullName.trim()) fe.fullName = 'Full name is required.';
     if (!form.phoneNumber.trim()) fe.phoneNumber = 'Phone number is required.';
     else if (phoneError) fe.phoneNumber = phoneError;      // invalid format
-    if (!form.username.trim()) fe.username = 'Username is required.';
-    else if (usernameError) fe.username = usernameError;   // invalid format
+    if (canEditUsername) {
+      if (!form.username.trim()) fe.username = 'Username is required.';
+      else if (usernameError) fe.username = usernameError;   // invalid format
+    }
     if (Object.keys(fe).length) { setFieldErrors(fe); return; }
 
     if (!dirty) {                 // nothing changed — don't pretend we saved
@@ -135,7 +141,9 @@ function ProfilePage() {
       const saved = await updateMe({
         fullName: form.fullName.trim(),
         phoneNumber: form.phoneNumber.trim(),
-        username: form.username.trim(),
+        // username is only editable by customers; omit it for other roles so
+        // the server keeps their fixed, system-assigned username
+        ...(canEditUsername ? { username: form.username.trim() } : {}),
       });
       setMe((m) => ({ ...m, ...saved }));
       updateUser({ fullName: saved.fullName });   // refresh the navbar greeting
@@ -319,17 +327,19 @@ function ProfilePage() {
                   {fieldErrors.fullName && <div className="invalid-feedback d-block">{fieldErrors.fullName}</div>}
                 </div>
               )}
-              <div className="mb-3">
-                <label className="form-label">Username</label>
-                <ClearableInput type="text" maxLength="20"
-                  className={(usernameError || fieldErrors.username) ? 'is-invalid' : ''}
-                  value={form.username}
-                  onChange={(e) => setField('username', e.target.value)}
-                  onClear={() => setField('username', '')} />
-                {(usernameError || fieldErrors.username)
-                  ? <div className="invalid-feedback d-block">{usernameError || fieldErrors.username}</div>
-                  : <div className="form-text">Letters, numbers or underscores. You can sign in with this or your email.</div>}
-              </div>
+              {canEditUsername && (
+                <div className="mb-3">
+                  <label className="form-label">Username</label>
+                  <ClearableInput type="text" maxLength="20"
+                    className={(usernameError || fieldErrors.username) ? 'is-invalid' : ''}
+                    value={form.username}
+                    onChange={(e) => setField('username', e.target.value)}
+                    onClear={() => setField('username', '')} />
+                  {(usernameError || fieldErrors.username)
+                    ? <div className="invalid-feedback d-block">{usernameError || fieldErrors.username}</div>
+                    : <div className="form-text">Letters, numbers or underscores. You can sign in with this or your email.</div>}
+                </div>
+              )}
               <div className="mb-3">
                 <label className="form-label">Phone number</label>
                 <ClearableInput type="text" inputMode="tel" maxLength="30" required
@@ -339,7 +349,7 @@ function ProfilePage() {
                   onClear={() => setField('phoneNumber', '')} />
                 {(phoneError || fieldErrors.phoneNumber)
                   ? <div className="invalid-feedback d-block">{phoneError || fieldErrors.phoneNumber}</div>
-                  : <div className="form-text">Malaysian number, e.g. 0123456789.</div>}
+                  : <div className="form-text">e.g. 0123456789.</div>}
               </div>
               <div className="d-flex gap-2">
                 <button type="submit" className="btn btn-primary" disabled={saving || !dirty || !!usernameError || !!phoneError}>

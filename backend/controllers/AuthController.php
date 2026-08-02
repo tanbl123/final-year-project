@@ -1024,15 +1024,24 @@ function handleUpdateMe(PDO $pdo, array $auth): void {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid Malaysian phone number, e.g. 0123456789.']);
   }
   $phone = normalizeMyPhone($phone); // store canonical +60...
-  if ($username === '') {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Username is required.']);
-  }
-  $fmtErr = usernameFormatError($username);
-  if ($fmtErr) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => $fmtErr]);
-  }
-  if (usernameTaken($pdo, $username, $auth['userId'])) {
-    sendJson(409, false, null, ['code' => 'DUPLICATE', 'message' => 'That username is already taken.']);
+
+  // Username is only self-editable by customers. For every other role, ignore
+  // any submitted value and keep the current username unchanged.
+  if (($auth['role'] ?? '') === 'Customer') {
+    if ($username === '') {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Username is required.']);
+    }
+    $fmtErr = usernameFormatError($username);
+    if ($fmtErr) {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => $fmtErr]);
+    }
+    if (usernameTaken($pdo, $username, $auth['userId'])) {
+      sendJson(409, false, null, ['code' => 'DUPLICATE', 'message' => 'That username is already taken.']);
+    }
+  } else {
+    $cur = $pdo->prepare('SELECT username FROM `user` WHERE userId = :id');
+    $cur->execute(['id' => $auth['userId']]);
+    $username = (string) $cur->fetchColumn();
   }
 
   // A supplier's display name IS their verified company name — it may only change
