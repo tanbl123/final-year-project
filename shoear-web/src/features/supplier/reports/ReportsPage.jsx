@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import SalesReport from './SalesReport';
 import ProductPerformanceReport from './ProductPerformanceReport';
 import InventoryReport from './InventoryReport';
@@ -18,7 +19,17 @@ const TABS = [
 
 function ReportsPage() {
   const [tab, setTab] = useState('sales');
+  const [searchParams, setSearchParams] = useSearchParams();
   const Active = TABS.find((t) => t.key === tab)?.Component ?? SalesReport;
+
+  // switching tabs mounts a different paginated table — drop ?page so the new
+  // tab opens on page 1 instead of inheriting the previous tab's page number
+  function changeTab(key) {
+    setTab(key);
+    if (searchParams.has('page')) {
+      setSearchParams((prev) => { const n = new URLSearchParams(prev); n.delete('page'); return n; }, { replace: true });
+    }
+  }
 
   return (
     <div className="container py-4 text-start">
@@ -30,7 +41,7 @@ function ReportsPage() {
           <li className="nav-item" key={t.key}>
             <button
               className={`nav-link text-nowrap ${tab === t.key ? 'active' : ''}`}
-              onClick={() => setTab(t.key)}
+              onClick={() => changeTab(t.key)}
             >
               {t.label}
             </button>

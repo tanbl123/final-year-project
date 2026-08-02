@@ -3,7 +3,11 @@ import { getSalesReport } from './reportService';
 import { useAuth } from '../../auth/AuthContext';
 import ReportPeriodBar from '../../../components/ReportPeriodBar';
 import ReportPreviewModal from '../../../components/ReportPreviewModal';
+import Pagination from '../../../components/Pagination';
+import { usePagination } from '../../../hooks/usePagination';
 import { ALL_TIME, rm, StatCard } from './reportUtils';
+
+const PAGE_SIZE = 15;
 
 // Paid sales + what the supplier keeps after platform commission.
 function SalesReport() {
@@ -32,6 +36,10 @@ function SalesReport() {
   const serviceTax = data?.summary.serviceTax ?? 0;
   // what the supplier keeps on a line: gross − commission − SST(on that commission)
   const netOf = (gross) => gross - (gross * rate / 100) * (1 + sstRate / 100);
+
+  // paginate the on-screen table only; totals (tfoot) + PDF stay full
+  const rows = data?.byProduct ?? [];
+  const { page, setPage, totalPages, pageItems } = usePagination(rows, PAGE_SIZE, `${range.from}|${range.to}`);
 
   function buildReportOpts() {
     return {
@@ -107,7 +115,7 @@ function SalesReport() {
                 </tr>
               </thead>
               <tbody>
-                {data.byProduct.map((p) => (
+                {pageItems.map((p) => (
                   <tr key={p.productId}>
                     <td className="fw-semibold">{p.productName}</td>
                     <td className="text-end">{p.units}</td>
@@ -125,6 +133,9 @@ function SalesReport() {
                 </tr>
               </tfoot>
             </table>
+
+            <Pagination page={page} totalPages={totalPages} onChange={setPage}
+              summary={`Page ${page} of ${totalPages} · ${rows.length} products · export includes all rows`} />
           </div>
         </>
       )}

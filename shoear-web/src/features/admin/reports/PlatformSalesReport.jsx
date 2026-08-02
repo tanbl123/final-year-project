@@ -3,7 +3,11 @@ import { getCommissionReport } from '../adminService';
 import { useAuth } from '../../auth/AuthContext';
 import ReportPeriodBar from '../../../components/ReportPeriodBar';
 import ReportPreviewModal from '../../../components/ReportPreviewModal';
+import Pagination from '../../../components/Pagination';
+import { usePagination } from '../../../hooks/usePagination';
 import { ALL_TIME, rm, StatCard, CompanyFilter } from './reportUtils';
+
+const PAGE_SIZE = 15;
 
 // Platform GMV + commission revenue, broken down by supplier. `company` scopes it
 // to a single supplier ('' id = all companies).
@@ -33,6 +37,10 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
   const netToSuppliers = data
     ? (data.summary.netToSuppliers ?? (data.summary.grossSales - data.summary.totalCommission - serviceTax))
     : 0;
+
+  // paginate the on-screen table only; totals (tfoot) + PDF stay full
+  const rows = data?.bySupplier ?? [];
+  const { page, setPage, totalPages, pageItems } = usePagination(rows, PAGE_SIZE, `${range.from}|${range.to}|${company.id}`);
 
   function buildReportOpts() {
     return {
@@ -100,7 +108,7 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
                 </tr>
               </thead>
               <tbody>
-                {data.bySupplier.map((s) => (
+                {pageItems.map((s) => (
                   <tr key={s.supplierId}>
                     <td className="fw-semibold">{s.companyName}</td>
                     <td className="text-end">{s.units}</td>
@@ -120,6 +128,9 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
                 </tr>
               </tfoot>
             </table>
+
+            <Pagination page={page} totalPages={totalPages} onChange={setPage}
+              summary={`Page ${page} of ${totalPages} · ${rows.length} suppliers · export includes all rows`} />
           </div>
         </>
       )}
