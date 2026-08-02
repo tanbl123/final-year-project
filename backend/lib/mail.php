@@ -295,24 +295,26 @@ function sendPasswordResetCodeEmail(array $config, string $toEmail, string $code
 function sendStaffWelcomeEmail(array $config, string $toEmail, string $fullName, string $username, string $role): void {
   $roleLabel = $role === 'ArSpecialist' ? 'AR Specialist' : $role;
   $subject   = 'Welcome to ShoeAR — your account is ready';
-  $text =
-    "An administrator has created a ShoeAR $roleLabel account for you.\n\n" .
-    "To sign in:\n" .
-    "  1. Go to the ShoeAR staff login page.\n" .
-    "  2. Username: $username  (or use this email address)\n" .
-    "  3. Temporary password: your mobile phone number (the one registered for you).\n\n" .
-    "For your security you'll be asked to choose your own password immediately after your first login. " .
-    "After that, the temporary password no longer works.";
+  $textBody =
+    "An administrator has created a ShoeAR $roleLabel account for you. We are pleased to welcome you to the team.\n\n" .
+    "To sign in, please visit the ShoeAR staff login page and use the following details:\n" .
+    "  • Username: $username  (you may also sign in with this email address)\n" .
+    "  • Temporary password: your mobile phone number (the one registered for you)\n\n" .
+    "For your security, you will be asked to choose your own password immediately after your first sign-in. " .
+    "Once you have done so, the temporary password will no longer be valid.\n\n" .
+    "If you did not expect this email, please contact your administrator.";
+  $text = "Dear $fullName,\n\n$textBody\n\nYours sincerely,\nThe ShoeAR Team";
   $safeUser = htmlspecialchars($username, ENT_QUOTES);
   $bodyHtml =
-    '<p>An administrator has created a ShoeAR <strong>' . htmlspecialchars($roleLabel, ENT_QUOTES) . '</strong> account for you.</p>' .
-    '<p>To sign in at the ShoeAR <strong>staff login</strong> page:</p>' .
+    '<p>An administrator has created a ShoeAR <strong>' . htmlspecialchars($roleLabel, ENT_QUOTES) . '</strong> account for you. We are pleased to welcome you to the team.</p>' .
+    '<p>To sign in, please visit the ShoeAR <strong>staff login</strong> page and use the following details:</p>' .
     '<ul>' .
-    '<li><strong>Username:</strong> ' . $safeUser . ' &nbsp;(or use this email address)</li>' .
+    '<li><strong>Username:</strong> ' . $safeUser . ' &nbsp;(you may also sign in with this email address)</li>' .
     '<li><strong>Temporary password:</strong> your mobile phone number (the one registered for you)</li>' .
     '</ul>' .
-    '<p style="color:#666">For your security you\'ll be asked to choose your own password immediately after your ' .
-    'first login. After that, the temporary password no longer works.</p>';
+    '<p style="color:#666">For your security, you will be asked to choose your own password immediately after your ' .
+    'first sign-in. Once you have done so, the temporary password will no longer be valid.</p>' .
+    '<p style="color:#666">If you did not expect this email, please contact your administrator.</p>';
   $html = formalLetterHtml($fullName, $bodyHtml, '👟 ShoeAR');
   sendMail($config, $toEmail, $fullName, $subject, $text, $html);
 }

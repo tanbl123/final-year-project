@@ -384,17 +384,18 @@ function handleCreateStaff(PDO $pdo, array $config): void {
   if ($role !== 'ArSpecialist') {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Unsupported staff role.']);
   }
-  if ($fullName === '') {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Full name is required.']);
+  if ($fullName === '' || mb_strlen($fullName) > 120) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Full name is required and must be 120 characters or fewer.']);
   }
-  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid email is required.']);
+  if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 120) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid email (120 characters or fewer) is required.']);
   }
-  // The phone number is the temporary password, so it must be sensible. Digits
-  // (allowing +, spaces, hyphens), at least 8 digits.
+  // Phone: allowed characters + a real length (8–15 digits), and within the
+  // column limit. (It also serves as the temporary password.)
   $digits = preg_replace('/\D/', '', $phone);
-  if (strlen($digits) < 8) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid phone number is required (it is used as the temporary password).']);
+  if (strlen($phone) > 20 || !preg_match('/^[+\d()\s-]+$/', $phone)
+      || strlen($digits) < 8 || strlen($digits) > 15) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid phone number is required.']);
   }
   // We email the sign-in instructions, so email must be configured.
   if (!mailConfigured($config)) {

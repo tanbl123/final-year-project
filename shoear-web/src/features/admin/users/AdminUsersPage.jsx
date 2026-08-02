@@ -19,6 +19,48 @@ const STATUS_COLORS = {
 const roleLabel = (r) => (r === 'DeliveryPersonnel' ? 'Delivery' : r === 'ArSpecialist' ? 'AR Specialist' : r);
 
 const EMPTY_STAFF = { fullName: '', email: '', phone: '' };  // username auto-generated; phone is the temp password
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_ALLOWED_RE = /^[+\d()\s-]+$/;   // digits + the usual phone punctuation
+const NAME_MAX = 120;                       // user.fullName VARCHAR(120)
+const EMAIL_MAX = 120;                      // user.email VARCHAR(120)
+const PHONE_MAX = 20;                       // user.phoneNumber VARCHAR(20)
+
+// Inline per-field validation for the Add-AR-Specialist form. Mirrors the
+// backend rules: name (non-empty, max length), a well-formed email (max length),
+// and a real phone number (allowed characters + 8–15 digits). Returns an error
+// string, or '' when the field is valid.
+function staffFieldError(name, value) {
+  const v = (value || '').trim();
+  if (name === 'fullName') {
+    if (v === '') return 'Full name is required.';
+    if (v.length > NAME_MAX) return `Full name must be ${NAME_MAX} characters or fewer.`;
+    return '';
+  }
+  if (name === 'email') {
+    if (v === '') return 'Email is required.';
+    if (!EMAIL_RE.test(v)) return 'Please enter a valid email address.';
+    if (v.length > EMAIL_MAX) return `Email must be ${EMAIL_MAX} characters or fewer.`;
+    return '';
+  }
+  if (name === 'phone') {
+    if (v === '') return 'Phone number is required.';
+    if (v.length > PHONE_MAX || !PHONE_ALLOWED_RE.test(v)) {
+      return 'Enter a valid phone number (digits, optionally with + - ( ) or spaces).';
+    }
+    const digits = v.replace(/\D/g, '');
+    if (digits.length < 8 || digits.length > 15) return 'Phone number must have 8 to 15 digits.';
+    return '';
+  }
+  return '';
+}
+function validateStaff(form) {
+  const errs = {};
+  ['fullName', 'email', 'phone'].forEach((k) => {
+    const msg = staffFieldError(k, form[k]);
+    if (msg) errs[k] = msg;
+  });
+  return errs;
+}
 
 function AdminUsersPage() {
   const [users, setUsers] = useState([]);
@@ -37,6 +79,32 @@ function AdminUsersPage() {
   const [createForm, setCreateForm] = useState(null); // AR-specialist create form (null = closed)
   const [creating, setCreating] = useState(false);
   const [createErr, setCreateErr] = useState('');
+  const [staffErrors, setStaffErrors] = useState({}); // per-field inline errors
+
+  // open/close the create form, clearing any previous input + errors
+  function openCreate() { setCreateErr(''); setStaffErrors({}); setCreateForm({ ...EMPTY_STAFF }); }
+  function closeCreate() { setCreateForm(null); setStaffErrors({}); setCreateErr(''); }
+
+  // update a field; re-check it live once it's already showing an error
+  function setStaffField(name, value) {
+    setCreateForm((f) => ({ ...f, [name]: value }));
+    setStaffErrors((prev) => {
+      if (!(name in prev)) return prev;
+      const next = { ...prev };
+      const msg = staffFieldError(name, value);
+      if (msg) next[name] = msg; else delete next[name];
+      return next;
+    });
+  }
+  // validate a field when the admin leaves it
+  function blurStaffField(name) {
+    setStaffErrors((prev) => {
+      const next = { ...prev };
+      const msg = staffFieldError(name, createForm?.[name]);
+      if (msg) next[name] = msg; else delete next[name];
+      return next;
+    });
+  }
 
   const sort = useTableSort(users, {
     initialKey: 'created_at',
@@ -98,6 +166,9 @@ function AdminUsersPage() {
 
   async function submitCreate(e) {
     e.preventDefault();
+    const v = validateStaff(createForm);
+    if (Object.keys(v).length) { setStaffErrors(v); return; }
+    setStaffErrors({});
     setCreating(true);
     setCreateErr('');
     try {
@@ -161,7 +232,7 @@ function AdminUsersPage() {
         </div>
         {/* Staff have no public sign-up, so an admin provisions them here.
             Currently the only provisionable staff role is AR Specialist. */}
-        <button className="btn btn-primary" onClick={() => { setCreateErr(''); setCreateForm({ ...EMPTY_STAFF }); }}>
+        <button className="btn btn-primary" onClick={openCreate}>
           + Add AR Specialist
         </button>
       </div>
@@ -319,41 +390,47 @@ function AdminUsersPage() {
       {/* create AR Specialist */}
       {createForm && (
         <div className="modal show d-block" tabIndex="-1" style={{ background: 'rgba(0,0,0,.5)' }}
-          onClick={() => !creating && setCreateForm(null)}>
+          onClick={() => !creating && closeCreate()}>
           <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
-            <form className="modal-content" onSubmit={submitCreate}>
+            <form className="modal-content" onSubmit={submitCreate} noValidate>
               <div className="modal-header">
                 <h5 className="modal-title">Add AR Specialist</h5>
-                <button type="button" className="btn-close" onClick={() => setCreateForm(null)} disabled={creating}></button>
+                <button type="button" className="btn-close" onClick={closeCreate} disabled={creating}></button>
               </div>
               <div className="modal-body">
                 <p className="text-muted small">
-                  Creates an active internal-staff account. The system generates their username.
-                  Their <strong>temporary password is their phone number</strong> — they'll be forced to
-                  set their own password on first login. A welcome email with sign-in details is sent
-                  to the address below.
+                  Creates an active internal-staff account. The system generates their username and
+                  emails their sign-in details to the address below; they set their own password on
+                  first login.
                 </p>
                 {createErr && <div className="alert alert-danger py-2">{createErr}</div>}
                 <div className="mb-2">
                   <label className="form-label small mb-1">Full name</label>
-                  <input className="form-control" value={createForm.fullName} required
-                    onChange={(e) => setCreateForm((f) => ({ ...f, fullName: e.target.value }))} />
+                  <input className={`form-control ${staffErrors.fullName ? 'is-invalid' : ''}`}
+                    value={createForm.fullName}
+                    onChange={(e) => setStaffField('fullName', e.target.value)}
+                    onBlur={() => blurStaffField('fullName')} />
+                  {staffErrors.fullName && <div className="invalid-feedback d-block">{staffErrors.fullName}</div>}
                 </div>
                 <div className="mb-2">
                   <label className="form-label small mb-1">Email</label>
-                  <input type="email" className="form-control" value={createForm.email} required
-                    onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))} />
-                  <div className="form-text">A real inbox — the welcome email is sent here.</div>
+                  <input type="email" className={`form-control ${staffErrors.email ? 'is-invalid' : ''}`}
+                    value={createForm.email}
+                    onChange={(e) => setStaffField('email', e.target.value)}
+                    onBlur={() => blurStaffField('email')} />
+                  {staffErrors.email && <div className="invalid-feedback d-block">{staffErrors.email}</div>}
                 </div>
                 <div className="mb-1">
                   <label className="form-label small mb-1">Phone number</label>
-                  <input type="tel" className="form-control" value={createForm.phone} required
-                    onChange={(e) => setCreateForm((f) => ({ ...f, phone: e.target.value }))} />
-                  <div className="form-text">Used as their temporary password (they change it on first login).</div>
+                  <input type="tel" className={`form-control ${staffErrors.phone ? 'is-invalid' : ''}`}
+                    value={createForm.phone}
+                    onChange={(e) => setStaffField('phone', e.target.value)}
+                    onBlur={() => blurStaffField('phone')} />
+                  {staffErrors.phone && <div className="invalid-feedback d-block">{staffErrors.phone}</div>}
                 </div>
               </div>
               <div className="modal-footer">
-                <button type="button" className="btn btn-light" onClick={() => setCreateForm(null)} disabled={creating}>Cancel</button>
+                <button type="button" className="btn btn-light" onClick={closeCreate} disabled={creating}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={creating}>
                   {creating ? 'Creating…' : 'Create account'}
                 </button>
