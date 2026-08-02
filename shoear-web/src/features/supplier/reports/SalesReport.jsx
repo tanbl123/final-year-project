@@ -34,8 +34,12 @@ function SalesReport() {
   const rate = data?.commissionRate ?? 0;
   const sstRate = data?.serviceTaxRate ?? 0;
   const serviceTax = data?.summary.serviceTax ?? 0;
-  // what the supplier keeps on a line: gross − commission − SST(on that commission)
-  const netOf = (gross) => gross - (gross * rate / 100) * (1 + sstRate / 100);
+  const totalGross = data?.summary.grossSales ?? 0;
+  // per-line breakdown of the gross → net waterfall
+  const commOf = (gross) => (gross * rate) / 100;                       // platform commission
+  const sstOf = (gross) => ((gross * rate) / 100) * (sstRate / 100);    // SST on that commission
+  const netOf = (gross) => gross - commOf(gross) - sstOf(gross);        // what the supplier keeps
+  const shareStr = (gross) => (totalGross > 0 ? `${Math.round((gross / totalGross) * 1000) / 10}%` : '—');
 
   // paginate the on-screen table only; totals (tfoot) + PDF stay full
   const rows = data?.byProduct ?? [];
@@ -60,10 +64,18 @@ function SalesReport() {
           ? [{ label: 'Gross sales vs previous period', value: `${growth > 0 ? '+' : ''}${growth}%` }]
           : []),
       ],
-      head: ['Product', 'Units', 'Gross sales', 'Net (after fees)'],
-      body: data.byProduct.map((p) => [p.productName, p.units, rm(p.gross), rm(netOf(p.gross))]),
-      foot: [['Total', data.summary.unitsSold, rm(data.summary.grossSales), rm(data.summary.netEarnings)]],
-      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
+      orientation: 'landscape',
+      head: ['Product', 'Units', '% sales', 'Gross', `Commission (${rate}%)`, `SST (${sstRate}%)`, 'Net (after fees)'],
+      body: data.byProduct.map((p) => [
+        p.productName, p.units, shareStr(p.gross), rm(p.gross),
+        rm(commOf(p.gross)), rm(sstOf(p.gross)), rm(netOf(p.gross)),
+      ]),
+      foot: [['Total', data.summary.unitsSold, '', rm(data.summary.grossSales),
+        rm(data.summary.commission), rm(serviceTax), rm(data.summary.netEarnings)]],
+      columnStyles: {
+        1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' },
+        4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' },
+      },
     };
   }
 
@@ -113,9 +125,12 @@ function SalesReport() {
               <thead>
                 <tr>
                   <th>Product</th>
-                  <th className="text-end" style={{ width: 110 }}>Units</th>
-                  <th className="text-end" style={{ width: 160 }}>Gross sales</th>
-                  <th className="text-end" style={{ width: 180 }}>Net (after fees)</th>
+                  <th className="text-end">Units</th>
+                  <th className="text-end">% sales</th>
+                  <th className="text-end">Gross</th>
+                  <th className="text-end">Commission ({rate}%)</th>
+                  <th className="text-end">SST ({sstRate}%)</th>
+                  <th className="text-end">Net (after fees)</th>
                 </tr>
               </thead>
               <tbody>
@@ -123,8 +138,11 @@ function SalesReport() {
                   <tr key={p.productId}>
                     <td className="fw-semibold">{p.productName}</td>
                     <td className="text-end">{p.units}</td>
+                    <td className="text-end">{shareStr(p.gross)}</td>
                     <td className="text-end">{rm(p.gross)}</td>
-                    <td className="text-end text-success">{rm(netOf(p.gross))}</td>
+                    <td className="text-end text-danger">{rm(commOf(p.gross))}</td>
+                    <td className="text-end text-muted">{rm(sstOf(p.gross))}</td>
+                    <td className="text-end text-success fw-semibold">{rm(netOf(p.gross))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -132,7 +150,10 @@ function SalesReport() {
                 <tr className="fw-semibold border-top">
                   <td>Total</td>
                   <td className="text-end">{data.summary.unitsSold}</td>
+                  <td className="text-end"></td>
                   <td className="text-end">{rm(data.summary.grossSales)}</td>
+                  <td className="text-end text-danger">{rm(data.summary.commission)}</td>
+                  <td className="text-end text-muted">{rm(serviceTax)}</td>
                   <td className="text-end text-success">{rm(data.summary.netEarnings)}</td>
                 </tr>
               </tfoot>
