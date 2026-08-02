@@ -2,6 +2,12 @@ import { useEffect, useState } from 'react';
 import { getArCompleted } from '../admin/adminService';
 import { useAuth } from '../auth/AuthContext';
 import ProductReviewModal from '../admin/products/ProductReviewModal';
+import SortableTh from '../../components/SortableTh';
+import Pagination from '../../components/Pagination';
+import { useTableSort } from '../../hooks/useTableSort';
+import { usePagination } from '../../hooks/usePagination';
+
+const PAGE_SIZE = 10;
 
 // AR "Completed" history: products that have been made AR-ready, newest first,
 // with when and which staff member prepared them. Opening one reuses the slim
@@ -37,6 +43,15 @@ function ArCompletedPage() {
     ? products.filter((p) => p.preparedById && p.preparedById === user?.userId)
     : products;
 
+  // Sortable + paginated like the admin approvals page; default is chronological
+  // (most recently prepared first).
+  const sort = useTableSort(shown, {
+    initialKey: 'arReadyAt',
+    initialDir: 'desc',
+    getValue: (p, k) => (k === 'arReadyAt' ? new Date(p.arReadyAt).getTime() : p[k]),
+  });
+  const { page, setPage, totalPages, pageItems } = usePagination(sort.sorted, PAGE_SIZE);
+
   return (
     <div className="container py-4 text-start">
       <h1 className="mb-1">✅ Completed</h1>
@@ -54,9 +69,9 @@ function ArCompletedPage() {
       {/* team-wide vs my own work */}
       <div className="btn-group btn-group-sm mb-3" role="group">
         <button type="button" className={`btn btn-outline-secondary${scope === 'all' ? ' active' : ''}`}
-          onClick={() => setScope('all')}>All completed</button>
+          onClick={() => { setScope('all'); setPage(1); }}>All completed</button>
         <button type="button" className={`btn btn-outline-secondary${scope === 'mine' ? ' active' : ''}`}
-          onClick={() => setScope('mine')}>Prepared by me</button>
+          onClick={() => { setScope('mine'); setPage(1); }}>Prepared by me</button>
       </div>
 
       {loading ? (
@@ -70,15 +85,15 @@ function ArCompletedPage() {
           <table className="table align-middle">
             <thead>
               <tr>
-                <th>Product</th>
-                <th style={{ width: 150 }}>Category</th>
-                <th style={{ width: 180 }}>Prepared by</th>
-                <th style={{ width: 180 }}>Prepared at</th>
+                <SortableTh label="Product" columnKey="productName" sort={sort} />
+                <SortableTh label="Category" columnKey="categoryName" sort={sort} style={{ width: 150 }} />
+                <SortableTh label="Prepared by" columnKey="preparedBy" sort={sort} style={{ width: 180 }} />
+                <SortableTh label="Prepared at" columnKey="arReadyAt" sort={sort} style={{ width: 180 }} />
                 <th className="text-center" style={{ width: 110 }}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {shown.map((p) => (
+              {pageItems.map((p) => (
                 <tr key={p.productId}>
                   <td style={{ overflowWrap: 'anywhere' }}>
                     <div className="fw-semibold">{p.productName}</div>
@@ -96,6 +111,9 @@ function ArCompletedPage() {
               ))}
             </tbody>
           </table>
+
+          <Pagination page={page} totalPages={totalPages} onChange={setPage}
+            summary={`Page ${page} of ${totalPages} · ${sort.sorted.length} prepared`} />
         </div>
       )}
 
