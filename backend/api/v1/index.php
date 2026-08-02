@@ -1015,6 +1015,14 @@ if ($method === 'POST' && preg_match('#^/admin/deliveries/([^/]+)/assign$#', $pa
   handleAssignDelivery($pdo, $m[1]);
 }
 
+// admin nudges the supplier of a paid Standard (3PL) parcel that hasn't shipped
+if ($method === 'POST' && preg_match('#^/admin/deliveries/([^/]+)/remind-ship$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleRemindSupplierShip($pdo, $config, $m[1]);
+}
+
 // ── admin delivery-issue queue (the courier "report an issue" reports) ──
 if ($method === 'GET' && $path === '/admin/delivery-issues') {
   $auth = requireAuth($secret);

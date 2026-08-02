@@ -257,6 +257,11 @@ export function assignDelivery(deliveryId, deliveryPersonnelId) {
   return apiPost(`/admin/deliveries/${deliveryId}/assign`, { deliveryPersonnelId }, getToken());
 }
 
+// Nudge the supplier of a paid Standard (3PL) parcel that hasn't shipped yet.
+export function remindSupplierShip(deliveryId) {
+  return apiPost(`/admin/deliveries/${deliveryId}/remind-ship`, {}, getToken());
+}
+
 // Delivery issues reported by couriers. Optional { status: 'Open' | 'Resolved' }.
 export function getDeliveryIssues(filters = {}) {
   const qs = new URLSearchParams();

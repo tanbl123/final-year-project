@@ -115,6 +115,55 @@ function handleAssignDelivery(PDO $pdo, string $deliveryId): void {
   ]);
 }
 
+// POST /admin/deliveries/{deliveryId}/remind-ship — nudge the supplier of a paid
+// Standard (3PL) parcel that hasn't been shipped yet. 3PL parcels are shipped by
+// the supplier (they hold the box + get the tracking number), so if they forget,
+// this is how the admin reaches them: an email (the channel suppliers see on the
+// web) plus a best-effort in-app notification (mobile parity).
+function handleRemindSupplierShip(PDO $pdo, array $config, string $deliveryId): void {
+  $stmt = $pdo->prepare(
+    "SELECT d.deliveryMethod, d.deliveryStatus, d.orderId,
+            s.companyName, u.userId, u.email
+       FROM delivery d
+       JOIN supplier s ON s.supplierId = d.supplierId
+       JOIN `user`  u ON u.userId = s.userId
+      WHERE d.deliveryId = :id"
+  );
+  $stmt->execute(['id' => $deliveryId]);
+  $del = $stmt->fetch();
+  if (!$del) {
+    sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Delivery not found.']);
+  }
+  if ($del['deliveryMethod'] !== 'Standard') {
+    sendJson(409, false, null, ['code' => 'CONFLICT', 'message' => 'This parcel is handled by an in-house courier, not the supplier.']);
+  }
+  if ($del['deliveryStatus'] !== 'Pending') {
+    sendJson(409, false, null, ['code' => 'CONFLICT', 'message' => 'This parcel has already been shipped.']);
+  }
+
+  // best-effort in-app notification (seen in the mobile app)
+  if (function_exists('createNotification')) {
+    try {
+      createNotification($pdo, $del['userId'], 'system', 'Order awaiting shipment 📦',
+        'Order ' . $del['orderId'] . ' is paid and waiting to be shipped. Open it in Orders, book the courier and enter the tracking number.');
+    } catch (Throwable $e) { /* the email below is the primary channel */ }
+  }
+  // email — the channel suppliers actually see on the web portal
+  $emailSent = false;
+  if (!empty($del['email']) && function_exists('sendShipReminderEmail')
+      && function_exists('mailConfigured') && mailConfigured($config)) {
+    try {
+      sendShipReminderEmail($config, (string) $del['email'], (string) $del['companyName'], (string) $del['orderId']);
+      $emailSent = true;
+    } catch (Throwable $e) { /* best-effort — don't fail the request on mail errors */ }
+  }
+
+  sendJson(200, true, [
+    'message'   => 'Reminder sent to ' . ($del['companyName'] ?: 'the supplier') . '.',
+    'emailSent' => $emailSent,
+  ]);
+}
+
 // ── Delivery personnel (courier) endpoints ───────────────────────────────────
 // The courier works their assigned deliveries: pick up → out for delivery →
 // confirm with the customer's OTP (or mark failed), and attach proof.

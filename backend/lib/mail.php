@@ -230,6 +230,23 @@ function sendProductDecisionEmail(array $config, string $toEmail, string $compan
   sendMail($config, $toEmail, $companyName, $subject, $text, $html);
 }
 
+// Nudge a supplier whose paid Standard (3PL) parcel is still waiting to be
+// shipped — they need to book the courier and enter the tracking number.
+function sendShipReminderEmail(array $config, string $toEmail, string $companyName, string $orderId): void {
+  $name  = $companyName !== '' ? $companyName : 'Supplier';
+  $order = $orderId !== '' ? $orderId : 'your order';
+
+  $subject  = 'ShoeAR — Order awaiting shipment';
+  $textBody = "Order $order has been paid and is waiting to be shipped by standard (3PL) delivery.\n\n"
+            . "Please sign in to the ShoeAR Supplier Portal, open the order, book the courier and enter the tracking number so the customer's parcel is on its way.";
+  $bodyHtml = '<p>Order <strong>' . htmlspecialchars($order, ENT_QUOTES) . '</strong> has been paid and is waiting to be shipped by standard (3PL) delivery.</p>'
+            . '<p>Please sign in to the ShoeAR Supplier Portal, open the order, book the courier and <strong>enter the tracking number</strong> so the parcel is on its way to the customer.</p>';
+
+  $text = "Dear $name,\n\n$textBody\n\nYours sincerely,\nThe ShoeAR Team";
+  $html = formalLetterHtml($name, $bodyHtml, '👟 ShoeAR');
+  sendMail($config, $toEmail, $companyName, $subject, $text, $html);
+}
+
 function sendSupplierDecisionEmail(array $config, string $toEmail, string $companyName, string $status, ?string $reason): void {
   $name      = $companyName !== '' ? $companyName : 'Applicant';
   $reasonTxt = ($reason !== null && $reason !== '') ? $reason : '';

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getDeliveries, getCouriers, assignDelivery, refreshBadges } from '../adminService';
+import { getDeliveries, getCouriers, assignDelivery, remindSupplierShip, refreshBadges } from '../adminService';
 import Toast from '../../../components/Toast';
 import Pagination from '../../../components/Pagination';
 import SortableTh from '../../../components/SortableTh';
@@ -30,6 +30,23 @@ function AdminDeliveriesPage() {
   const [couriersLoading, setCouriersLoading] = useState(false);
   const [chosenCourier, setChosenCourier] = useState('');
   const [saving, setSaving] = useState(false);
+  const [remindingId, setRemindingId] = useState('');   // Standard parcel being reminded
+
+  // nudge the supplier of a paid-but-unshipped Standard (3PL) parcel
+  async function remind(d) {
+    setRemindingId(d.deliveryId);
+    setError('');
+    try {
+      const res = await remindSupplierShip(d.deliveryId);
+      setToast(res.emailSent === false
+        ? `Reminder queued for ${d.supplierName}, but the email couldn't be sent — check email settings.`
+        : `Reminder emailed to ${d.supplierName}.`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRemindingId('');
+    }
+  }
 
   // Click any column header to sort; Amount compares numerically.
   const sort = useTableSort(deliveries, {
@@ -204,8 +221,20 @@ function AdminDeliveriesPage() {
                     )}
                   </td>
                   <td className="text-center">
-                    {/* Standard parcels are handled by a 3PL — no courier to assign */}
-                    {d.deliveryMethod === 'Standard' || isClosed(d.deliveryStatus) ? (
+                    {/* Standard parcels are shipped by the supplier (3PL) — no courier to
+                        assign. If it's still Pending the supplier hasn't shipped yet, so
+                        offer a nudge; once shipped there's nothing for the admin to do. */}
+                    {d.deliveryMethod === 'Standard' ? (
+                      d.deliveryStatus === 'Pending' ? (
+                        <button className="btn btn-sm btn-outline-primary text-nowrap"
+                          disabled={remindingId === d.deliveryId}
+                          onClick={() => remind(d)}>
+                          {remindingId === d.deliveryId ? 'Sending…' : 'Remind supplier'}
+                        </button>
+                      ) : (
+                        <span className="text-muted">—</span>
+                      )
+                    ) : isClosed(d.deliveryStatus) ? (
                       <span className="text-muted">—</span>
                     ) : (
                       <button
