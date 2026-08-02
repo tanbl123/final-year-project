@@ -685,13 +685,6 @@ if ($method === 'GET' && $path === '/admin/reports/refunds') {
   handleAdminRefundReport($pdo);
 }
 
-if ($method === 'GET' && $path === '/admin/reports/growth') {
-  $auth = requireAuth($secret);
-  requireAdmin($auth);
-  $pdo  = getPDO();
-  handleAdminGrowthReport($pdo);
-}
-
 // ── admin commission rate configuration ──
 if ($path === '/admin/commission') {
   $auth = requireAuth($secret);

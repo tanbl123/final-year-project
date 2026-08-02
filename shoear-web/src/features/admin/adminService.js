@@ -299,11 +299,6 @@ export function getAdminRefundReport(range = {}) {
   return apiGet(`/admin/reports/refunds${reportQs(range)}`, getToken());
 }
 
-// New sign-ups by role over a period.
-export function getAdminGrowthReport(range = {}) {
-  return apiGet(`/admin/reports/growth${reportQs(range)}`, getToken());
-}
-
 // ── order oversight ──────────────────────────────────────────────────
 // filters: { status, search }
 export function getAdminOrders(filters = {}) {
