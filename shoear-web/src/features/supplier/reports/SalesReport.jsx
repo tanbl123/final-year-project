@@ -66,7 +66,7 @@ function SalesReport() {
           : []),
       ],
       orientation: 'landscape',
-      head: ['Product', 'Units', '% sales', 'Gross', `Commission (${rate}%)`, `SST (${sstRate}%)`, 'Net (after comm. & SST)'],
+      head: ['Product', 'Units', '% sales', 'Gross', `Commission (${rate}%)`, `SST (${sstRate}%)`, 'Net\n(after comm. & SST)'],
       body: data.byProduct.map((p) => [
         p.productName, p.units, shareStr(p.gross), rm(p.gross),
         rm(commOf(p.gross)), rm(sstOf(p.gross)), rm(netOf(p.gross)),

@@ -130,7 +130,9 @@ export function buildReportDoc({
     head: head.length ? [head.map(pdfSafe)] : undefined,
     body: body.map(pdfSafeRow),
     foot: foot.length ? foot.map(pdfSafeRow) : undefined,
-    headStyles: { fillColor: ACCENT, textColor: 255, fontStyle: 'bold' },
+    // wrap long headers onto a second line instead of forcing the column wide;
+    // valign middle keeps the shorter headers aligned against the wrapped one
+    headStyles: { fillColor: ACCENT, textColor: 255, fontStyle: 'bold', overflow: 'linebreak', valign: 'middle' },
     footStyles: { fillColor: [240, 240, 245], textColor: 20, fontStyle: 'bold' },
     styles: { fontSize: 9, cellPadding: 5 },
     columnStyles,
@@ -174,7 +176,7 @@ export function buildReportDoc({
       head: t.head && t.head.length ? [t.head.map(pdfSafe)] : undefined,
       body: (t.body || []).map(pdfSafeRow),
       foot: t.foot && t.foot.length ? t.foot.map(pdfSafeRow) : undefined,
-      headStyles: { fillColor: ACCENT, textColor: 255, fontStyle: 'bold' },
+      headStyles: { fillColor: ACCENT, textColor: 255, fontStyle: 'bold', overflow: 'linebreak', valign: 'middle' },
       footStyles: { fillColor: [240, 240, 245], textColor: 20, fontStyle: 'bold' },
       styles: { fontSize: 9, cellPadding: 5 },
       columnStyles: t.columnStyles || {},
