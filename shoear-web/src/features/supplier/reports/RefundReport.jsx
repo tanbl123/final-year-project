@@ -36,6 +36,7 @@ function RefundReport() {
 
   const has = !!data && data.summary.refunds > 0;
   const rateStr = data?.summary?.refundRate != null ? `${data.summary.refundRate}%` : '—';
+  const valuePctStr = data?.summary?.refundValuePct != null ? `${data.summary.refundValuePct}%` : '—';
 
   // paginate the on-screen table only (export/PDF keeps every row)
   const rows = data?.refunds ?? [];
@@ -52,6 +53,8 @@ function RefundReport() {
         { label: 'Total refunded', value: rm(data.summary.totalRefunded) },
         { label: 'Paid orders', value: String(data.summary.paidOrders) },
         { label: 'Refund rate', value: rateStr },
+        { label: 'Refund value (% of sales)', value: valuePctStr },
+        ...(data.byReason?.length ? [{ label: 'Top reason', value: `${data.byReason[0].reason} (${data.byReason[0].count})` }] : []),
       ],
       head: ['Order', 'Reason', 'Amount', 'Status', 'Date'],
       body: data.refunds.map((r) => [r.orderId, r.reason, rm(r.amount), r.status, r.requestDate]),
@@ -87,7 +90,26 @@ function RefundReport() {
             <StatCard label="Refunds" value={data.summary.refunds} />
             <StatCard label="Total refunded" value={rm(data.summary.totalRefunded)} color="danger" />
             <StatCard label="Refund rate" value={rateStr} sub={`of ${data.summary.paidOrders} paid orders`} />
+            <StatCard label="Refund value" value={valuePctStr} sub="of gross sales" color="danger" />
           </div>
+
+          {data.byReason?.length > 0 && (
+            <div className="mb-4">
+              <h6 className="text-muted">Top refund reasons</h6>
+              <table className="table table-sm w-auto">
+                <thead><tr><th>Reason</th><th className="text-end" style={{ width: 90 }}>Count</th><th className="text-end" style={{ width: 140 }}>Amount</th></tr></thead>
+                <tbody>
+                  {data.byReason.map((r) => (
+                    <tr key={r.reason}>
+                      <td>{r.reason}</td>
+                      <td className="text-end">{r.count}</td>
+                      <td className="text-end">{rm(r.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <h5 className="mb-3">Refund requests</h5>
           <div className="table-responsive">

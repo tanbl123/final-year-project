@@ -33,6 +33,8 @@ function AdminOrderReport({ company = { id: '', name: '' }, setCompany }) {
 
   const has = !!data && data.summary.totalOrders > 0;
   const onTimeStr = data?.summary?.onTimeRate != null ? `${data.summary.onTimeRate}%` : '—';
+  const cancelStr = data?.summary?.cancellationRate != null ? `${data.summary.cancellationRate}%` : '—';
+  const shipDaysStr = data?.summary?.avgDeliveryDays != null ? `${data.summary.avgDeliveryDays} days` : '—';
 
   function buildReportOpts() {
     return {
@@ -45,7 +47,9 @@ function AdminOrderReport({ company = { id: '', name: '' }, setCompany }) {
         { label: company.id ? 'Merchandise value' : 'Total order value', value: rm(data.summary.totalValue) },
         { label: 'Delivered parcels', value: String(data.summary.delivered) },
         { label: 'Cancelled orders', value: String(data.summary.cancelled) },
+        { label: 'Cancellation rate', value: cancelStr },
         { label: 'On-time delivery rate', value: onTimeStr },
+        { label: 'Avg delivery time', value: shipDaysStr },
       ],
       head: ['Order status', 'Orders'],
       body: Object.entries(data.byStatus).map(([s, n]) => [LABELS[s] || s, n]),
@@ -83,7 +87,8 @@ function AdminOrderReport({ company = { id: '', name: '' }, setCompany }) {
             <StatCard label="Total orders" value={data.summary.totalOrders} sub={rm(data.summary.totalValue)} />
             <StatCard label="Delivered" value={data.summary.delivered} color="success" />
             <StatCard label="On-time rate" value={onTimeStr} color="success" />
-            <StatCard label="Cancelled" value={data.summary.cancelled} color={data.summary.cancelled > 0 ? 'danger' : 'dark'} />
+            <StatCard label="Avg delivery time" value={shipDaysStr} />
+            <StatCard label="Cancelled" value={data.summary.cancelled} sub={`${cancelStr} of orders`} color={data.summary.cancelled > 0 ? 'danger' : 'dark'} />
           </div>
 
           <h5 className="mb-3">By order status</h5>

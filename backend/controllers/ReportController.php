@@ -140,16 +140,32 @@ function handleSupplierSalesReport(PDO $pdo, array $auth): void {
   $commission = round($gross * $rate / 100, 2);
   $serviceTax = serviceTaxOn($commission);   // SST 8% on the commission
 
+  // distinct paid orders containing this supplier's products → average order value
+  $oSql =
+    "SELECT COUNT(DISTINCT o.orderId)
+       FROM `order` o
+       JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus = 'Successful'
+       JOIN order_item oi ON oi.orderId = o.orderId
+       JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+       JOIN product p ON p.productId = pv.productId
+      WHERE p.supplierId = :sid";
+  $oParams = ['sid' => $supplierId];
+  if ($fromDt !== null) { $oSql .= ' AND pay.paymentDate BETWEEN :from AND :to'; $oParams['from'] = $fromDt; $oParams['to'] = $toDt; }
+  $oStmt = $pdo->prepare($oSql); $oStmt->execute($oParams);
+  $orders = (int) $oStmt->fetchColumn();
+
   sendJson(200, true, [
     'commissionRate' => $rate,
     'serviceTaxRate' => serviceTaxRate(),
     'summary' => [
-      'grossSales'  => round($gross, 2),
-      'commission'  => $commission,
-      'serviceTax'  => $serviceTax,
-      'netEarnings' => round($gross - $commission - $serviceTax, 2),
-      'unitsSold'   => $units,
-      'products'    => count($byProduct),
+      'grossSales'    => round($gross, 2),
+      'commission'    => $commission,
+      'serviceTax'    => $serviceTax,
+      'netEarnings'   => round($gross - $commission - $serviceTax, 2),
+      'unitsSold'     => $units,
+      'orders'        => $orders,
+      'avgOrderValue' => $orders > 0 ? round($gross / $orders, 2) : null,
+      'products'      => count($byProduct),
     ],
     'byProduct' => $byProduct,
     'period' => periodBlock($pdo, $supplierId, $fromDt, $toDt, $gross),
@@ -341,7 +357,7 @@ function handleSupplierFulfilmentReport(PDO $pdo, array $auth): void {
   [$fromDt, $toDt] = reportRange();
 
   $sql =
-    "SELECT d.deliveryStatus, d.deliveryMethod, d.deliveryDate, d.estimatedDeliveryTime
+    "SELECT d.deliveryStatus, d.deliveryMethod, d.deliveryDate, d.estimatedDeliveryTime, o.orderDate
        FROM delivery d
        JOIN `order` o ON o.orderId = d.orderId
       WHERE d.supplierId = :sid";
@@ -354,6 +370,7 @@ function handleSupplierFulfilmentReport(PDO $pdo, array $auth): void {
   $statuses = ['Pending' => 0, 'Assigned' => 0, 'PickedUp' => 0, 'OutForDelivery' => 0, 'Delivered' => 0, 'Failed' => 0];
   $inHouse = 0; $standard = 0;
   $delivered = 0; $onTime = 0; $ratedForOnTime = 0;
+  $shipDaysSum = 0.0; $shipDaysN = 0;   // order → delivered elapsed time
   foreach ($rows as $r) {
     $s = $r['deliveryStatus'];
     if (isset($statuses[$s])) { $statuses[$s]++; }
@@ -364,10 +381,15 @@ function handleSupplierFulfilmentReport(PDO $pdo, array $auth): void {
         $ratedForOnTime++;
         if (strtotime($r['deliveryDate']) <= strtotime($r['estimatedDeliveryTime'])) { $onTime++; }
       }
+      if (!empty($r['deliveryDate']) && !empty($r['orderDate'])) {
+        $shipDaysSum += (strtotime($r['deliveryDate']) - strtotime($r['orderDate'])) / 86400;
+        $shipDaysN++;
+      }
     }
   }
   $total = count($rows);
   $onTimeRate = $ratedForOnTime > 0 ? round($onTime / $ratedForOnTime * 100, 1) : null;
+  $avgDeliveryDays = $shipDaysN > 0 ? round($shipDaysSum / $shipDaysN, 1) : null;
 
   sendJson(200, true, [
     'summary' => [
@@ -377,6 +399,7 @@ function handleSupplierFulfilmentReport(PDO $pdo, array $auth): void {
       'inProgress'      => $total - $delivered - $statuses['Failed'],
       'onTime'          => $onTime,
       'onTimeRate'      => $onTimeRate,   // % of delivered parcels on/before ETA (null if none rated)
+      'avgDeliveryDays' => $avgDeliveryDays,   // avg days from order to delivered
       'inHouse'         => $inHouse,
       'standard'        => $standard,
     ],
@@ -411,11 +434,16 @@ function handleSupplierRefundReport(PDO $pdo, array $auth): void {
   $byStatus = ['Pending' => 0, 'Approved' => 0, 'Rejected' => 0, 'Completed' => 0];
   $totalRefunded = 0.0;   // amount actually refunded (Approved/Completed)
   $refunds = [];
+  $byReason = [];         // reason → { count, amount } for the "top reasons" breakdown
   foreach ($rows as $r) {
     $st = $r['refundStatus'];
     if (isset($byStatus[$st])) { $byStatus[$st]++; }
     $amt = (float) $r['refundAmount'];
     if ($st === 'Approved' || $st === 'Completed') { $totalRefunded += $amt; }
+    $reason = ($r['refundReason'] !== null && $r['refundReason'] !== '') ? $r['refundReason'] : 'Unspecified';
+    if (!isset($byReason[$reason])) { $byReason[$reason] = ['reason' => $reason, 'count' => 0, 'amount' => 0.0]; }
+    $byReason[$reason]['count']++;
+    $byReason[$reason]['amount'] += $amt;
     $refunds[] = [
       'refundId'   => $r['refundId'],
       'orderId'    => $r['orderId'],
@@ -425,6 +453,11 @@ function handleSupplierRefundReport(PDO $pdo, array $auth): void {
       'requestDate' => substr((string) $r['requestDate'], 0, 10),
     ];
   }
+  // most common reasons first
+  $byReason = array_values($byReason);
+  usort($byReason, fn($a, $b) => $b['count'] <=> $a['count']);
+  foreach ($byReason as &$br) { $br['amount'] = round($br['amount'], 2); }
+  unset($br);
 
   // paid orders for this supplier (for the refund rate), same window
   $paidSql =
@@ -443,14 +476,21 @@ function handleSupplierRefundReport(PDO $pdo, array $auth): void {
 
   $refundRate = $paidOrders > 0 ? round(count($refunds) / $paidOrders * 100, 1) : null;
 
+  // refund value as a % of this supplier's gross sales in the same window
+  $gross = grossInWindow($pdo, $supplierId, $fromDt, $toDt);
+  $refundValuePct = $gross > 0 ? round($totalRefunded / $gross * 100, 1) : null;
+
   sendJson(200, true, [
     'summary' => [
-      'refunds'       => count($refunds),
-      'totalRefunded' => round($totalRefunded, 2),
-      'paidOrders'    => $paidOrders,
-      'refundRate'    => $refundRate,   // % of paid orders that had a refund (null if no paid orders)
+      'refunds'        => count($refunds),
+      'totalRefunded'  => round($totalRefunded, 2),
+      'paidOrders'     => $paidOrders,
+      'refundRate'     => $refundRate,   // % of paid orders that had a refund (null if no paid orders)
+      'grossSales'     => round($gross, 2),
+      'refundValuePct' => $refundValuePct,   // refunded RM as % of gross sales
     ],
     'byStatus' => $byStatus,
+    'byReason' => $byReason,   // [{ reason, count, amount }], most common first
     'refunds' => $refunds,
     'period' => [
       'from' => $fromDt !== null ? substr($fromDt, 0, 10) : null,
@@ -464,6 +504,7 @@ function handleSupplierRefundReport(PDO $pdo, array $auth): void {
 // product count, and average product rating. Ranked by gross sales.
 function handleAdminSupplierPerformanceReport(PDO $pdo): void {
   [$fromDt, $toDt] = reportRange();
+  $commRate = activeCommissionRate($pdo);   // for commission generated per supplier
 
   // base: all active suppliers
   $suppliers = $pdo->query(
@@ -474,7 +515,8 @@ function handleAdminSupplierPerformanceReport(PDO $pdo): void {
 
   // sales (paid) per supplier over the period
   $salesSql =
-    "SELECT p.supplierId AS sid, SUM(oi.orderQuantity) AS units, SUM(oi.orderSubtotal) AS gross
+    "SELECT p.supplierId AS sid, SUM(oi.orderQuantity) AS units, SUM(oi.orderSubtotal) AS gross,
+            COUNT(DISTINCT o.orderId) AS orders
        FROM order_item oi
        JOIN `order` o   ON o.orderId = oi.orderId
        JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus = 'Successful'
@@ -485,7 +527,7 @@ function handleAdminSupplierPerformanceReport(PDO $pdo): void {
   $salesSql .= ' GROUP BY p.supplierId';
   $st = $pdo->prepare($salesSql); $st->execute($params);
   $sales = [];
-  foreach ($st->fetchAll() as $r) { $sales[$r['sid']] = ['units' => (int) $r['units'], 'gross' => (float) $r['gross']]; }
+  foreach ($st->fetchAll() as $r) { $sales[$r['sid']] = ['units' => (int) $r['units'], 'gross' => (float) $r['gross'], 'orders' => (int) $r['orders']]; }
 
   // active product count per supplier
   $prod = [];
@@ -502,28 +544,51 @@ function handleAdminSupplierPerformanceReport(PDO $pdo): void {
     $rate[$r['sid']] = ['avg' => round((float) $r['avg'], 2), 'n' => (int) $r['n']];
   }
 
-  $bySupplier = []; $totalGross = 0.0; $totalUnits = 0;
+  $bySupplier = []; $totalGross = 0.0; $totalUnits = 0; $totalCommission = 0.0;
   foreach ($suppliers as $s) {
     $sid = $s['supplierId'];
-    $g = $sales[$sid]['gross'] ?? 0.0; $u = $sales[$sid]['units'] ?? 0;
-    $totalGross += $g; $totalUnits += $u;
+    $g = $sales[$sid]['gross'] ?? 0.0; $u = $sales[$sid]['units'] ?? 0; $o = $sales[$sid]['orders'] ?? 0;
+    $comm = round($g * $commRate / 100, 2);
+    $totalGross += $g; $totalUnits += $u; $totalCommission += $comm;
     $bySupplier[] = [
       'supplierId'  => $sid,
       'companyName' => $s['companyName'],
       'units'       => $u,
+      'orders'      => $o,
       'gross'       => round($g, 2),
+      'commission'  => $comm,                                  // commission this supplier generated
+      'avgOrderValue' => $o > 0 ? round($g / $o, 2) : null,    // AOV
       'products'    => $prod[$sid] ?? 0,
       'avgRating'   => $rate[$sid]['avg'] ?? null,
       'reviews'     => $rate[$sid]['n'] ?? 0,
+      'sharePct'    => 0.0,    // % of platform GMV — filled below
+      'abcGrade'    => null,   // A/B/C Pareto grade — filled below
     ];
   }
   usort($bySupplier, fn($a, $b) => $b['gross'] <=> $a['gross']);
 
+  // contribution share + ABC (Pareto) grade over the gross ranking (same as the
+  // product report): A = suppliers making the first 80% of GMV, B = next 15%, C = rest.
+  if ($totalGross > 0) {
+    $cum = 0.0;
+    foreach ($bySupplier as $i => $s) {
+      $g = $s['gross'];
+      $bySupplier[$i]['sharePct'] = round($g / $totalGross * 100, 1);
+      if ($g > 0) {
+        $cum += $g;
+        $cumPct = $cum / $totalGross * 100;
+        $bySupplier[$i]['abcGrade'] = $cumPct <= 80 ? 'A' : ($cumPct <= 95 ? 'B' : 'C');
+      }
+    }
+  }
+
   sendJson(200, true, [
+    'commissionRate' => $commRate,
     'summary' => [
-      'suppliers'  => count($bySupplier),
-      'grossSales' => round($totalGross, 2),
-      'unitsSold'  => $totalUnits,
+      'suppliers'       => count($bySupplier),
+      'grossSales'      => round($totalGross, 2),
+      'unitsSold'       => $totalUnits,
+      'totalCommission' => round($totalCommission, 2),
     ],
     'bySupplier' => $bySupplier,
     'period' => periodBlock($pdo, null, $fromDt, $toDt, $totalGross),
@@ -566,14 +631,14 @@ function handleAdminOrderReport(PDO $pdo): void {
   }
 
   // on-time delivery — platform-wide, or this supplier's own parcels
-  $dSql = "SELECT d.deliveryStatus, d.deliveryDate, d.estimatedDeliveryTime
+  $dSql = "SELECT d.deliveryStatus, d.deliveryDate, d.estimatedDeliveryTime, o.orderDate
              FROM delivery d JOIN `order` o ON o.orderId = d.orderId";
   $dWhere = []; $dParams = [];
   if ($supplierId !== null) { $dWhere[] = 'd.supplierId = :sid'; $dParams['sid'] = $supplierId; }
   if ($fromDt !== null)     { $dWhere[] = 'o.orderDate BETWEEN :from AND :to'; $dParams['from'] = $fromDt; $dParams['to'] = $toDt; }
   if ($dWhere) { $dSql .= ' WHERE ' . implode(' AND ', $dWhere); }
   $dst = $pdo->prepare($dSql); $dst->execute($dParams);
-  $delivered = 0; $onTime = 0; $rated = 0;
+  $delivered = 0; $onTime = 0; $rated = 0; $shipDaysSum = 0.0; $shipDaysN = 0;
   foreach ($dst->fetchAll() as $r) {
     if ($r['deliveryStatus'] === 'Delivered') {
       $delivered++;
@@ -581,16 +646,22 @@ function handleAdminOrderReport(PDO $pdo): void {
         $rated++;
         if (strtotime($r['deliveryDate']) <= strtotime($r['estimatedDeliveryTime'])) { $onTime++; }
       }
+      if (!empty($r['deliveryDate']) && !empty($r['orderDate'])) {
+        $shipDaysSum += (strtotime($r['deliveryDate']) - strtotime($r['orderDate'])) / 86400;
+        $shipDaysN++;
+      }
     }
   }
 
   sendJson(200, true, [
     'summary' => [
-      'totalOrders' => $totalOrders,
-      'totalValue'  => round($totalValue, 2),
-      'cancelled'   => $byStatus['Cancelled'],
-      'delivered'   => $delivered,
-      'onTimeRate'  => $rated > 0 ? round($onTime / $rated * 100, 1) : null,
+      'totalOrders'     => $totalOrders,
+      'totalValue'      => round($totalValue, 2),
+      'cancelled'       => $byStatus['Cancelled'],
+      'cancellationRate' => $totalOrders > 0 ? round($byStatus['Cancelled'] / $totalOrders * 100, 1) : null,
+      'delivered'       => $delivered,
+      'onTimeRate'      => $rated > 0 ? round($onTime / $rated * 100, 1) : null,
+      'avgDeliveryDays' => $shipDaysN > 0 ? round($shipDaysSum / $shipDaysN, 1) : null,
     ],
     'byStatus' => $byStatus,
     'period' => [
@@ -660,14 +731,48 @@ function handleAdminRefundReport(PDO $pdo): void {
   $pst = $pdo->prepare($paidSql); $pst->execute($paidParams);
   $paidOrders = (int) $pst->fetchColumn();
 
+  // top refund reasons (platform-wide or scoped to one supplier's products)
+  $reasonExpr = "COALESCE(NULLIF(TRIM(refundReason), ''), 'Unspecified')";
+  if ($supplierId !== null) {
+    $brSql = "SELECT reason, COUNT(*) AS n, COALESCE(SUM(amt), 0) AS amt FROM (
+                SELECT DISTINCT r.refundId,
+                       COALESCE(NULLIF(TRIM(r.refundReason), ''), 'Unspecified') AS reason,
+                       r.refundAmount AS amt
+                  FROM refund r
+                  JOIN order_item oi ON oi.orderId = r.orderId
+                  JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+                  JOIN product p ON p.productId = pv.productId
+                 WHERE p.supplierId = :sid" . ($fromDt !== null ? ' AND r.requestDate BETWEEN :from AND :to' : '') . "
+              ) t GROUP BY reason ORDER BY n DESC";
+  } else {
+    $brSql = "SELECT $reasonExpr AS reason, COUNT(*) AS n, COALESCE(SUM(refundAmount), 0) AS amt
+                FROM refund" . ($fromDt !== null ? ' WHERE requestDate BETWEEN :from AND :to' : '') . "
+               GROUP BY reason ORDER BY n DESC";
+  }
+  $brStmt = $pdo->prepare($brSql); $brStmt->execute($params);
+  $byReason = array_map(fn($r) => [
+    'reason' => $r['reason'], 'count' => (int) $r['n'], 'amount' => round((float) $r['amt'], 2),
+  ], $brStmt->fetchAll());
+
+  // approval rate among decided refunds, and refund value as a % of GMV
+  $approved = $byStatus['Approved'] + $byStatus['Completed'];
+  $decided  = $approved + $byStatus['Rejected'];
+  $approvalRate = $decided > 0 ? round($approved / $decided * 100, 1) : null;
+  $gmv = grossInWindow($pdo, $supplierId, $fromDt, $toDt);
+  $refundValuePct = $gmv > 0 ? round($totalRefunded / $gmv * 100, 1) : null;
+
   sendJson(200, true, [
     'summary' => [
-      'refunds'       => $totalRefunds,
-      'totalRefunded' => round($totalRefunded, 2),
-      'paidOrders'    => $paidOrders,
-      'refundRate'    => $paidOrders > 0 ? round($totalRefunds / $paidOrders * 100, 1) : null,
+      'refunds'        => $totalRefunds,
+      'totalRefunded'  => round($totalRefunded, 2),
+      'paidOrders'     => $paidOrders,
+      'refundRate'     => $paidOrders > 0 ? round($totalRefunds / $paidOrders * 100, 1) : null,
+      'approvalRate'   => $approvalRate,     // approved ÷ (approved + rejected)
+      'grossSales'     => round($gmv, 2),
+      'refundValuePct' => $refundValuePct,   // refunded RM as % of GMV
     ],
     'byStatus' => $byStatus,
+    'byReason' => $byReason,   // [{ reason, count, amount }], most common first
     'period' => [
       'from' => $fromDt !== null ? substr($fromDt, 0, 10) : null,
       'to'   => $toDt   !== null ? substr($toDt, 0, 10)   : null,
@@ -771,6 +876,22 @@ function handleAdminCommissionReport(PDO $pdo): void {
     ];
   }
 
+  // distinct paid orders (scoped to the company filter + window) → average order value
+  $oSql = "SELECT COUNT(DISTINCT o.orderId)
+             FROM `order` o
+             JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus = 'Successful'";
+  $oWhere = []; $oParams = [];
+  if ($supplierId !== null) {
+    $oSql .= " JOIN order_item oi ON oi.orderId = o.orderId
+               JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+               JOIN product p ON p.productId = pv.productId";
+    $oWhere[] = 'p.supplierId = :sid'; $oParams['sid'] = $supplierId;
+  }
+  if ($fromDt !== null) { $oWhere[] = 'pay.paymentDate BETWEEN :from AND :to'; $oParams['from'] = $fromDt; $oParams['to'] = $toDt; }
+  if ($oWhere) { $oSql .= ' WHERE ' . implode(' AND ', $oWhere); }
+  $oStmt = $pdo->prepare($oSql); $oStmt->execute($oParams);
+  $orders = (int) $oStmt->fetchColumn();
+
   sendJson(200, true, [
     'commissionRate' => $rate,
     'serviceTaxRate' => serviceTaxRate(),
@@ -780,6 +901,8 @@ function handleAdminCommissionReport(PDO $pdo): void {
       'totalServiceTax' => round($totalServiceTax, 2),
       // what actually reaches suppliers after commission AND the SST they bear
       'netToSuppliers'  => round($totalGross - $totalCommission - $totalServiceTax, 2),
+      'orders'          => $orders,
+      'avgOrderValue'   => $orders > 0 ? round($totalGross / $orders, 2) : null,
       'suppliers'       => count($bySupplier),
     ],
     'bySupplier' => $bySupplier,

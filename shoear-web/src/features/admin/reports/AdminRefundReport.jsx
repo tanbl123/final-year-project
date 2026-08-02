@@ -28,6 +28,8 @@ function AdminRefundReport({ company = { id: '', name: '' }, setCompany }) {
 
   const has = !!data && data.summary.refunds > 0;
   const rateStr = data?.summary?.refundRate != null ? `${data.summary.refundRate}%` : '—';
+  const approvalStr = data?.summary?.approvalRate != null ? `${data.summary.approvalRate}%` : '—';
+  const valuePctStr = data?.summary?.refundValuePct != null ? `${data.summary.refundValuePct}%` : '—';
 
   function buildReportOpts() {
     return {
@@ -40,11 +42,13 @@ function AdminRefundReport({ company = { id: '', name: '' }, setCompany }) {
         { label: 'Total refunded', value: rm(data.summary.totalRefunded) },
         { label: 'Paid orders', value: String(data.summary.paidOrders) },
         { label: 'Refund rate', value: rateStr },
+        { label: 'Approval rate', value: approvalStr },
+        { label: 'Refund value (% of GMV)', value: valuePctStr },
       ],
-      head: ['Refund status', 'Count'],
-      body: Object.entries(data.byStatus).map(([s, n]) => [s, n]),
-      foot: [['Total', data.summary.refunds]],
-      columnStyles: { 1: { halign: 'right' } },
+      head: ['Refund reason', 'Count', 'Amount'],
+      body: (data.byReason ?? []).map((r) => [r.reason, r.count, rm(r.amount)]),
+      foot: [['Total', data.summary.refunds, rm(data.summary.totalRefunded)]],
+      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' } },
     };
   }
 
@@ -77,7 +81,27 @@ function AdminRefundReport({ company = { id: '', name: '' }, setCompany }) {
             <StatCard label="Refunds" value={data.summary.refunds} />
             <StatCard label="Total refunded" value={rm(data.summary.totalRefunded)} color="danger" />
             <StatCard label="Refund rate" value={rateStr} sub={`of ${data.summary.paidOrders} paid orders`} />
+            <StatCard label="Approval rate" value={approvalStr} sub="of decided refunds" />
+            <StatCard label="Refund value" value={valuePctStr} sub="of GMV" color="danger" />
           </div>
+
+          {data.byReason?.length > 0 && (
+            <div className="mb-4">
+              <h6 className="text-muted">Top refund reasons</h6>
+              <table className="table table-sm w-auto">
+                <thead><tr><th>Reason</th><th className="text-end" style={{ width: 90 }}>Count</th><th className="text-end" style={{ width: 140 }}>Amount</th></tr></thead>
+                <tbody>
+                  {data.byReason.map((r) => (
+                    <tr key={r.reason}>
+                      <td>{r.reason}</td>
+                      <td className="text-end">{r.count}</td>
+                      <td className="text-end">{rm(r.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <h5 className="mb-3">By refund status</h5>
           <div className="table-responsive">

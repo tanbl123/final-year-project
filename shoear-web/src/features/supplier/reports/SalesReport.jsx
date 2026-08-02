@@ -53,6 +53,8 @@ function SalesReport() {
         { label: `SST (${sstRate}%) on commission`, value: rm(serviceTax) },
         { label: 'Net earnings (after commission & SST)', value: rm(data.summary.netEarnings) },
         { label: 'Units sold', value: String(data.summary.unitsSold) },
+        { label: 'Orders', value: String(data.summary.orders) },
+        { label: 'Avg order value', value: data.summary.avgOrderValue != null ? rm(data.summary.avgOrderValue) : '—' },
         { label: 'Products sold', value: String(data.summary.products) },
         ...(growth != null
           ? [{ label: 'Gross sales vs previous period', value: `${growth > 0 ? '+' : ''}${growth}%` }]
@@ -100,6 +102,8 @@ function SalesReport() {
             <StatCard label={`Commission (${data.commissionRate}%)`} value={rm(data.summary.commission)} color="danger" />
             <StatCard label={`SST (${sstRate}%)`} value={rm(serviceTax)} color="danger" sub="on commission" />
             <StatCard label="Net earnings" value={rm(data.summary.netEarnings)} color="success" sub="after commission & SST" />
+            <StatCard label="Orders" value={data.summary.orders} />
+            <StatCard label="Avg order value" value={data.summary.avgOrderValue != null ? rm(data.summary.avgOrderValue) : '—'} />
             <StatCard label="Products sold" value={data.summary.products} />
           </div>
 

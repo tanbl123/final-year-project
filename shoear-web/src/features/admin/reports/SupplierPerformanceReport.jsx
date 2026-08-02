@@ -32,6 +32,9 @@ function SupplierPerformanceReport({ onDrill }) {
 
   const has = !!data && data.summary.suppliers > 0;
   const star = (r) => (r != null ? `★ ${r}` : '—');
+  const rate = data?.commissionRate ?? 0;
+  const money = (n) => (n == null ? '—' : rm(n));
+  const ABC_CLASS = { A: 'success', B: 'primary', C: 'secondary' };
 
   // paginate the on-screen leaderboard only (export/PDF keeps every row)
   const rows = data?.bySupplier ?? [];
@@ -44,14 +47,24 @@ function SupplierPerformanceReport({ onDrill }) {
       generatedBy: user?.fullName,
       period: range.label,
       referencePrefix: 'SP',
+      orientation: 'landscape',
       summary: [
         { label: 'Suppliers', value: String(data.summary.suppliers) },
         { label: 'Total units sold', value: String(data.summary.unitsSold) },
         { label: 'Total gross sales', value: rm(data.summary.grossSales) },
+        { label: `Total commission (${rate}%)`, value: rm(data.summary.totalCommission) },
       ],
-      head: ['Rank', 'Supplier', 'Units', 'Gross sales', 'Products', 'Avg rating'],
-      body: data.bySupplier.map((s, i) => [i + 1, s.companyName, s.units, rm(s.gross), s.products, s.avgRating != null ? s.avgRating : '—']),
-      columnStyles: { 0: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+      head: ['Rank', 'Supplier', 'Units', 'Orders', 'Gross', 'AOV', '% GMV', 'ABC', `Commission (${rate}%)`, 'Products', 'Avg rating'],
+      body: data.bySupplier.map((s, i) => [
+        i + 1, s.companyName, s.units, s.orders, rm(s.gross), money(s.avgOrderValue),
+        s.sharePct > 0 ? `${s.sharePct}%` : '—', s.abcGrade ?? '—', rm(s.commission),
+        s.products, s.avgRating != null ? s.avgRating : '—',
+      ]),
+      columnStyles: {
+        0: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' },
+        5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'center' }, 8: { halign: 'right' },
+        9: { halign: 'right' }, 10: { halign: 'right' },
+      },
     };
   }
 
@@ -81,20 +94,33 @@ function SupplierPerformanceReport({ onDrill }) {
             <StatCard label="Suppliers" value={data.summary.suppliers} />
             <StatCard label="Units sold" value={data.summary.unitsSold} />
             <StatCard label="Gross sales" value={rm(data.summary.grossSales)} color="success" />
+            <StatCard label={`Commission (${rate}%)`} value={rm(data.summary.totalCommission)} sub="generated" />
           </div>
 
-          <h5 className="mb-3">Leaderboard</h5>
+          <div className="d-flex justify-content-between align-items-end mb-2 flex-wrap gap-2">
+            <h5 className="mb-0">Leaderboard</h5>
+            <span className="text-muted small">
+              ABC: <span className="badge text-bg-success">A</span> top 80% ·
+              <span className="badge text-bg-primary ms-1">B</span> next 15% ·
+              <span className="badge text-bg-secondary ms-1">C</span> last 5% of GMV
+            </span>
+          </div>
           <div className="table-responsive">
             <table className="table align-middle">
               <thead>
                 <tr>
-                  <th style={{ width: 50 }}>#</th>
+                  <th style={{ width: 44 }}>#</th>
                   <th>Supplier</th>
-                  <th className="text-end" style={{ width: 90 }}>Units</th>
-                  <th className="text-end" style={{ width: 150 }}>Gross sales</th>
-                  <th className="text-end" style={{ width: 100 }}>Products</th>
-                  <th className="text-end" style={{ width: 120 }}>Avg rating</th>
-                  {onDrill && <th style={{ width: 110 }} />}
+                  <th className="text-end">Units</th>
+                  <th className="text-end">Orders</th>
+                  <th className="text-end">Gross</th>
+                  <th className="text-end">AOV</th>
+                  <th className="text-end">% GMV</th>
+                  <th className="text-center">ABC</th>
+                  <th className="text-end">Commission ({rate}%)</th>
+                  <th className="text-end">Products</th>
+                  <th className="text-end">Avg rating</th>
+                  {onDrill && <th style={{ width: 100 }} />}
                 </tr>
               </thead>
               <tbody>
@@ -103,7 +129,16 @@ function SupplierPerformanceReport({ onDrill }) {
                     <td className="text-muted">{offset + i + 1}</td>
                     <td className="fw-semibold">{s.companyName}</td>
                     <td className="text-end">{s.units}</td>
+                    <td className="text-end">{s.orders}</td>
                     <td className="text-end">{rm(s.gross)}</td>
+                    <td className="text-end">{money(s.avgOrderValue)}</td>
+                    <td className="text-end">{s.sharePct > 0 ? `${s.sharePct}%` : '—'}</td>
+                    <td className="text-center">
+                      {s.abcGrade
+                        ? <span className={`badge text-bg-${ABC_CLASS[s.abcGrade]}`}>{s.abcGrade}</span>
+                        : <span className="text-muted">—</span>}
+                    </td>
+                    <td className="text-end text-success">{rm(s.commission)}</td>
                     <td className="text-end">{s.products}</td>
                     <td className="text-end text-warning">{star(s.avgRating)}{s.reviews ? <span className="text-muted small"> ({s.reviews})</span> : null}</td>
                     {onDrill && (

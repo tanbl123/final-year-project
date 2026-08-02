@@ -32,6 +32,7 @@ function FulfilmentReport() {
 
   const has = !!data && data.summary.totalDeliveries > 0;
   const onTimeStr = data?.summary?.onTimeRate != null ? `${data.summary.onTimeRate}%` : '—';
+  const shipDaysStr = data?.summary?.avgDeliveryDays != null ? `${data.summary.avgDeliveryDays} days` : '—';
 
   function buildReportOpts() {
     return {
@@ -45,6 +46,7 @@ function FulfilmentReport() {
         { label: 'In progress', value: String(data.summary.inProgress) },
         { label: 'Failed', value: String(data.summary.failed) },
         { label: 'On-time delivery rate', value: onTimeStr },
+        { label: 'Avg delivery time', value: shipDaysStr },
         { label: 'In-house / Standard', value: `${data.summary.inHouse} / ${data.summary.standard}` },
       ],
       head: ['Delivery status', 'Parcels'],
@@ -82,6 +84,7 @@ function FulfilmentReport() {
             <StatCard label="Total parcels" value={data.summary.totalDeliveries} />
             <StatCard label="Delivered" value={data.summary.delivered} color="success" />
             <StatCard label="On-time rate" value={onTimeStr} color="success" sub="of delivered parcels" />
+            <StatCard label="Avg delivery time" value={shipDaysStr} />
             <StatCard label="Failed" value={data.summary.failed} color={data.summary.failed > 0 ? 'danger' : 'dark'} />
           </div>
 

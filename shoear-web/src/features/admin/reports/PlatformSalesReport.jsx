@@ -53,6 +53,8 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
         { label: `Platform commission (${rate}%)`, value: rm(data.summary.totalCommission) },
         { label: `SST (${sstRate}%) on commission`, value: rm(serviceTax) },
         { label: 'Net paid to suppliers', value: rm(netToSuppliers) },
+        { label: 'Orders', value: String(data.summary.orders) },
+        { label: 'Avg order value', value: data.summary.avgOrderValue != null ? rm(data.summary.avgOrderValue) : '—' },
         { label: 'Active selling suppliers', value: String(data.summary.suppliers) },
       ],
       head: ['Supplier', 'Units', 'Gross (GMV)', `Commission (${rate}%)`, `SST (${sstRate}%)`],
@@ -92,6 +94,8 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
             <StatCard label={`Commission (${rate}%)`} value={rm(data.summary.totalCommission)} color="success" sub="platform revenue" />
             <StatCard label={`SST (${sstRate}%)`} value={rm(serviceTax)} sub="on commission · remitted" />
             <StatCard label="Paid to suppliers" value={rm(netToSuppliers)} sub="after commission & SST" />
+            <StatCard label="Orders" value={data.summary.orders} />
+            <StatCard label="Avg order value" value={data.summary.avgOrderValue != null ? rm(data.summary.avgOrderValue) : '—'} />
             <StatCard label="Selling suppliers" value={data.summary.suppliers} />
           </div>
 
