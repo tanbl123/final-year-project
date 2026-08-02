@@ -20,15 +20,14 @@ const roleLabel = (r) => (r === 'DeliveryPersonnel' ? 'Delivery' : r === 'ArSpec
 
 const EMPTY_STAFF = { fullName: '', email: '', phone: '' };  // username auto-generated; phone is the temp password
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const PHONE_ALLOWED_RE = /^[+\d()\s-]+$/;   // digits + the usual phone punctuation
+// Same Malaysian phone pattern the customer app uses (edit_profile_screen.dart):
+// local "0…" or international "+60…" (E.164). Kept in sync for consistency.
+const PHONE_RE = /^(0\d{8,10}|\+?60\d{8,10})$/;
 const NAME_MAX = 120;                       // user.fullName VARCHAR(120)
-const EMAIL_MAX = 120;                      // user.email VARCHAR(120)
-const PHONE_MAX = 20;                       // user.phoneNumber VARCHAR(20)
 
-// Inline per-field validation for the Add-AR-Specialist form. Mirrors the
-// backend rules: name (non-empty, max length), a well-formed email (max length),
-// and a real phone number (allowed characters + 8–15 digits). Returns an error
-// string, or '' when the field is valid.
+// Inline per-field validation for the Add-AR-Specialist form. Name (non-empty,
+// max length), a well-formed email, and a valid Malaysian phone number.
+// Returns an error string, or '' when the field is valid.
 function staffFieldError(name, value) {
   const v = (value || '').trim();
   if (name === 'fullName') {
@@ -38,18 +37,11 @@ function staffFieldError(name, value) {
   }
   if (name === 'email') {
     if (v === '') return 'Email is required.';
-    if (!EMAIL_RE.test(v)) return 'Please enter a valid email address.';
-    if (v.length > EMAIL_MAX) return `Email must be ${EMAIL_MAX} characters or fewer.`;
-    return '';
+    return EMAIL_RE.test(v) ? '' : 'Please enter a valid email address.';
   }
   if (name === 'phone') {
     if (v === '') return 'Phone number is required.';
-    if (v.length > PHONE_MAX || !PHONE_ALLOWED_RE.test(v)) {
-      return 'Enter a valid phone number (digits, optionally with + - ( ) or spaces).';
-    }
-    const digits = v.replace(/\D/g, '');
-    if (digits.length < 8 || digits.length > 15) return 'Phone number must have 8 to 15 digits.';
-    return '';
+    return PHONE_RE.test(v) ? '' : 'Enter a valid Malaysian phone number, e.g. 0123456789.';
   }
   return '';
 }

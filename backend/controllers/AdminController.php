@@ -387,15 +387,13 @@ function handleCreateStaff(PDO $pdo, array $config): void {
   if ($fullName === '' || mb_strlen($fullName) > 120) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Full name is required and must be 120 characters or fewer.']);
   }
-  if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($email) > 120) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid email (120 characters or fewer) is required.']);
+  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid email is required.']);
   }
-  // Phone: allowed characters + a real length (8–15 digits), and within the
-  // column limit. (It also serves as the temporary password.)
-  $digits = preg_replace('/\D/', '', $phone);
-  if (strlen($phone) > 20 || !preg_match('/^[+\d()\s-]+$/', $phone)
-      || strlen($digits) < 8 || strlen($digits) > 15) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid phone number is required.']);
+  // Same Malaysian phone pattern the customer app uses (local "0…" or "+60…").
+  // (It also serves as the temporary password.)
+  if (!preg_match('/^(0\d{8,10}|\+?60\d{8,10})$/', $phone)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid Malaysian phone number is required.']);
   }
   // We email the sign-in instructions, so email must be configured.
   if (!mailConfigured($config)) {
