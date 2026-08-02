@@ -7,6 +7,7 @@ import ClearableInput from '../../../components/ClearableInput';
 import SortableTh from '../../../components/SortableTh';
 import { usePagination } from '../../../hooks/usePagination';
 import { useTableSort } from '../../../hooks/useTableSort';
+import { AR_FILTER_OPTIONS, matchesArFilter } from '../../../utils/arFilter';
 import ProductReviewModal from './ProductReviewModal';
 
 const PAGE_SIZE = 10;
@@ -22,15 +23,18 @@ function AdminProductApprovalsPage() {
   const [rejectReason, setRejectReason] = useState(''); // reason typed in the reject dialog
   const [reviewId, setReviewId] = useState('');     // product being previewed in the modal
   const [search, setSearch] = useState('');
+  const [ar, setAr] = useState('');   // Virtual try-on filter (see utils/arFilter)
 
-  // client-side search across name / brand / supplier / category
+  // client-side search across name / brand / supplier / category, plus the try-on filter
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return products;
-    return products.filter((p) =>
-      [p.productName, p.productBrand, p.companyName, p.categoryName]
-        .some((v) => String(v ?? '').toLowerCase().includes(q)));
-  }, [products, search]);
+    return products.filter((p) => {
+      if (!matchesArFilter(p, ar)) return false;
+      if (!q) return true;
+      return [p.productName, p.productBrand, p.companyName, p.categoryName]
+        .some((v) => String(v ?? '').toLowerCase().includes(q));
+    });
+  }, [products, search, ar]);
 
   // click a header to sort; Price numeric, Submitted by date
   const sort = useTableSort(filtered, {
@@ -84,11 +88,22 @@ function AdminProductApprovalsPage() {
 
       {!loading && products.length > 0 && (
         <div className="card card-body mb-4">
-          <label className="form-label small text-muted mb-1">Search</label>
-          <ClearableInput type="text" placeholder="Product, brand, supplier or category"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            onClear={() => { setSearch(''); setPage(1); }} />
+          <div className="row g-2 align-items-end">
+            <div className="col-md-8">
+              <label className="form-label small text-muted mb-1">Search</label>
+              <ClearableInput type="text" placeholder="Product, brand, supplier or category"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                onClear={() => { setSearch(''); setPage(1); }} />
+            </div>
+            <div className="col-md-4">
+              <label className="form-label small text-muted mb-1">Virtual try-on</label>
+              <select className="form-select" value={ar}
+                onChange={(e) => { setAr(e.target.value); setPage(1); }}>
+                {AR_FILTER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+          </div>
         </div>
       )}
 
@@ -99,7 +114,7 @@ function AdminProductApprovalsPage() {
           🎉 No pending products. You're all caught up.
         </div>
       ) : filtered.length === 0 ? (
-        <div className="card card-body text-center text-muted">No pending products match your search.</div>
+        <div className="card card-body text-center text-muted">No pending products match your filters.</div>
       ) : (
         <div className="table-responsive">
           <table className="table align-middle">

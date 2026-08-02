@@ -164,7 +164,9 @@ function handleListPendingProducts(PDO $pdo): void {
             p.productDescription, c.categoryName, s.companyName, p.created_at,
             p.virtualTryOnEnable,
             (SELECT pm.arLensId FROM product_model pm
-              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arLensId
+              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arLensId,
+            (SELECT pm.arReadyAt IS NOT NULL FROM product_model pm
+              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arReady
        FROM product p
        JOIN supplier s ON s.supplierId = p.supplierId
        JOIN category c ON c.categoryId = p.categoryId
@@ -173,10 +175,12 @@ function handleListPendingProducts(PDO $pdo): void {
   );
   $rows = $stmt->fetchAll();
   // virtualTryOnEnable + arLensId let the approvals page warn when a try-on
-  // product is about to be approved without a Camera Kit lens (AR won't work).
+  // product is about to be approved without a Camera Kit lens (AR won't work);
+  // arReady drives the Virtual try-on filter (mirrors the inventory/supplier lists).
   foreach ($rows as &$r) {
     $r['productPrice']       = (float) $r['productPrice'];
     $r['virtualTryOnEnable'] = (bool) $r['virtualTryOnEnable'];
+    $r['arReady']            = (bool) $r['arReady'];
   }
   unset($r);
   sendJson(200, true, ['products' => $rows]);
