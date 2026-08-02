@@ -154,10 +154,11 @@ function handleSupplierSalesReport(PDO $pdo, array $auth): void {
   $oStmt = $pdo->prepare($oSql); $oStmt->execute($oParams);
   $orders = (int) $oStmt->fetchColumn();
 
-  // platform-paid 3PL shipping the supplier bears (auto-booked parcels), over the
-  // same paid window — deducted from net earnings alongside commission + SST
+  // delivery cost the supplier bears, over the same paid window — the platform-paid
+  // 3PL label (shippingCost) OR the in-house courier's fee (courierFee), whichever
+  // applies per parcel. Deducted from net earnings alongside commission + SST.
   $shSql =
-    "SELECT COALESCE(SUM(d.shippingCost), 0)
+    "SELECT COALESCE(SUM(d.shippingCost + d.courierFee), 0)
        FROM delivery d
        JOIN `order` o   ON o.orderId = d.orderId
        JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus = 'Successful'
@@ -165,7 +166,7 @@ function handleSupplierSalesReport(PDO $pdo, array $auth): void {
   $shParams = ['sid' => $supplierId];
   if ($fromDt !== null) { $shSql .= ' AND pay.paymentDate BETWEEN :from AND :to'; $shParams['from'] = $fromDt; $shParams['to'] = $toDt; }
   $shStmt = $pdo->prepare($shSql); $shStmt->execute($shParams);
-  $shipping = round((float) $shStmt->fetchColumn(), 2);
+  $deliveryCost = round((float) $shStmt->fetchColumn(), 2);
 
   sendJson(200, true, [
     'commissionRate' => $rate,
@@ -174,8 +175,8 @@ function handleSupplierSalesReport(PDO $pdo, array $auth): void {
       'grossSales'    => round($gross, 2),
       'commission'    => $commission,
       'serviceTax'    => $serviceTax,
-      'shippingCost'  => $shipping,
-      'netEarnings'   => round($gross - $commission - $serviceTax - $shipping, 2),
+      'deliveryCost'  => $deliveryCost,
+      'netEarnings'   => round($gross - $commission - $serviceTax - $deliveryCost, 2),
       'unitsSold'     => $units,
       'orders'        => $orders,
       'avgOrderValue' => $orders > 0 ? round($gross / $orders, 2) : null,
@@ -979,9 +980,9 @@ function handleAdminCommissionReport(PDO $pdo): void {
   $oStmt = $pdo->prepare($oSql); $oStmt->execute($oParams);
   $orders = (int) $oStmt->fetchColumn();
 
-  // platform-paid 3PL shipping (auto-booked parcels), scoped to the company
-  // filter + window — recovered from suppliers, so it reduces net-to-suppliers
-  $shSql = "SELECT COALESCE(SUM(d.shippingCost), 0)
+  // delivery cost recovered from suppliers (3PL label OR in-house courier fee),
+  // scoped to the company filter + window — reduces net-to-suppliers
+  $shSql = "SELECT COALESCE(SUM(d.shippingCost + d.courierFee), 0)
               FROM delivery d
               JOIN `order` o   ON o.orderId = d.orderId
               JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus = 'Successful'";
@@ -990,7 +991,7 @@ function handleAdminCommissionReport(PDO $pdo): void {
   if ($fromDt !== null)     { $shWhere[] = 'pay.paymentDate BETWEEN :from AND :to'; $shParams['from'] = $fromDt; $shParams['to'] = $toDt; }
   if ($shWhere) { $shSql .= ' WHERE ' . implode(' AND ', $shWhere); }
   $shStmt = $pdo->prepare($shSql); $shStmt->execute($shParams);
-  $totalShipping = round((float) $shStmt->fetchColumn(), 2);
+  $totalDeliveryCost = round((float) $shStmt->fetchColumn(), 2);
 
   sendJson(200, true, [
     'commissionRate' => $rate,
@@ -999,10 +1000,10 @@ function handleAdminCommissionReport(PDO $pdo): void {
       'grossSales'      => round($totalGross, 2),
       'totalCommission' => round($totalCommission, 2),
       'totalServiceTax' => round($totalServiceTax, 2),
-      'totalShipping'   => $totalShipping,
+      'totalDeliveryCost' => $totalDeliveryCost,
       // what actually reaches suppliers after commission, the SST they bear, and
-      // the 3PL shipping recovered from them
-      'netToSuppliers'  => round($totalGross - $totalCommission - $totalServiceTax - $totalShipping, 2),
+      // the delivery cost recovered from them
+      'netToSuppliers'  => round($totalGross - $totalCommission - $totalServiceTax - $totalDeliveryCost, 2),
       'orders'          => $orders,
       'avgOrderValue'   => $orders > 0 ? round($totalGross / $orders, 2) : null,
       'suppliers'       => count($bySupplier),

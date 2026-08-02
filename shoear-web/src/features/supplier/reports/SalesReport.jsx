@@ -55,8 +55,8 @@ function SalesReport() {
         { label: 'Gross sales', value: rm(data.summary.grossSales) },
         { label: `Commission (${rate}%)`, value: rm(data.summary.commission) },
         { label: `SST (${sstRate}%) on commission`, value: rm(serviceTax) },
-        { label: 'Shipping (3PL, platform-booked)', value: rm(data.summary.shippingCost ?? 0) },
-        { label: 'Net earnings (after commission, SST & shipping)', value: rm(data.summary.netEarnings) },
+        { label: 'Delivery cost (3PL label / in-house courier)', value: rm(data.summary.deliveryCost ?? 0) },
+        { label: 'Net earnings (after commission, SST & delivery)', value: rm(data.summary.netEarnings) },
         { label: 'Units sold', value: String(data.summary.unitsSold) },
         { label: 'Orders', value: String(data.summary.orders) },
         { label: 'Avg order value', value: data.summary.avgOrderValue != null ? rm(data.summary.avgOrderValue) : '—' },
@@ -114,8 +114,8 @@ function SalesReport() {
             <StatCard label="Gross sales" value={rm(data.summary.grossSales)} sub={`${data.summary.unitsSold} units sold`} />
             <StatCard label={`Commission (${data.commissionRate}%)`} value={rm(data.summary.commission)} color="danger" />
             <StatCard label={`SST (${sstRate}%)`} value={rm(serviceTax)} color="danger" sub="on commission" />
-            <StatCard label="Shipping (3PL)" value={rm(data.summary.shippingCost ?? 0)} color="danger" sub="platform-booked" />
-            <StatCard label="Net earnings" value={rm(data.summary.netEarnings)} color="success" sub="after commission, SST & shipping" />
+            <StatCard label="Delivery cost" value={rm(data.summary.deliveryCost ?? 0)} color="danger" sub="3PL label / in-house courier" />
+            <StatCard label="Net earnings" value={rm(data.summary.netEarnings)} color="success" sub="after commission, SST & delivery" />
             <StatCard label="Orders" value={data.summary.orders} />
             <StatCard label="Avg order value" value={data.summary.avgOrderValue != null ? rm(data.summary.avgOrderValue) : '—'} />
             <StatCard label="Products sold" value={data.summary.products} />
@@ -165,7 +165,7 @@ function SalesReport() {
               summary={`Page ${page} of ${totalPages} · ${rows.length} products · export includes all rows`} />
 
             <p className="text-muted small mt-2 mb-0">
-              Shipping is charged per parcel, not per product, so it's deducted once from
+              Delivery is charged per parcel, not per product, so it's deducted once from
               <strong> Net earnings</strong> in the summary above — not shown in this per-product table.
             </p>
           </div>
