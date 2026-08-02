@@ -45,8 +45,9 @@ export function buildReportDoc({
   body = [],
   foot = [],
   columnStyles = {},
+  orientation = 'portrait',   // 'landscape' for wide, many-column tables
 }) {
-  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const doc = new jsPDF({ orientation, unit: 'pt', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const margin = 40;

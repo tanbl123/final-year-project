@@ -172,14 +172,21 @@ function handleSupplierProductReport(PDO $pdo, array $auth): void {
     $win = ' AND pay.paymentDate BETWEEN :from AND :to';
     $params['from'] = $fromDt; $params['to'] = $toDt;
   }
+  // Per product: window sales (units/gross/orders) + current stock on hand +
+  // published-review rating. Stock and rating are current snapshots (not
+  // date-bound) — they describe the product, not the period.
   $sql =
     "SELECT p.productId, p.productName, p.productPrice,
-            COALESCE(s.units, 0) AS units, COALESCE(s.gross, 0) AS gross
+            COALESCE(s.units, 0) AS units, COALESCE(s.gross, 0) AS gross,
+            COALESCE(s.orders, 0) AS orders,
+            COALESCE(st.stock, 0) AS stock,
+            rv.avgRating AS avgRating, COALESCE(rv.reviewCount, 0) AS reviewCount
        FROM product p
        LEFT JOIN (
          SELECT pv.productId AS pid,
                 SUM(oi.orderQuantity) AS units,
-                SUM(oi.orderSubtotal) AS gross
+                SUM(oi.orderSubtotal) AS gross,
+                COUNT(DISTINCT oi.orderId) AS orders
            FROM order_item oi
            JOIN `order` o   ON o.orderId = oi.orderId
            JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus = 'Successful'
@@ -187,17 +194,25 @@ function handleSupplierProductReport(PDO $pdo, array $auth): void {
           WHERE 1 = 1{$win}
           GROUP BY pv.productId
        ) s ON s.pid = p.productId
+       LEFT JOIN (
+         SELECT productId AS pid, SUM(stockQuantity) AS stock
+           FROM product_variant GROUP BY productId
+       ) st ON st.pid = p.productId
+       LEFT JOIN (
+         SELECT productId AS pid, AVG(ratingScore) AS avgRating, COUNT(*) AS reviewCount
+           FROM review WHERE reviewStatus = 'Published' GROUP BY productId
+       ) rv ON rv.pid = p.productId
       WHERE p.supplierId = :sid AND p.productStatus = 'Approved'
       ORDER BY units DESC, gross DESC, p.productName ASC";
   $stmt = $pdo->prepare($sql);
   $stmt->execute($params);
   $rows = $stmt->fetchAll();
 
-  $totalUnits = 0; $totalGross = 0.0; $withSales = 0; $noSales = 0;
+  $totalUnits = 0; $totalGross = 0.0; $totalStock = 0; $withSales = 0; $noSales = 0;
   $byProduct = [];
   foreach ($rows as $r) {
-    $u = (int) $r['units']; $g = (float) $r['gross'];
-    $totalUnits += $u; $totalGross += $g;
+    $u = (int) $r['units']; $g = (float) $r['gross']; $stock = (int) $r['stock'];
+    $totalUnits += $u; $totalGross += $g; $totalStock += $stock;
     if ($u > 0) { $withSales++; } else { $noSales++; }
     $byProduct[] = [
       'productId'   => $r['productId'],
@@ -205,16 +220,60 @@ function handleSupplierProductReport(PDO $pdo, array $auth): void {
       'price'       => round((float) $r['productPrice'], 2),
       'units'       => $u,
       'gross'       => round($g, 2),
+      'orders'      => (int) $r['orders'],
+      // realised average selling price (null when nothing sold)
+      'avgPrice'    => $u > 0 ? round($g / $u, 2) : null,
+      'stock'       => $stock,
+      // units sold / (units sold + stock on hand) — how much of the supply moved
+      'sellThrough' => ($u + $stock) > 0 ? round($u / ($u + $stock) * 100, 1) : null,
+      'avgRating'   => $r['avgRating'] !== null ? round((float) $r['avgRating'], 1) : null,
+      'reviewCount' => (int) $r['reviewCount'],
+      'sharePct'    => 0.0,     // % of total gross — filled below
+      'abcGrade'    => null,    // A/B/C Pareto grade — filled below
     ];
   }
 
+  // Share of gross + ABC (Pareto) grade, computed over products ranked by gross:
+  // A = products making up the first 80% of gross, B = next 15%, C = last 5%.
+  // Zero-sales products aren't graded (null).
+  if ($totalGross > 0) {
+    $order = array_keys($byProduct);
+    usort($order, fn($a, $b) => $byProduct[$b]['gross'] <=> $byProduct[$a]['gross']);
+    $cum = 0.0;
+    foreach ($order as $i) {
+      $g = $byProduct[$i]['gross'];
+      $byProduct[$i]['sharePct'] = round($g / $totalGross * 100, 1);
+      if ($g > 0) {
+        $cum += $g;
+        $cumPct = $cum / $totalGross * 100;
+        $byProduct[$i]['abcGrade'] = $cumPct <= 80 ? 'A' : ($cumPct <= 95 ? 'B' : 'C');
+      }
+    }
+  }
+
+  // Distinct orders across all of this supplier's products (not summable per row).
+  $oStmt = $pdo->prepare(
+    "SELECT COUNT(DISTINCT o.orderId)
+       FROM order_item oi
+       JOIN `order` o   ON o.orderId = oi.orderId
+       JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus = 'Successful'
+       JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+       JOIN product p   ON p.productId = pv.productId
+      WHERE p.supplierId = :sid AND p.productStatus = 'Approved'{$win}"
+  );
+  $oStmt->execute($params);
+  $totalOrders = (int) $oStmt->fetchColumn();
+
   sendJson(200, true, [
     'summary' => [
-      'products'   => count($byProduct),
-      'withSales'  => $withSales,
-      'noSales'    => $noSales,
-      'unitsSold'  => $totalUnits,
-      'grossSales' => round($totalGross, 2),
+      'products'    => count($byProduct),
+      'withSales'   => $withSales,
+      'noSales'     => $noSales,
+      'unitsSold'   => $totalUnits,
+      'orders'      => $totalOrders,
+      'grossSales'  => round($totalGross, 2),
+      'avgPrice'    => $totalUnits > 0 ? round($totalGross / $totalUnits, 2) : null,
+      'stockOnHand' => $totalStock,
     ],
     'byProduct' => $byProduct,   // already ranked best → worst
     'period' => periodBlock($pdo, $supplierId, $fromDt, $toDt, $totalGross),
