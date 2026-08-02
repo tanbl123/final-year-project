@@ -70,6 +70,9 @@ CREATE TABLE `user` (
     -- Suspended : disabled by admin
     -- Deleted   : soft-deleted account
     status        ENUM('Pending','Active','Rejected','Banned','Suspended','Deleted') NOT NULL DEFAULT 'Pending',
+    -- force a password change on next login (e.g. staff provisioned with a
+    -- temporary password = their phone number); cleared by /auth/change-password
+    mustChangePassword TINYINT(1) NOT NULL DEFAULT 0,
     -- why a registration was rejected, shown to the supplier so they know what
     -- to fix before resubmitting; cleared when they resubmit or are approved
     rejectionReason VARCHAR(255) NULL,

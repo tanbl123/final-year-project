@@ -902,7 +902,7 @@ function handleLogin(PDO $pdo, string $secret): void {
   // look up by email OR username (prepared statement → safe from SQL injection).
   // Two distinct placeholders: with emulation off, PDO won't reuse one twice.
   $stmt = $pdo->prepare(
-    'SELECT userId, password, role, fullName, phoneNumber, status, rejectionReason
+    'SELECT userId, password, role, fullName, phoneNumber, status, rejectionReason, mustChangePassword
        FROM `user` WHERE email = :email OR username = :username'
   );
   $stmt->execute(['email' => $identifier, 'username' => $identifier]);
@@ -955,6 +955,7 @@ function handleLogin(PDO $pdo, string $secret): void {
       'phoneNumber'     => $user['phoneNumber'],
       'status'          => $user['status'],
       'rejectionReason' => $user['rejectionReason'],
+      'mustChangePassword' => (bool) $user['mustChangePassword'],
       'hasPassword'     => true, // password was verified above, so it is never null here
     ],
   ]);
@@ -1201,7 +1202,8 @@ function handleChangePassword(PDO $pdo, array $auth): void {
   }
 
   $hash = password_hash($new, PASSWORD_BCRYPT);
-  $upd  = $pdo->prepare('UPDATE `user` SET password = :p WHERE userId = :id');
+  // Also clear any force-change flag — setting a new password satisfies it.
+  $upd  = $pdo->prepare('UPDATE `user` SET password = :p, mustChangePassword = 0 WHERE userId = :id');
   $upd->execute(['p' => $hash, 'id' => $auth['userId']]);
 
   sendJson(200, true, ['message' => 'Password changed.']);

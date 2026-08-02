@@ -18,7 +18,7 @@ const STATUS_COLORS = {
 };
 const roleLabel = (r) => (r === 'DeliveryPersonnel' ? 'Delivery' : r === 'ArSpecialist' ? 'AR Specialist' : r);
 
-const EMPTY_STAFF = { username: '', fullName: '', email: '' };  // no password — set by the staff member via emailed invite
+const EMPTY_STAFF = { fullName: '', email: '', phone: '' };  // username auto-generated; phone is the temp password
 
 function AdminUsersPage() {
   const [users, setUsers] = useState([]);
@@ -104,8 +104,8 @@ function AdminUsersPage() {
       const created = await createStaff(createForm);
       setCreateForm(null);
       setToast(created.inviteEmailSent === false
-        ? `AR Specialist “${created.fullName}” created, but the invite email failed to send — ask them to use “Forgot password” to set their password.`
-        : `AR Specialist “${created.fullName}” created — an email was sent inviting them to set their password.`);
+        ? `AR Specialist “${created.fullName}” created (username ${created.username}), but the welcome email failed — tell them to sign in with their phone number as the temporary password.`
+        : `AR Specialist “${created.fullName}” created — a welcome email with sign-in details was sent (username ${created.username}).`);
       load();
     } catch (err) {
       setCreateErr(err.message || 'Could not create the account.');
@@ -328,9 +328,10 @@ function AdminUsersPage() {
               </div>
               <div className="modal-body">
                 <p className="text-muted small">
-                  Creates an active internal-staff account. They'll get an email inviting them to
-                  set their own password (via “Forgot password”), then sign in at the staff login
-                  and land in the AR queue. You never see or set their password.
+                  Creates an active internal-staff account. The system generates their username.
+                  Their <strong>temporary password is their phone number</strong> — they'll be forced to
+                  set their own password on first login. A welcome email with sign-in details is sent
+                  to the address below.
                 </p>
                 {createErr && <div className="alert alert-danger py-2">{createErr}</div>}
                 <div className="mb-2">
@@ -339,15 +340,16 @@ function AdminUsersPage() {
                     onChange={(e) => setCreateForm((f) => ({ ...f, fullName: e.target.value }))} />
                 </div>
                 <div className="mb-2">
-                  <label className="form-label small mb-1">Username</label>
-                  <input className="form-control" value={createForm.username} required
-                    onChange={(e) => setCreateForm((f) => ({ ...f, username: e.target.value }))} />
-                </div>
-                <div className="mb-1">
                   <label className="form-label small mb-1">Email</label>
                   <input type="email" className="form-control" value={createForm.email} required
                     onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))} />
-                  <div className="form-text">A real inbox — the set-password invite is sent here.</div>
+                  <div className="form-text">A real inbox — the welcome email is sent here.</div>
+                </div>
+                <div className="mb-1">
+                  <label className="form-label small mb-1">Phone number</label>
+                  <input type="tel" className="form-control" value={createForm.phone} required
+                    onChange={(e) => setCreateForm((f) => ({ ...f, phone: e.target.value }))} />
+                  <div className="form-text">Used as their temporary password (they change it on first login).</div>
                 </div>
               </div>
               <div className="modal-footer">

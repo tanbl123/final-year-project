@@ -288,31 +288,31 @@ function sendPasswordResetCodeEmail(array $config, string $toEmail, string $code
 }
 
 // Sent when an admin provisions a new internal-staff account (e.g. an AR
-// Specialist). The account exists but has no password the admin knows — the
-// staff member sets their own via the "Forgot password" flow, so nothing
-// sensitive is ever emailed. This welcomes them and points the way.
-function sendStaffWelcomeEmail(array $config, string $toEmail, string $fullName, string $role): void {
+// Specialist). The temporary password is the staff member's own phone number
+// (something they already know — so we never print a password in the email),
+// and they're forced to set their own on first login. This tells them their
+// username and how to sign in.
+function sendStaffWelcomeEmail(array $config, string $toEmail, string $fullName, string $username, string $role): void {
   $roleLabel = $role === 'ArSpecialist' ? 'AR Specialist' : $role;
-  $subject   = 'Welcome to ShoeAR — set your password';
+  $subject   = 'Welcome to ShoeAR — your account is ready';
   $text =
-    "An administrator has created a ShoeAR $roleLabel account for you, using this email address.\n\n" .
-    "To set your password and sign in:\n" .
+    "An administrator has created a ShoeAR $roleLabel account for you.\n\n" .
+    "To sign in:\n" .
     "  1. Go to the ShoeAR staff login page.\n" .
-    "  2. Click \"Forgot password\".\n" .
-    "  3. Enter this email address ($toEmail) — you'll receive a 6-digit code.\n" .
-    "  4. Enter the code and choose your own password.\n\n" .
-    "For your security, the administrator does not know your password — only you will.";
-  $safeEmail = htmlspecialchars($toEmail, ENT_QUOTES);
+    "  2. Username: $username  (or use this email address)\n" .
+    "  3. Temporary password: your mobile phone number (the one registered for you).\n\n" .
+    "For your security you'll be asked to choose your own password immediately after your first login. " .
+    "After that, the temporary password no longer works.";
+  $safeUser = htmlspecialchars($username, ENT_QUOTES);
   $bodyHtml =
-    '<p>An administrator has created a ShoeAR <strong>' . htmlspecialchars($roleLabel, ENT_QUOTES) . '</strong> account for you, using this email address.</p>' .
-    '<p>To set your password and sign in:</p>' .
-    '<ol>' .
-    '<li>Go to the ShoeAR <strong>staff login</strong> page.</li>' .
-    '<li>Click <strong>“Forgot password”</strong>.</li>' .
-    '<li>Enter this email address (<strong>' . $safeEmail . '</strong>) — you\'ll receive a 6-digit code.</li>' .
-    '<li>Enter the code and choose your own password.</li>' .
-    '</ol>' .
-    '<p style="color:#666">For your security, the administrator does not know your password — only you will.</p>';
+    '<p>An administrator has created a ShoeAR <strong>' . htmlspecialchars($roleLabel, ENT_QUOTES) . '</strong> account for you.</p>' .
+    '<p>To sign in at the ShoeAR <strong>staff login</strong> page:</p>' .
+    '<ul>' .
+    '<li><strong>Username:</strong> ' . $safeUser . ' &nbsp;(or use this email address)</li>' .
+    '<li><strong>Temporary password:</strong> your mobile phone number (the one registered for you)</li>' .
+    '</ul>' .
+    '<p style="color:#666">For your security you\'ll be asked to choose your own password immediately after your ' .
+    'first login. After that, the temporary password no longer works.</p>';
   $html = formalLetterHtml($fullName, $bodyHtml, '👟 ShoeAR');
   sendMail($config, $toEmail, $fullName, $subject, $text, $html);
 }

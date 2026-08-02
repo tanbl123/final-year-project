@@ -345,20 +345,38 @@ function handleSetUserStatus(PDO $pdo, array $auth, string $userId): void {
   sendJson(200, true, ['userId' => $userId, 'status' => $status]);
 }
 
+// Generate a unique, readable username for a provisioned staff account from
+// their full name (letters/digits only), appending a number on collision.
+function generateStaffUsername(PDO $pdo, string $fullName): string {
+  $base = strtolower(preg_replace('/[^a-z0-9]/i', '', $fullName));
+  if ($base === '') { $base = 'arspecialist'; }
+  $base = substr($base, 0, 20);
+  $chk  = $pdo->prepare('SELECT 1 FROM `user` WHERE username = :u LIMIT 1');
+  $candidate = $base;
+  $n = 1;
+  while (true) {
+    $chk->execute(['u' => $candidate]);
+    if (!$chk->fetchColumn()) { return $candidate; }
+    $n++;
+    $candidate = $base . $n;
+  }
+}
+
 // POST /admin/staff — an admin provisions an internal-staff account. There is no
 // public sign-up for staff (admins are seeded, suppliers self-register), so this
 // is the only creation path. Currently the sole staff role is AR Specialist.
-// Body: { username, email, fullName, role? }.
+// Body: { fullName, email, phoneNumber, role? }.
 //
-// The admin does NOT set a password: the account is created with a random,
-// unusable one, and the staff member sets their OWN password via the emailed
-// invite ("Forgot password" flow). So nothing sensitive is ever emailed and the
-// admin never knows the password.
+// The admin does NOT choose a username or a lasting password: the SYSTEM
+// generates the username, and the temporary password is the staff member's own
+// phone number (something they already know — so we never print a password in
+// the email). The account is flagged mustChangePassword, so on first login they
+// must set their own password and the admin-known temporary value stops working.
 function handleCreateStaff(PDO $pdo, array $config): void {
   $body     = getJsonBody();
-  $username = trim($body['username'] ?? '');
   $email    = trim($body['email'] ?? '');
   $fullName = trim($body['fullName'] ?? '');
+  $phone    = trim($body['phoneNumber'] ?? '');
   $role     = trim($body['role'] ?? 'ArSpecialist');
 
   // Only AR Specialist is provisionable here for now (guard against creating
@@ -366,38 +384,44 @@ function handleCreateStaff(PDO $pdo, array $config): void {
   if ($role !== 'ArSpecialist') {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Unsupported staff role.']);
   }
-  if ($username === '' || $fullName === '') {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Username and full name are required.']);
+  if ($fullName === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Full name is required.']);
   }
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid email is required.']);
   }
-  // The staff member sets their own password via an emailed invite, so email
-  // must be configured — otherwise we'd create an account nobody can sign into.
+  // The phone number is the temporary password, so it must be sensible. Digits
+  // (allowing +, spaces, hyphens), at least 8 digits.
+  $digits = preg_replace('/\D/', '', $phone);
+  if (strlen($digits) < 8) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid phone number is required (it is used as the temporary password).']);
+  }
+  // We email the sign-in instructions, so email must be configured.
   if (!mailConfigured($config)) {
     sendJson(503, false, null, ['code' => 'MAIL_NOT_CONFIGURED',
-      'message' => 'Email sending is not configured, so the set-password invite cannot be sent. Configure SMTP before adding staff.']);
+      'message' => 'Email sending is not configured, so the welcome email cannot be sent. Configure SMTP before adding staff.']);
   }
 
-  // username/email must be unique (same constraint as registration)
-  $chk = $pdo->prepare('SELECT userId FROM `user` WHERE username = :u OR email = :e LIMIT 1');
-  $chk->execute(['u' => $username, 'e' => $email]);
+  // email must be unique (username is generated, so it can't collide)
+  $chk = $pdo->prepare('SELECT userId FROM `user` WHERE email = :e LIMIT 1');
+  $chk->execute(['e' => $email]);
   if ($chk->fetchColumn()) {
-    sendJson(409, false, null, ['code' => 'DUPLICATE', 'message' => 'That username or email is already in use.']);
+    sendJson(409, false, null, ['code' => 'DUPLICATE', 'message' => 'That email is already in use.']);
   }
 
-  $userId = nextId($pdo, 'user', 'userId', 'USR');
-  $arsId  = nextId($pdo, 'ar_specialist', 'arSpecialistId', 'ARS');
-  // Random, unusable password — no one (not even the admin) knows it. The staff
-  // member replaces it with their own via the "Forgot password" invite below.
-  $hash   = password_hash(bin2hex(random_bytes(18)), PASSWORD_BCRYPT);
+  $userId   = nextId($pdo, 'user', 'userId', 'USR');
+  $arsId    = nextId($pdo, 'ar_specialist', 'arSpecialistId', 'ARS');
+  $username = generateStaffUsername($pdo, $fullName);
+  // Temporary password = the phone number as entered. mustChangePassword forces
+  // them to replace it on first login.
+  $hash = password_hash($phone, PASSWORD_BCRYPT);
 
   $pdo->beginTransaction();
   try {
     $pdo->prepare(
-      "INSERT INTO `user` (userId, username, password, email, fullName, role, status)
-       VALUES (:id, :u, :pw, :e, :fn, 'ArSpecialist', 'Active')"
-    )->execute(['id' => $userId, 'u' => $username, 'pw' => $hash, 'e' => $email, 'fn' => $fullName]);
+      "INSERT INTO `user` (userId, username, password, email, fullName, phoneNumber, role, status, mustChangePassword)
+       VALUES (:id, :u, :pw, :e, :fn, :ph, 'ArSpecialist', 'Active', 1)"
+    )->execute(['id' => $userId, 'u' => $username, 'pw' => $hash, 'e' => $email, 'fn' => $fullName, 'ph' => $phone]);
 
     $pdo->prepare('INSERT INTO ar_specialist (arSpecialistId, userId) VALUES (:aid, :uid)')
         ->execute(['aid' => $arsId, 'uid' => $userId]);
@@ -407,12 +431,12 @@ function handleCreateStaff(PDO $pdo, array $config): void {
     sendJson(500, false, null, ['code' => 'CREATE_FAILED', 'message' => 'Could not create the staff account.']);
   }
 
-  // Send the set-password invite. The account already exists, so if the email
-  // fails we don't roll back — we tell the admin so they can have the staff
-  // member use "Forgot password" manually.
+  // Send the welcome/sign-in email. The account already exists, so if the email
+  // fails we don't roll back — we tell the admin so they can pass the sign-in
+  // details on manually (username + "your phone number is the temp password").
   $emailSent = true;
   try {
-    sendStaffWelcomeEmail($config, $email, $fullName, 'ArSpecialist');
+    sendStaffWelcomeEmail($config, $email, $fullName, $username, 'ArSpecialist');
   } catch (Throwable $e) {
     $emailSent = false;
   }
