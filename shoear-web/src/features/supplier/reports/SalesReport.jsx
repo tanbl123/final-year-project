@@ -66,7 +66,7 @@ function SalesReport() {
           : []),
       ],
       orientation: 'landscape',
-      head: ['Product', 'Units', '% sales', 'Gross', `Commission (${rate}%)`, `SST (${sstRate}%)`, 'Net (after fees)'],
+      head: ['Product', 'Units', '% sales', 'Gross', `Commission (${rate}%)`, `SST (${sstRate}%)`, 'Net (after comm. & SST)'],
       body: data.byProduct.map((p) => [
         p.productName, p.units, shareStr(p.gross), rm(p.gross),
         rm(commOf(p.gross)), rm(sstOf(p.gross)), rm(netOf(p.gross)),
@@ -132,7 +132,7 @@ function SalesReport() {
                   <th className="text-end">Gross</th>
                   <th className="text-end">Commission ({rate}%)</th>
                   <th className="text-end">SST ({sstRate}%)</th>
-                  <th className="text-end">Net (after fees)</th>
+                  <th className="text-end">Net (after comm. &amp; SST)</th>
                 </tr>
               </thead>
               <tbody>
@@ -163,6 +163,11 @@ function SalesReport() {
 
             <Pagination page={page} totalPages={totalPages} onChange={setPage}
               summary={`Page ${page} of ${totalPages} · ${rows.length} products · export includes all rows`} />
+
+            <p className="text-muted small mt-2 mb-0">
+              Shipping is charged per parcel, not per product, so it's deducted once from
+              <strong> Net earnings</strong> in the summary above — not shown in this per-product table.
+            </p>
           </div>
         </>
       )}
