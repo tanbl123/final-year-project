@@ -69,6 +69,12 @@ function ArQueuePage() {
         Camera Kit lens — saving the lens marks it AR-ready and an admin can then approve it.
       </p>
 
+      {!loading && products.length > 0 && (
+        <div className="mb-3">
+          <span className="badge text-bg-warning">{products.length} awaiting</span>
+        </div>
+      )}
+
       {error && (
         <div className="alert alert-danger py-2 d-flex justify-content-between align-items-center">
           <span>{error}</span>
@@ -84,13 +90,10 @@ function ArQueuePage() {
         </div>
       ) : (
         <>
-          <div className="d-flex flex-wrap align-items-center gap-2 mb-3">
-            <div style={{ flex: '1 1 260px', maxWidth: 360 }}>
-              <ClearableInput type="text" placeholder="Search product, brand or category"
-                value={search} onChange={(e) => setSearch(e.target.value)}
-                onClear={() => setSearch('')} />
-            </div>
-            <span className="badge text-bg-warning">{products.length} awaiting</span>
+          <div className="mb-3" style={{ maxWidth: 360 }}>
+            <ClearableInput type="text" placeholder="Search product, brand or category"
+              value={search} onChange={(e) => setSearch(e.target.value)}
+              onClear={() => setSearch('')} />
           </div>
 
           {filtered.length === 0 ? (
