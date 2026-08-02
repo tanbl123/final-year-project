@@ -25,6 +25,7 @@ function SearchableSelect({
   options,
   allLabel = '',          // truthy → show a reset row with this label (id '')
   placeholder = 'Search…',
+  clearable = true,       // show the clear "x" once a value is selected
   invalid = false,
   onBlur,
   id,
@@ -82,7 +83,7 @@ function SearchableSelect({
   }
 
   // show the clear "×" once something is selected (not while it's still empty)
-  const showClear = !!value;
+  const showClear = clearable && !!value;
 
   return (
     <div className="position-relative" style={{ width }}>

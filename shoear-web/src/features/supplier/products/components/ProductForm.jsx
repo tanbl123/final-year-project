@@ -509,6 +509,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
             onBlur={() => blurField('categoryId')}
             options={categories.map((cat) => ({ id: cat.id, label: cat.name }))}
             placeholder="Choose category…"
+            clearable={false}
             invalid={showError('categoryId')}
             size="md"
             width="100%"
