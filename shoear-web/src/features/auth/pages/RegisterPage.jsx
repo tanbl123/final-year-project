@@ -49,7 +49,7 @@ function validateForm(form) {
   if (form.phoneNumber.trim() === '') {
     errors.phoneNumber = 'Phone number is required.';
   } else if (!/^(0\d{8,10}|\+?60\d{8,10})$/.test(form.phoneNumber.trim())) {
-    errors.phoneNumber = 'Enter a valid Malaysian phone number, e.g. 0123456789.';
+    errors.phoneNumber = 'Enter a valid phone number, e.g. 0123456789.';
   }
 
   // business verification

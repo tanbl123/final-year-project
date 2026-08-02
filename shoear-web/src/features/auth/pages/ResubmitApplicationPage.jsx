@@ -76,7 +76,7 @@ function ResubmitApplicationPage() {
     if (f.companyName.trim() === '') e.companyName = 'Company name is required.';
     if (f.phoneNumber.trim() === '') e.phoneNumber = 'Phone number is required.';
     else if (!/^(0\d{8,10}|\+?60\d{8,10})$/.test(f.phoneNumber.trim())) {
-      e.phoneNumber = 'Enter a valid Malaysian phone number, e.g. 0123456789.';
+      e.phoneNumber = 'Enter a valid phone number, e.g. 0123456789.';
     }
     if (f.businessRegNo.trim() === '') {
       e.businessRegNo = 'Business registration number is required.';

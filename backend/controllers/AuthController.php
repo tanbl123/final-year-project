@@ -195,7 +195,7 @@ function handleRegister(PDO $pdo): void {
   }
   // E.164: optional leading +, country code, up to 15 digits total
   if (!preg_match('/^(0\d{8,10}|\+?60\d{8,10})$/', $phoneNumber)) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid Malaysian phone number, e.g. 0123456789.']);
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid phone number, e.g. 0123456789.']);
   }
   $phoneNumber = normalizeMyPhone($phoneNumber); // store canonical +60...
   // SSM number: new 12-digit format or old 6–8 digits + check letter
@@ -334,7 +334,7 @@ function handleRegisterCustomer(PDO $pdo): void {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please enter a valid email.']);
   }
   if ($phoneNumber !== null && !preg_match('/^(0\d{8,10}|\+?60\d{8,10})$/', $phoneNumber)) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid Malaysian phone number, e.g. 0123456789.']);
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid phone number, e.g. 0123456789.']);
   }
   if ($phoneNumber !== null) $phoneNumber = normalizeMyPhone($phoneNumber);
   $fmtErr = usernameFormatError($username);
@@ -500,7 +500,7 @@ function validateCourierKyc(array $body): array {
     }
   }
   if (!preg_match('/^(0\d{8,10}|\+?60\d{8,10})$/', $phoneNumber)) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid Malaysian phone number, e.g. 0123456789.']);
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid phone number, e.g. 0123456789.']);
   }
   if (mb_strlen($fullName) > 120) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Full name is too long (max 120 characters).']);
@@ -675,7 +675,7 @@ function handleRegisterCourier(PDO $pdo): void {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please enter a valid email.']);
   }
   if (!preg_match('/^(0\d{8,10}|\+?60\d{8,10})$/', $phoneNumber)) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid Malaysian phone number, e.g. 0123456789.']);
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid phone number, e.g. 0123456789.']);
   }
   $phoneNumber = normalizeMyPhone($phoneNumber); // store canonical +60...
   if (mb_strlen($fullName) > 120) {
@@ -1021,7 +1021,7 @@ function handleUpdateMe(PDO $pdo, array $auth): void {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Phone number is required.']);
   }
   if (!preg_match('/^(0\d{8,10}|\+?60\d{8,10})$/', $phone)) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid Malaysian phone number, e.g. 0123456789.']);
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid phone number, e.g. 0123456789.']);
   }
   $phone = normalizeMyPhone($phone); // store canonical +60...
 
@@ -1469,7 +1469,7 @@ function handleUpdatePhone(PDO $pdo, array $auth): void {
   }
   if (!preg_match('/^(0\d{8,10}|\+?60\d{8,10})$/', $phone)) {
     sendJson(400, false, null, ['code' => 'VALIDATION',
-      'message' => 'Enter a valid Malaysian phone number, e.g. 0123456789.']);
+      'message' => 'Enter a valid phone number, e.g. 0123456789.']);
   }
   $phone = normalizeMyPhone($phone); // store canonical +60...
 

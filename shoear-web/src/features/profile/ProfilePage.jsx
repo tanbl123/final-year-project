@@ -14,7 +14,7 @@ const EMPTY_BANK = { bankName: '', bankAccountName: '', bankAccountNumber: '' };
 
 // Malaysian phone format the backend enforces (0xxxxxxxxx or +60xxxxxxxxx).
 const MY_PHONE = /^(0\d{8,10}|\+?60\d{8,10})$/;
-const PHONE_ERROR = 'Enter a valid Malaysian phone number, e.g. 0123456789.';
+const PHONE_ERROR = 'Enter a valid phone number, e.g. 0123456789.';
 
 // Show only the last 4 digits of an account number, e.g. ••••5678.
 function maskAccount(no) {
