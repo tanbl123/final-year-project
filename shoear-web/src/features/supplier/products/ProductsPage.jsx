@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import ProductCard from './components/ProductCard';
 import ProductFilterBar from './components/ProductFilterBar';
 import ConfirmDialog from '../../../components/ConfirmDialog';
@@ -9,7 +9,7 @@ import { usePagination } from '../../../hooks/usePagination';
 import { fetchProducts, deleteProduct } from './productService';
 import { usePayoutBlocked } from '../usePayoutBlocked';
 
-const EMPTY_FILTERS = { name: '', brand: '', maxPrice: '', categoryId: '', status: '' };
+const FILTER_KEYS = ['name', 'brand', 'maxPrice', 'categoryId', 'status'];
 const PAGE_SIZE = 12;
 
 function ProductsPage() {
@@ -17,7 +17,29 @@ function ProductsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  // Filters live in the URL (?name=&brand=&categoryId=…) so they survive leaving
+  // for a product's detail page and coming back — same reason ?page= is in the
+  // URL. Without this, returning via Back would reset every filter.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = useMemo(() => ({
+    name: searchParams.get('name') || '',
+    brand: searchParams.get('brand') || '',
+    maxPrice: searchParams.get('maxPrice') || '',
+    categoryId: searchParams.get('categoryId') || '',
+    status: searchParams.get('status') || '',
+  }), [searchParams]);
+  function setFilters(next) {
+    setSearchParams((prev) => {
+      const p = new URLSearchParams(prev);
+      FILTER_KEYS.forEach((k) => {
+        const v = (next[k] ?? '').toString();
+        if (v === '') p.delete(k); else p.set(k, v);
+      });
+      p.delete('page');   // any filter change resets to the first page
+      return p;
+    }, { replace: true });
+  }
+
   const [toast, setToast] = useState('');
 
   // Payout gate: suppliers must connect a Stripe payout account before listing
