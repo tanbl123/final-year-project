@@ -653,6 +653,65 @@ function handleAdminOrderReport(PDO $pdo): void {
     }
   }
 
+  // ── per-supplier fulfilment breakdown ──────────────────────────────────
+  // order-level counts (orders + cancelled) per supplier
+  $ocSql = "SELECT p.supplierId AS sid, s.companyName,
+                   COUNT(DISTINCT o.orderId) AS orders,
+                   COUNT(DISTINCT CASE WHEN o.orderStatus = 'Cancelled' THEN o.orderId END) AS cancelled
+              FROM order_item oi
+              JOIN `order` o ON o.orderId = oi.orderId
+              JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+              JOIN product p ON p.productId = pv.productId
+              JOIN supplier s ON s.supplierId = p.supplierId";
+  $ocWhere = []; $ocParams = [];
+  if ($supplierId !== null) { $ocWhere[] = 'p.supplierId = :sid'; $ocParams['sid'] = $supplierId; }
+  if ($fromDt !== null)     { $ocWhere[] = 'o.orderDate BETWEEN :from AND :to'; $ocParams['from'] = $fromDt; $ocParams['to'] = $toDt; }
+  if ($ocWhere) { $ocSql .= ' WHERE ' . implode(' AND ', $ocWhere); }
+  $ocSql .= ' GROUP BY p.supplierId, s.companyName';
+  $ocStmt = $pdo->prepare($ocSql); $ocStmt->execute($ocParams);
+
+  $bySupplier = [];
+  foreach ($ocStmt->fetchAll() as $r) {
+    $o = (int) $r['orders']; $c = (int) $r['cancelled'];
+    $bySupplier[$r['sid']] = [
+      'supplierId'       => $r['sid'],
+      'companyName'      => $r['companyName'],
+      'orders'           => $o,
+      'cancelled'        => $c,
+      'cancellationRate' => $o > 0 ? round($c / $o * 100, 1) : null,
+      'delivered'        => 0,
+      'failed'           => 0,
+      'onTimeRate'       => null,
+      'avgDeliveryDays'  => null,
+    ];
+  }
+
+  // delivery-level metrics per supplier (delivered/failed/on-time/ship time)
+  $dmSql = "SELECT d.supplierId AS sid,
+                   SUM(d.deliveryStatus = 'Delivered') AS delivered,
+                   SUM(d.deliveryStatus = 'Failed') AS failed,
+                   SUM(d.deliveryStatus = 'Delivered' AND d.deliveryDate IS NOT NULL AND d.estimatedDeliveryTime IS NOT NULL) AS rated,
+                   SUM(d.deliveryStatus = 'Delivered' AND d.deliveryDate IS NOT NULL AND d.estimatedDeliveryTime IS NOT NULL AND d.deliveryDate <= d.estimatedDeliveryTime) AS onTime,
+                   SUM(CASE WHEN d.deliveryStatus = 'Delivered' AND d.deliveryDate IS NOT NULL THEN TIMESTAMPDIFF(HOUR, o.orderDate, d.deliveryDate) END) AS shipHours,
+                   SUM(CASE WHEN d.deliveryStatus = 'Delivered' AND d.deliveryDate IS NOT NULL THEN 1 ELSE 0 END) AS shipN
+              FROM delivery d JOIN `order` o ON o.orderId = d.orderId";
+  $dmWhere = []; $dmParams = [];
+  if ($supplierId !== null) { $dmWhere[] = 'd.supplierId = :sid'; $dmParams['sid'] = $supplierId; }
+  if ($fromDt !== null)     { $dmWhere[] = 'o.orderDate BETWEEN :from AND :to'; $dmParams['from'] = $fromDt; $dmParams['to'] = $toDt; }
+  if ($dmWhere) { $dmSql .= ' WHERE ' . implode(' AND ', $dmWhere); }
+  $dmSql .= ' GROUP BY d.supplierId';
+  $dmStmt = $pdo->prepare($dmSql); $dmStmt->execute($dmParams);
+  foreach ($dmStmt->fetchAll() as $r) {
+    if (!isset($bySupplier[$r['sid']])) { continue; }
+    $rated = (int) $r['rated']; $shipN = (int) $r['shipN'];
+    $bySupplier[$r['sid']]['delivered']       = (int) $r['delivered'];
+    $bySupplier[$r['sid']]['failed']          = (int) $r['failed'];
+    $bySupplier[$r['sid']]['onTimeRate']      = $rated > 0 ? round($r['onTime'] / $rated * 100, 1) : null;
+    $bySupplier[$r['sid']]['avgDeliveryDays'] = $shipN > 0 ? round(($r['shipHours'] / 24) / $shipN, 1) : null;
+  }
+  $bySupplier = array_values($bySupplier);
+  usort($bySupplier, fn($a, $b) => $b['orders'] <=> $a['orders']);
+
   sendJson(200, true, [
     'summary' => [
       'totalOrders'     => $totalOrders,
@@ -664,6 +723,7 @@ function handleAdminOrderReport(PDO $pdo): void {
       'avgDeliveryDays' => $shipDaysN > 0 ? round($shipDaysSum / $shipDaysN, 1) : null,
     ],
     'byStatus' => $byStatus,
+    'bySupplier' => $bySupplier,   // fulfilment performance per supplier
     'period' => [
       'from' => $fromDt !== null ? substr($fromDt, 0, 10) : null,
       'to'   => $toDt   !== null ? substr($toDt, 0, 10)   : null,

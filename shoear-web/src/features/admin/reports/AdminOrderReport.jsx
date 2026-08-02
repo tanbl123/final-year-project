@@ -3,7 +3,11 @@ import { getAdminOrderReport } from '../adminService';
 import { useAuth } from '../../auth/AuthContext';
 import ReportPeriodBar from '../../../components/ReportPeriodBar';
 import ReportPreviewModal from '../../../components/ReportPreviewModal';
+import Pagination from '../../../components/Pagination';
+import { usePagination } from '../../../hooks/usePagination';
 import { ALL_TIME, rm, StatCard, CompanyFilter } from './reportUtils';
+
+const PAGE_SIZE = 15;
 
 const LABELS = {
   Placed: 'Placed (unpaid)', Paid: 'Paid', Processing: 'Processing', Shipped: 'Shipped',
@@ -35,6 +39,13 @@ function AdminOrderReport({ company = { id: '', name: '' }, setCompany }) {
   const onTimeStr = data?.summary?.onTimeRate != null ? `${data.summary.onTimeRate}%` : '—';
   const cancelStr = data?.summary?.cancellationRate != null ? `${data.summary.cancellationRate}%` : '—';
   const shipDaysStr = data?.summary?.avgDeliveryDays != null ? `${data.summary.avgDeliveryDays} days` : '—';
+  const pct = (v) => (v == null ? '—' : `${v}%`);
+  const days = (v) => (v == null ? '—' : `${v}`);
+
+  // paginate the on-screen per-supplier table only (export/PDF keeps every row)
+  const rows = data?.bySupplier ?? [];
+  const { page, setPage, totalPages, pageItems } = usePagination(rows, PAGE_SIZE, `${range.from}|${range.to}|${company.id}`);
+  const failedTotal = rows.reduce((a, s) => a + s.failed, 0);
 
   function buildReportOpts() {
     return {
@@ -42,19 +53,27 @@ function AdminOrderReport({ company = { id: '', name: '' }, setCompany }) {
       generatedBy: user?.fullName,
       period: range.label,
       referencePrefix: 'AOF',
+      orientation: 'landscape',
       summary: [
         { label: 'Total orders', value: String(data.summary.totalOrders) },
         { label: company.id ? 'Merchandise value' : 'Total order value', value: rm(data.summary.totalValue) },
         { label: 'Delivered parcels', value: String(data.summary.delivered) },
-        { label: 'Cancelled orders', value: String(data.summary.cancelled) },
-        { label: 'Cancellation rate', value: cancelStr },
         { label: 'On-time delivery rate', value: onTimeStr },
         { label: 'Avg delivery time', value: shipDaysStr },
+        { label: 'Cancelled orders', value: String(data.summary.cancelled) },
+        { label: 'Cancellation rate', value: cancelStr },
       ],
-      head: ['Order status', 'Orders'],
-      body: Object.entries(data.byStatus).map(([s, n]) => [LABELS[s] || s, n]),
-      foot: [['Total', data.summary.totalOrders]],
-      columnStyles: { 1: { halign: 'right' } },
+      head: ['Supplier', 'Orders', 'Delivered', 'On-time %', 'Avg days', 'Cancelled', 'Cancel rate', 'Failed'],
+      body: data.bySupplier.map((s) => [
+        s.companyName, s.orders, s.delivered, pct(s.onTimeRate), days(s.avgDeliveryDays),
+        s.cancelled, pct(s.cancellationRate), s.failed,
+      ]),
+      foot: [['Total', data.summary.totalOrders, data.summary.delivered, onTimeStr, days(data.summary.avgDeliveryDays),
+        data.summary.cancelled, cancelStr, failedTotal]],
+      columnStyles: {
+        1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' },
+        5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' },
+      },
     };
   }
 
@@ -91,9 +110,56 @@ function AdminOrderReport({ company = { id: '', name: '' }, setCompany }) {
             <StatCard label="Cancelled" value={data.summary.cancelled} sub={`${cancelStr} of orders`} color={data.summary.cancelled > 0 ? 'danger' : 'dark'} />
           </div>
 
+          <h5 className="mb-3">Fulfilment by supplier</h5>
+          <div className="table-responsive mb-4">
+            <table className="table align-middle">
+              <thead>
+                <tr>
+                  <th>Supplier</th>
+                  <th className="text-end">Orders</th>
+                  <th className="text-end">Delivered</th>
+                  <th className="text-end">On-time %</th>
+                  <th className="text-end">Avg days</th>
+                  <th className="text-end">Cancelled</th>
+                  <th className="text-end">Cancel rate</th>
+                  <th className="text-end">Failed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pageItems.map((s) => (
+                  <tr key={s.supplierId}>
+                    <td className="fw-semibold">{s.companyName}</td>
+                    <td className="text-end">{s.orders}</td>
+                    <td className="text-end">{s.delivered}</td>
+                    <td className="text-end">{pct(s.onTimeRate)}</td>
+                    <td className="text-end">{days(s.avgDeliveryDays)}</td>
+                    <td className="text-end">{s.cancelled}</td>
+                    <td className={'text-end ' + (s.cancellationRate > 0 ? 'text-danger' : '')}>{pct(s.cancellationRate)}</td>
+                    <td className={'text-end ' + (s.failed > 0 ? 'text-danger' : 'text-muted')}>{s.failed}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="fw-semibold border-top">
+                  <td>Total</td>
+                  <td className="text-end">{data.summary.totalOrders}</td>
+                  <td className="text-end">{data.summary.delivered}</td>
+                  <td className="text-end">{onTimeStr}</td>
+                  <td className="text-end">{days(data.summary.avgDeliveryDays)}</td>
+                  <td className="text-end">{data.summary.cancelled}</td>
+                  <td className="text-end">{cancelStr}</td>
+                  <td className="text-end">{failedTotal}</td>
+                </tr>
+              </tfoot>
+            </table>
+
+            <Pagination page={page} totalPages={totalPages} onChange={setPage}
+              summary={`Page ${page} of ${totalPages} · ${rows.length} suppliers · export includes all rows`} />
+          </div>
+
           <h5 className="mb-3">By order status</h5>
           <div className="table-responsive">
-            <table className="table align-middle">
+            <table className="table align-middle w-auto">
               <thead>
                 <tr>
                   <th>Order status</th>
