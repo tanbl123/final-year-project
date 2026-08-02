@@ -3,6 +3,7 @@ import { Link, useBlocker } from 'react-router-dom';
 import { getInventory, updateInventory, refreshBadges } from './productService';
 import { useUnsavedChangesWarning } from '../../../hooks/useUnsavedChangesWarning';
 import ConfirmDialog from '../../../components/ConfirmDialog';
+import ClearableInput from '../../../components/ClearableInput';
 import Toast from '../../../components/Toast';
 import Pagination from '../../../components/Pagination';
 import SortableTh from '../../../components/SortableTh';
@@ -222,8 +223,9 @@ function SupplierInventoryPage() {
         <div className="row g-2 align-items-end">
           <div className="col-md-6">
             <label className="form-label small text-muted mb-1">Search</label>
-            <input type="text" className="form-control" placeholder="Product name or brand"
-              value={search} onChange={(e) => setSearch(e.target.value)} />
+            <ClearableInput type="text" placeholder="Product name or brand"
+              value={search} onChange={(e) => setSearch(e.target.value)}
+              onClear={() => setSearch('')} />
           </div>
           <div className="col-md-6">
             <label className="form-label small text-muted mb-1 d-block">Show</label>

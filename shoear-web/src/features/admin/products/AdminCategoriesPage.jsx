@@ -3,6 +3,7 @@ import {
   getCategoriesAdmin, createCategory, renameCategory, deleteCategory,
 } from '../adminService';
 import ConfirmDialog from '../../../components/ConfirmDialog';
+import ClearableInput from '../../../components/ClearableInput';
 import Toast from '../../../components/Toast';
 import Pagination from '../../../components/Pagination';
 import SortableTh from '../../../components/SortableTh';
@@ -114,8 +115,9 @@ function AdminCategoriesPage() {
         <label className="form-label fw-semibold">Add a category</label>
         <div className="d-flex gap-2 align-items-start">
           <div className="flex-grow-1">
-            <input type="text" className={`form-control ${addError ? 'is-invalid' : ''}`} maxLength="80" placeholder="e.g. Tennis"
-              value={newName} onChange={(e) => { setNewName(e.target.value); if (addError) setAddError(''); }} />
+            <ClearableInput type="text" className={addError ? 'is-invalid' : ''} maxLength="80" placeholder="e.g. Tennis"
+              value={newName} onChange={(e) => { setNewName(e.target.value); if (addError) setAddError(''); }}
+              onClear={() => { setNewName(''); setAddError(''); }} />
             {addError && <div className="invalid-feedback d-block">{addError}</div>}
           </div>
           <button type="submit" className="btn btn-primary text-nowrap"
