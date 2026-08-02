@@ -385,7 +385,7 @@ function AdminUsersPage() {
                 <p className="text-muted small">
                   Creates an active internal-staff account. The system generates their username, and
                   a secure one-time link to set their own password is emailed to the address below.
-                  They then sign in with their email. You never see or set their password.
+                  They then sign in with their email.
                 </p>
                 {createErr && <div className="alert alert-danger py-2">{createErr}</div>}
                 <div className="mb-2">
