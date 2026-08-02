@@ -4,6 +4,7 @@ import ProductReviewModal from '../admin/products/ProductReviewModal';
 import SortableTh from '../../components/SortableTh';
 import Pagination from '../../components/Pagination';
 import ClearableInput from '../../components/ClearableInput';
+import Toast from '../../components/Toast';
 import { useTableSort } from '../../hooks/useTableSort';
 import { usePagination } from '../../hooks/usePagination';
 
@@ -77,12 +78,9 @@ function ArQueuePage() {
         </div>
       )}
 
-      {notice && (
-        <div className="alert alert-success py-2 d-flex justify-content-between align-items-center">
-          <span>{notice}</span>
-          <button type="button" className="btn-close" onClick={() => setNotice('')}></button>
-        </div>
-      )}
+      {/* success feedback as a toast (consistent with the admin/supplier pages);
+          errors stay inline below */}
+      <Toast message={notice} onClose={() => setNotice('')} />
 
       {error && (
         <div className="alert alert-danger py-2 d-flex justify-content-between align-items-center">
