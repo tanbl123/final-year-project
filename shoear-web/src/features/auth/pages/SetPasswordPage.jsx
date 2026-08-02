@@ -26,7 +26,8 @@ function SetPasswordPage() {
 
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [shown, setShown] = useState(false);
+  const [shown, setShown] = useState({ password: false, confirm: false });
+  const toggleShown = (name) => setShown((p) => ({ ...p, [name]: !p[name] }));
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -92,14 +93,14 @@ function SetPasswordPage() {
           <div className="mb-3">
             <label className="form-label">New password</label>
             <div className="input-group has-validation">
-              <input type={shown ? 'text' : 'password'}
+              <input type={shown.password ? 'text' : 'password'}
                 className={`form-control ${errors.password ? 'is-invalid' : ''}`}
                 value={password} onChange={(e) => setPassword(e.target.value)}
                 autoComplete="new-password" style={{ backgroundImage: 'none' }} />
               <button type="button" className="btn btn-outline-secondary d-flex align-items-center"
-                onClick={() => setShown((v) => !v)} tabIndex={-1}
-                aria-label={shown ? 'Hide password' : 'Show password'}>
-                <EyeIcon off={shown} />
+                onClick={() => toggleShown('password')} tabIndex={-1}
+                aria-label={shown.password ? 'Hide password' : 'Show password'}>
+                <EyeIcon off={shown.password} />
               </button>
               {errors.password && <div className="invalid-feedback">{errors.password}</div>}
             </div>
@@ -107,10 +108,18 @@ function SetPasswordPage() {
 
           <div className="mb-3">
             <label className="form-label">Confirm new password</label>
-            <input type={shown ? 'text' : 'password'}
-              className={`form-control ${errors.confirm ? 'is-invalid' : ''}`}
-              value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
-            {errors.confirm && <div className="invalid-feedback d-block">{errors.confirm}</div>}
+            <div className="input-group has-validation">
+              <input type={shown.confirm ? 'text' : 'password'}
+                className={`form-control ${errors.confirm ? 'is-invalid' : ''}`}
+                value={confirm} onChange={(e) => setConfirm(e.target.value)}
+                autoComplete="new-password" style={{ backgroundImage: 'none' }} />
+              <button type="button" className="btn btn-outline-secondary d-flex align-items-center"
+                onClick={() => toggleShown('confirm')} tabIndex={-1}
+                aria-label={shown.confirm ? 'Hide password' : 'Show password'}>
+                <EyeIcon off={shown.confirm} />
+              </button>
+              {errors.confirm && <div className="invalid-feedback">{errors.confirm}</div>}
+            </div>
           </div>
 
           <button type="submit" className="btn btn-primary w-100 text-center" disabled={saving}>
