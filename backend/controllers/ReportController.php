@@ -807,7 +807,8 @@ function handleAdminCommissionReport(PDO $pdo): void {
   $sql =
     "SELECT s.supplierId, s.companyName,
             SUM(oi.orderQuantity) AS units,
-            SUM(oi.orderSubtotal) AS gross
+            SUM(oi.orderSubtotal) AS gross,
+            COUNT(DISTINCT o.orderId) AS orders
        FROM order_item oi
        JOIN `order` o      ON o.orderId = oi.orderId
        JOIN payment pay    ON pay.orderId = o.orderId AND pay.paymentStatus = 'Successful'
@@ -830,6 +831,7 @@ function handleAdminCommissionReport(PDO $pdo): void {
     $g = (float) $r['gross'];
     $c = round($g * $rate / 100, 2);
     $t = serviceTaxOn($c);              // SST 8% on this supplier's commission
+    $o = (int) $r['orders'];
     $totalGross += $g;
     $totalCommission += $c;
     $totalServiceTax += $t;
@@ -837,10 +839,20 @@ function handleAdminCommissionReport(PDO $pdo): void {
       'supplierId'  => $r['supplierId'],
       'companyName' => $r['companyName'],
       'units'       => (int) $r['units'],
+      'orders'      => $o,
       'gross'       => round($g, 2),
       'commission'  => $c,
       'serviceTax'  => $t,
+      'net'         => round($g - $c - $t, 2),          // what this supplier actually receives
+      'avgOrderValue' => $o > 0 ? round($g / $o, 2) : null,
+      'sharePct'    => 0.0,                             // % of GMV — filled below
     ];
+  }
+  // contribution share of GMV per supplier
+  if ($totalGross > 0) {
+    foreach ($bySupplier as $i => $s) {
+      $bySupplier[$i]['sharePct'] = round($s['gross'] / $totalGross * 100, 1);
+    }
   }
 
   // distinct paid orders (scoped to the company filter + window) → average order value
