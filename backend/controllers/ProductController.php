@@ -342,7 +342,7 @@ function handleGetAdminProduct(PDO $pdo, string $id): void {
 // lens in Lens Studio. When set, the customer app offers AR try-on for the
 // product; sending an empty/null value removes it. The lens GROUP id is a single
 // app-level constant, so only the per-product lens id is stored here.
-function handleSetAdminProductArLens(PDO $pdo, string $id): void {
+function handleSetAdminProductArLens(PDO $pdo, array $auth, string $id): void {
   $body   = getJsonBody();
   $lensId = trim((string) ($body['arLensId'] ?? ''));
 
@@ -373,13 +373,20 @@ function handleSetAdminProductArLens(PDO $pdo, string $id): void {
   //
   // arReadyAt is the "AR prepared" marker that drives the AR work queue: saving a
   // valid lens marks the product AR-ready (drops it out of the queue); clearing
-  // the lens marks it not-ready again (returns it to the queue).
-  $stamp = $lensId !== '' ? 'NOW()' : 'NULL';
+  // the lens marks it not-ready again (returns it to the queue). arReadyBy records
+  // WHO prepared it (the signed-in staff user) for the AR "Completed" history.
+  $ready = $lensId !== '';
+  $stamp = $ready ? 'NOW()' : 'NULL';
   $upd = $pdo->prepare(
     'UPDATE product_model
-        SET arLensId = :lens, arLensUpdatedAt = ' . $stamp . ', arReadyAt = ' . $stamp . '
+        SET arLensId = :lens, arLensUpdatedAt = ' . $stamp . ',
+            arReadyAt = ' . $stamp . ', arReadyBy = :by
       WHERE productModelId = :mid');
-  $upd->execute(['lens' => $lensId !== '' ? $lensId : null, 'mid' => $modelId]);
+  $upd->execute([
+    'lens' => $ready ? $lensId : null,
+    'by'   => $ready ? ($auth['userId'] ?? null) : null,
+    'mid'  => $modelId,
+  ]);
 
   sendJson(200, true, ['productId' => $id, 'arLensId' => $lensId !== '' ? $lensId : null]);
 }

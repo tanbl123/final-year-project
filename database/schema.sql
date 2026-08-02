@@ -283,6 +283,7 @@ CREATE TABLE product_model (
                                                           -- lens cache when this changes, so a re-published SAME lens id still refreshes
     arReadyAt       TIMESTAMP    NULL,                    -- "AR is prepared" marker: stamped when an AR Specialist saves a valid
                                                           -- lens, cleared when the lens is removed. Drives the AR work queue.
+    arReadyBy       VARCHAR(10)  NULL,                    -- which staff user set the lens (for the AR "Completed" history/audit)
     PRIMARY KEY (productModelId),
     KEY idx_model_product (productId),
     CONSTRAINT fk_model_product FOREIGN KEY (productId) REFERENCES product(productId)

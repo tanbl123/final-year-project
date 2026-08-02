@@ -843,7 +843,7 @@ if ($method === 'PUT' && preg_match('#^/admin/products/([^/]+)/ar-lens$#', $path
   $auth = requireAuth($secret);
   requireStaff($auth);   // Admin or AR Specialist
   $pdo  = getPDO();
-  handleSetAdminProductArLens($pdo, $m[1]);
+  handleSetAdminProductArLens($pdo, $auth, $m[1]);
 }
 
 // admin AR-lens PICKER config: hand the Camera Kit staging token + group id to a
@@ -866,6 +866,22 @@ if ($method === 'GET' && $path === '/ar/queue') {
   requireStaff($auth);   // Admin or AR Specialist
   $pdo  = getPDO();
   handleListArQueue($pdo);
+}
+
+// AR dashboard headline numbers (+ the sidebar badge count).
+if ($method === 'GET' && $path === '/ar/stats') {
+  $auth = requireAuth($secret);
+  requireStaff($auth);
+  $pdo  = getPDO();
+  handleArStats($pdo);
+}
+
+// AR "Completed" history — products already made AR-ready.
+if ($method === 'GET' && $path === '/ar/completed') {
+  $auth = requireAuth($secret);
+  requireStaff($auth);
+  $pdo  = getPDO();
+  handleListArCompleted($pdo);
 }
 
 // admin AR auto-fit: run the product's 3D model through the ML auto-fit and

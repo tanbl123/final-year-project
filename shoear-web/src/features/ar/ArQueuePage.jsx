@@ -2,6 +2,15 @@ import { useEffect, useState } from 'react';
 import { getArQueue } from '../admin/adminService';
 import ProductReviewModal from '../admin/products/ProductReviewModal';
 
+// Whole days a product has been waiting since it was added, and how that reads.
+function waitInfo(createdAt) {
+  const days = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000));
+  const label = days === 0 ? 'today' : days === 1 ? '1 day' : `${days} days`;
+  // amber after a few days, red after a week — a gentle SLA nudge
+  const tone = days >= 7 ? 'danger' : days >= 3 ? 'warning' : 'muted';
+  return { days, label, tone };
+}
+
 // AR Specialist workspace: the queue of virtual-try-on products still needing AR
 // preparation (no Camera Kit lens recorded yet). Opening one launches the slim
 // AR review modal (auto-fit + lens) — no pricing, supplier or stock, and no
@@ -54,43 +63,56 @@ function ArQueuePage() {
           Nothing to prepare right now — every try-on product has its AR lens set. 🎉
         </div>
       ) : (
-        <div className="table-responsive">
-          <table className="table align-middle">
-            <thead>
-              <tr>
-                <th>Product</th>
-                <th style={{ width: 160 }}>Category</th>
-                <th className="text-center" style={{ width: 120 }}>Listing</th>
-                <th className="text-center" style={{ width: 120 }}>Added</th>
-                <th className="text-center" style={{ width: 120 }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((p) => (
-                <tr key={p.productId}>
-                  <td style={{ overflowWrap: 'anywhere' }}>
-                    <div className="fw-semibold">{p.productName}</div>
-                    <div className="text-muted small">{p.productBrand}</div>
-                  </td>
-                  <td><span className="badge text-bg-light border">{p.categoryName}</span></td>
-                  <td className="text-center">
-                    <span className={`badge text-bg-${p.productStatus === 'Approved' ? 'success' : 'warning'}`}>
-                      {p.productStatus}
-                    </span>
-                  </td>
-                  <td className="text-center text-muted small">
-                    {new Date(p.created_at).toLocaleDateString()}
-                  </td>
-                  <td className="text-center">
-                    <button className="btn btn-primary btn-sm" onClick={() => setReviewId(p.productId)}>
-                      Prepare AR
-                    </button>
-                  </td>
+        <>
+          <div className="d-flex align-items-center gap-2 mb-2">
+            <span className="badge text-bg-warning">{products.length} awaiting</span>
+            <span className="text-muted small">oldest first</span>
+          </div>
+          <div className="table-responsive">
+            <table className="table align-middle">
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th style={{ width: 150 }}>Category</th>
+                  <th className="text-center" style={{ width: 110 }}>Listing</th>
+                  <th className="text-center" style={{ width: 140 }}>Waiting</th>
+                  <th className="text-center" style={{ width: 120 }}>Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {products.map((p) => {
+                  const w = waitInfo(p.created_at);
+                  return (
+                    <tr key={p.productId}>
+                      <td style={{ overflowWrap: 'anywhere' }}>
+                        <div className="fw-semibold">{p.productName}</div>
+                        <div className="text-muted small">{p.productBrand}</div>
+                      </td>
+                      <td><span className="badge text-bg-light border">{p.categoryName}</span></td>
+                      <td className="text-center">
+                        <span className={`badge text-bg-${p.productStatus === 'Approved' ? 'success' : 'warning'}`}>
+                          {p.productStatus}
+                        </span>
+                      </td>
+                      <td className="text-center">
+                        <span className={w.tone === 'muted' ? 'text-muted small' : `text-${w.tone} small fw-semibold`}
+                          title={`Added ${new Date(p.created_at).toLocaleDateString()}`}>
+                          {w.label}
+                          {w.days >= 7 && ' ⚠'}
+                        </span>
+                      </td>
+                      <td className="text-center">
+                        <button className="btn btn-primary btn-sm" onClick={() => setReviewId(p.productId)}>
+                          Prepare AR
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {reviewId && (

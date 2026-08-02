@@ -477,6 +477,44 @@ function handleListArQueue(PDO $pdo): void {
   sendJson(200, true, ['products' => $stmt->fetchAll()]);
 }
 
+// GET /ar/stats — headline numbers for the AR Specialist dashboard + the sidebar
+// badge: how many try-on products are awaiting prep, how many have been prepared
+// in total, and how many in the last 7 days.
+function handleArStats(PDO $pdo): void {
+  $awaiting = (int) $pdo->query(
+    "SELECT COUNT(*) FROM product p
+      WHERE p.virtualTryOnEnable = 1
+        AND p.productStatus IN ('Pending', 'Approved')
+        AND EXISTS (SELECT 1 FROM product_model pm WHERE pm.productId = p.productId)
+        AND (SELECT pm.arReadyAt FROM product_model pm
+              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) IS NULL"
+  )->fetchColumn();
+  $prepared = (int) $pdo->query(
+    "SELECT COUNT(*) FROM product_model WHERE arReadyAt IS NOT NULL"
+  )->fetchColumn();
+  $thisWeek = (int) $pdo->query(
+    "SELECT COUNT(*) FROM product_model
+      WHERE arReadyAt IS NOT NULL AND arReadyAt >= DATE_SUB(NOW(), INTERVAL 7 DAY)"
+  )->fetchColumn();
+  sendJson(200, true, ['awaiting' => $awaiting, 'prepared' => $prepared, 'preparedThisWeek' => $thisWeek]);
+}
+
+// GET /ar/completed — the AR "Completed" history: products that have been made
+// AR-ready, newest first, with when and which staff member prepared them.
+function handleListArCompleted(PDO $pdo): void {
+  $stmt = $pdo->query(
+    "SELECT p.productId, p.productName, p.productBrand, c.categoryName, p.productStatus,
+            pm.arLensId, pm.arReadyAt, u.fullName AS preparedBy
+       FROM product_model pm
+       JOIN product p  ON p.productId  = pm.productId
+       JOIN category c ON c.categoryId = p.categoryId
+       LEFT JOIN `user` u ON u.userId = pm.arReadyBy
+      WHERE pm.arReadyAt IS NOT NULL
+      ORDER BY pm.arReadyAt DESC"
+  );
+  sendJson(200, true, ['products' => $stmt->fetchAll()]);
+}
+
 // ── supplier business-detail change requests ─────────────────────────
 // GET /admin/supplier-changes — pending change requests with the current
 // (live) values alongside the proposed ones, so the admin can see the diff.

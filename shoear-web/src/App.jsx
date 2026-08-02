@@ -38,7 +38,9 @@ import AdminCourierPayoutsPage from './features/admin/payouts/AdminCourierPayout
 import AdminDeliveriesPage from './features/admin/deliveries/AdminDeliveriesPage';
 import AdminDeliveryIssuesPage from './features/admin/deliveries/AdminDeliveryIssuesPage';
 import AdminIntegrationsPage from './features/admin/integrations/AdminIntegrationsPage';
+import ArDashboardPage from './features/ar/ArDashboardPage';
 import ArQueuePage from './features/ar/ArQueuePage';
+import ArCompletedPage from './features/ar/ArCompletedPage';
 import ProfilePage from './features/profile/ProfilePage';
 import PayoutsPage from './features/supplier/payouts/PayoutsPage';
 import Avatar from './components/Avatar';
@@ -217,7 +219,13 @@ const router = createBrowserRouter(
 
       {/* AR Specialist (internal staff) */}
       <Route path="/ar" element={
+        <ProtectedRoute role="ArSpecialist"><ArDashboardPage /></ProtectedRoute>
+      } />
+      <Route path="/ar/queue" element={
         <ProtectedRoute role="ArSpecialist"><ArQueuePage /></ProtectedRoute>
+      } />
+      <Route path="/ar/completed" element={
+        <ProtectedRoute role="ArSpecialist"><ArCompletedPage /></ProtectedRoute>
       } />
 
       {/* any signed-in user's own profile */}

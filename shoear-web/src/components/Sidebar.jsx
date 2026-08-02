@@ -1,7 +1,14 @@
 import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { getBadgeCounts } from '../features/admin/adminService';
+import { getBadgeCounts, getArStats } from '../features/admin/adminService';
 import { getSupplierBadgeCounts } from '../features/supplier/products/productService';
+
+// AR Specialist badge: map the AR stats to the same {counts:{...}} shape the
+// sidebar expects, so the 'AR Queue' item shows the awaiting count.
+async function getArBadgeCounts() {
+  const s = await getArStats();
+  return { counts: { arQueue: s?.awaiting ?? 0 } };
+}
 
 // Grouped navigation per role. `end` marks links that should only be active on
 // an exact match (e.g. /admin, otherwise it'd light up for every /admin/* page).
@@ -61,10 +68,12 @@ const SUPPLIER_PENDING_NAV = [
   ] },
 ];
 
-// AR Specialist: a focused workspace — just the AR preparation queue.
+// AR Specialist: a focused content-ops workspace.
 const AR_NAV = [
   { group: 'AR', items: [
-    { to: '/ar', label: 'AR Queue', icon: '🕶️', end: true },
+    { to: '/ar', label: 'Dashboard', icon: '📊', end: true },
+    { to: '/ar/queue', label: 'AR Queue', icon: '🕶️', badge: 'arQueue' },
+    { to: '/ar/completed', label: 'Completed', icon: '✅' },
   ] },
 ];
 
@@ -91,6 +100,7 @@ function useBadgeCounts(role) {
   useEffect(() => {
     const fetcher = role === 'Admin' ? getBadgeCounts
                   : role === 'Supplier' ? getSupplierBadgeCounts
+                  : role === 'ArSpecialist' ? getArBadgeCounts
                   : null;
     if (!fetcher) return;
     let active = true;

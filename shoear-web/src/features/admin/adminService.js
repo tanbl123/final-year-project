@@ -94,6 +94,17 @@ export function getArQueue() {
   return apiGet('/ar/queue', getToken());
 }
 
+// AR dashboard headline numbers: { awaiting, prepared, preparedThisWeek }.
+export function getArStats() {
+  return apiGet('/ar/stats', getToken());
+}
+
+// AR "Completed" history: products already made AR-ready, newest first, with
+// when + who prepared them. Returns { products: [...] }.
+export function getArCompleted() {
+  return apiGet('/ar/completed', getToken());
+}
+
 // Admin provisions an internal-staff account (currently AR Specialist only).
 // No credential is set here — the system emails a one-time link for the staff
 // member to set their own password. { fullName, email } → the created account
