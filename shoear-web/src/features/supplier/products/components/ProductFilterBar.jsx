@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { fetchCategories } from '../productService';
 import ClearableInput from '../../../../components/ClearableInput';
+import SearchableSelect from '../../../../components/SearchableSelect';
 import { AR_FILTER_OPTIONS } from '../../../../utils/arFilter';
 
 // The old "add" bar lived here (name / brand / price / category). It now
@@ -53,13 +54,15 @@ function ProductFilterBar({ filters, onChange }) {
         </div>
         <div className="col-6 col-md-4 col-lg-2">
           <label className="form-label small text-muted mb-1">Category</label>
-          <select className="form-select" value={filters.categoryId}
-            onChange={(e) => set('categoryId', e.target.value)}>
-            <option value="">All categories</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>{cat.name}</option>
-            ))}
-          </select>
+          <SearchableSelect
+            value={filters.categoryId}
+            onChange={(id) => set('categoryId', id)}
+            options={categories.map((cat) => ({ id: cat.id, label: cat.name }))}
+            allLabel="All categories"
+            placeholder="All categories"
+            size="md"
+            width="100%"
+          />
         </div>
         <div className="col-6 col-md-4 col-lg-2">
           <label className="form-label small text-muted mb-1">Status</label>

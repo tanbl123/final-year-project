@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { fetchCategories, uploadFile, validateModel } from '../productService';
 import ConfirmDialog from '../../../../components/ConfirmDialog';
 import ClearableInput from '../../../../components/ClearableInput';
+import SearchableSelect from '../../../../components/SearchableSelect';
 
 // A blank size row. Suppliers add one row per size they sell.
 const emptyVariant = () => ({ size: '', stock: '' });
@@ -502,16 +503,17 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
         </div>
         <div className="col-md-6">
           <label className="form-label">Category</label>
-          <select value={categoryId}
-            className={'form-select' + (showError('categoryId') ? ' is-invalid' : '')}
-            onChange={(e) => changeField('categoryId', setCategoryId, e.target.value)}
-            onBlur={() => blurField('categoryId')}>
-            <option value="">Choose category…</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>{cat.name}</option>
-            ))}
-          </select>
-          {showError('categoryId') && <div className="invalid-feedback">{fieldErrors.categoryId}</div>}
+          <SearchableSelect
+            value={categoryId}
+            onChange={(id) => changeField('categoryId', setCategoryId, id)}
+            onBlur={() => blurField('categoryId')}
+            options={categories.map((cat) => ({ id: cat.id, label: cat.name }))}
+            placeholder="Choose category…"
+            invalid={showError('categoryId')}
+            size="md"
+            width="100%"
+          />
+          {showError('categoryId') && <div className="invalid-feedback d-block">{fieldErrors.categoryId}</div>}
         </div>
         <div className="col-12">
           <label className="form-label">Description</label>
