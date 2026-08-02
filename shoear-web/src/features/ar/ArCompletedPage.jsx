@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import ProductReviewModal from '../admin/products/ProductReviewModal';
 import SortableTh from '../../components/SortableTh';
 import Pagination from '../../components/Pagination';
+import ClearableInput from '../../components/ClearableInput';
 import { useTableSort } from '../../hooks/useTableSort';
 import { usePagination } from '../../hooks/usePagination';
 
@@ -20,6 +21,7 @@ function ArCompletedPage() {
   const [error, setError] = useState('');
   const [reviewId, setReviewId] = useState('');
   const [scope, setScope] = useState('all');   // 'all' (team) | 'mine'
+  const [search, setSearch] = useState('');
 
   function load() {
     setLoading(true);
@@ -39,9 +41,12 @@ function ArCompletedPage() {
   }
 
   const fmt = (d) => (d ? new Date(d).toLocaleString() : '—');
-  const shown = scope === 'mine'
-    ? products.filter((p) => p.preparedById && p.preparedById === user?.userId)
-    : products;
+  // scope (team / mine) + search (product / brand / category) → sort → paginate
+  const q = search.trim().toLowerCase();
+  const shown = products
+    .filter((p) => scope !== 'mine' || (p.preparedById && p.preparedById === user?.userId))
+    .filter((p) => q === '' || [p.productName, p.productBrand, p.categoryName]
+      .some((v) => (v || '').toLowerCase().includes(q)));
 
   // Sortable + paginated like the admin approvals page; default is chronological
   // (most recently prepared first).
@@ -50,7 +55,7 @@ function ArCompletedPage() {
     initialDir: 'desc',
     getValue: (p, k) => (k === 'arReadyAt' ? new Date(p.arReadyAt).getTime() : p[k]),
   });
-  const { page, setPage, totalPages, pageItems } = usePagination(sort.sorted, PAGE_SIZE);
+  const { page, setPage, totalPages, pageItems } = usePagination(sort.sorted, PAGE_SIZE, `${scope}|${q}`);
 
   return (
     <div className="container py-4 text-start">
@@ -66,19 +71,29 @@ function ArCompletedPage() {
         </div>
       )}
 
-      {/* team-wide vs my own work */}
-      <div className="btn-group btn-group-sm mb-3" role="group">
-        <button type="button" className={`btn btn-outline-secondary${scope === 'all' ? ' active' : ''}`}
-          onClick={() => { setScope('all'); setPage(1); }}>All completed</button>
-        <button type="button" className={`btn btn-outline-secondary${scope === 'mine' ? ' active' : ''}`}
-          onClick={() => { setScope('mine'); setPage(1); }}>Prepared by me</button>
+      {/* team-wide vs my own work + search */}
+      <div className="row g-2 align-items-center mb-3">
+        <div className="col-auto">
+          <div className="btn-group btn-group-sm" role="group">
+            <button type="button" className={`btn btn-outline-secondary${scope === 'all' ? ' active' : ''}`}
+              onClick={() => setScope('all')}>All completed</button>
+            <button type="button" className={`btn btn-outline-secondary${scope === 'mine' ? ' active' : ''}`}
+              onClick={() => setScope('mine')}>Prepared by me</button>
+          </div>
+        </div>
+        <div className="col-sm-6 col-md-5">
+          <ClearableInput type="text" placeholder="Search product, brand or category"
+            value={search} onChange={(e) => setSearch(e.target.value)} onClear={() => setSearch('')} />
+        </div>
       </div>
 
       {loading ? (
         <p className="text-muted">Loading…</p>
       ) : shown.length === 0 ? (
         <div className="card card-body text-center text-muted">
-          {scope === 'mine' ? "You haven't prepared any products yet." : 'Nothing prepared yet.'}
+          {q !== '' ? `No products match “${search}”.`
+            : scope === 'mine' ? "You haven't prepared any products yet."
+            : 'Nothing prepared yet.'}
         </div>
       ) : (
         <div className="table-responsive">

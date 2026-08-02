@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { getArQueue } from '../admin/adminService';
 import ProductReviewModal from '../admin/products/ProductReviewModal';
+import SortableTh from '../../components/SortableTh';
+import Pagination from '../../components/Pagination';
+import ClearableInput from '../../components/ClearableInput';
+import { useTableSort } from '../../hooks/useTableSort';
+import { usePagination } from '../../hooks/usePagination';
+
+const PAGE_SIZE = 10;
 
 // Whole days a product has been waiting since it was added, and how that reads.
 function waitInfo(createdAt) {
@@ -21,6 +28,7 @@ function ArQueuePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reviewId, setReviewId] = useState('');   // product open in the modal
+  const [search, setSearch] = useState('');
 
   function load() {
     setLoading(true);
@@ -40,6 +48,18 @@ function ArQueuePage() {
     setReviewId('');
     load();
   }
+
+  // filter (product / brand / category) → sort → paginate
+  const q = search.trim().toLowerCase();
+  const filtered = q === '' ? products : products.filter((p) =>
+    [p.productName, p.productBrand, p.categoryName].some((v) => (v || '').toLowerCase().includes(q)));
+  // default: longest-waiting first (oldest created_at)
+  const sort = useTableSort(filtered, {
+    initialKey: 'created_at',
+    initialDir: 'asc',
+    getValue: (p, k) => (k === 'created_at' ? new Date(p.created_at).getTime() : p[k]),
+  });
+  const { page, setPage, totalPages, pageItems } = usePagination(sort.sorted, PAGE_SIZE, q);
 
   return (
     <div className="container py-4 text-start">
@@ -64,54 +84,68 @@ function ArQueuePage() {
         </div>
       ) : (
         <>
-          <div className="d-flex align-items-center gap-2 mb-2">
-            <span className="badge text-bg-warning">{products.length} awaiting</span>
-            <span className="text-muted small">oldest first</span>
+          <div className="row g-2 align-items-center mb-2">
+            <div className="col-sm-6 col-md-5">
+              <ClearableInput type="text" placeholder="Search product, brand or category"
+                value={search} onChange={(e) => setSearch(e.target.value)}
+                onClear={() => setSearch('')} />
+            </div>
+            <div className="col-sm-6 text-sm-end">
+              <span className="badge text-bg-warning">{products.length} awaiting</span>
+            </div>
           </div>
-          <div className="table-responsive">
-            <table className="table align-middle">
-              <thead>
-                <tr>
-                  <th>Product</th>
-                  <th style={{ width: 150 }}>Category</th>
-                  <th className="text-center" style={{ width: 110 }}>Listing</th>
-                  <th className="text-center" style={{ width: 140 }}>Waiting</th>
-                  <th className="text-center" style={{ width: 120 }}>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map((p) => {
-                  const w = waitInfo(p.created_at);
-                  return (
-                    <tr key={p.productId}>
-                      <td style={{ overflowWrap: 'anywhere' }}>
-                        <div className="fw-semibold">{p.productName}</div>
-                        <div className="text-muted small">{p.productBrand}</div>
-                      </td>
-                      <td><span className="badge text-bg-light border">{p.categoryName}</span></td>
-                      <td className="text-center">
-                        <span className={`badge text-bg-${p.productStatus === 'Approved' ? 'success' : 'warning'}`}>
-                          {p.productStatus}
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        <span className={w.tone === 'muted' ? 'text-muted small' : `text-${w.tone} small fw-semibold`}
-                          title={`Added ${new Date(p.created_at).toLocaleDateString()}`}>
-                          {w.label}
-                          {w.days >= 7 && ' ⚠'}
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        <button className="btn btn-primary btn-sm" onClick={() => setReviewId(p.productId)}>
-                          Prepare AR
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+
+          {filtered.length === 0 ? (
+            <div className="card card-body text-center text-muted">No products match “{search}”.</div>
+          ) : (
+            <div className="table-responsive">
+              <table className="table align-middle">
+                <thead>
+                  <tr>
+                    <SortableTh label="Product" columnKey="productName" sort={sort} />
+                    <SortableTh label="Category" columnKey="categoryName" sort={sort} style={{ width: 150 }} />
+                    <SortableTh label="Listing" columnKey="productStatus" sort={sort} className="text-center" style={{ width: 110 }} />
+                    <SortableTh label="Waiting" columnKey="created_at" sort={sort} className="text-center" style={{ width: 140 }} />
+                    <th className="text-center" style={{ width: 120 }}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageItems.map((p) => {
+                    const w = waitInfo(p.created_at);
+                    return (
+                      <tr key={p.productId}>
+                        <td style={{ overflowWrap: 'anywhere' }}>
+                          <div className="fw-semibold">{p.productName}</div>
+                          <div className="text-muted small">{p.productBrand}</div>
+                        </td>
+                        <td><span className="badge text-bg-light border">{p.categoryName}</span></td>
+                        <td className="text-center">
+                          <span className={`badge text-bg-${p.productStatus === 'Approved' ? 'success' : 'warning'}`}>
+                            {p.productStatus}
+                          </span>
+                        </td>
+                        <td className="text-center">
+                          <span className={w.tone === 'muted' ? 'text-muted small' : `text-${w.tone} small fw-semibold`}
+                            title={`Added ${new Date(p.created_at).toLocaleDateString()}`}>
+                            {w.label}
+                            {w.days >= 7 && ' ⚠'}
+                          </span>
+                        </td>
+                        <td className="text-center">
+                          <button className="btn btn-primary btn-sm" onClick={() => setReviewId(p.productId)}>
+                            Prepare AR
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+
+              <Pagination page={page} totalPages={totalPages} onChange={setPage}
+                summary={`Page ${page} of ${totalPages} · ${sort.sorted.length} awaiting`} />
+            </div>
+          )}
         </>
       )}
 
