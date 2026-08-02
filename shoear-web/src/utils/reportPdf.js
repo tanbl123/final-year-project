@@ -55,6 +55,9 @@ export function buildReportDoc({
   body = [],
   foot = [],
   columnStyles = {},
+  // optional additional tables rendered below the main one, each:
+  // { title?, head, body, foot?, columnStyles? }
+  extraTables = [],
   orientation = 'portrait',   // 'landscape' for wide, many-column tables
 }) {
   const doc = new jsPDF({ orientation, unit: 'pt', format: 'a4' });
@@ -146,6 +149,41 @@ export function buildReportDoc({
       });
       doc.setTextColor(0);
     },
+  });
+
+  // ── Extra tables (optional) ───────────────────────────────────────────────
+  // Rendered below the main table, each with its own optional heading. Shares
+  // the same styling and the running footer already installed above.
+  extraTables.forEach((t) => {
+    const tRight = new Set(
+      Object.entries(t.columnStyles || {})
+        .filter(([, s]) => s && s.halign === 'right')
+        .map(([k]) => Number(k)),
+    );
+    let ey = doc.lastAutoTable.finalY + 22;
+    if (t.title) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(11);
+      doc.setTextColor(0);
+      doc.text(pdfSafe(t.title), margin, ey);
+      ey += 6;
+    }
+    autoTable(doc, {
+      startY: ey,
+      margin: { left: margin, right: margin },
+      head: t.head && t.head.length ? [t.head.map(pdfSafe)] : undefined,
+      body: (t.body || []).map(pdfSafeRow),
+      foot: t.foot && t.foot.length ? t.foot.map(pdfSafeRow) : undefined,
+      headStyles: { fillColor: ACCENT, textColor: 255, fontStyle: 'bold' },
+      footStyles: { fillColor: [240, 240, 245], textColor: 20, fontStyle: 'bold' },
+      styles: { fontSize: 9, cellPadding: 5 },
+      columnStyles: t.columnStyles || {},
+      didParseCell: (data) => {
+        if ((data.section === 'head' || data.section === 'foot') && tRight.has(data.column.index)) {
+          data.cell.styles.halign = 'right';
+        }
+      },
+    });
   });
 
   return { doc, filename: `${title.replace(/\s+/g, '_')}_${ref}.pdf` };

@@ -157,11 +157,15 @@ function handleSupplierSalesReport(PDO $pdo, array $auth): void {
   // delivery cost the supplier bears, over the same paid window — the platform-paid
   // 3PL label (shippingCost) OR the in-house courier's fee (courierFee), whichever
   // applies per parcel. Deducted from net earnings alongside commission + SST.
+  // We include 'Refunded' payments here (but not in the gross/commission queries
+  // above): once a parcel has physically shipped, the delivery cost was really
+  // incurred, so the supplier still bears it even if the sale is later refunded.
+  // A pre-shipment cancel deletes its delivery rows, so it contributes nothing.
   $shSql =
     "SELECT COALESCE(SUM(d.shippingCost + d.courierFee), 0)
        FROM delivery d
        JOIN `order` o   ON o.orderId = d.orderId
-       JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus = 'Successful'
+       JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus IN ('Successful', 'Refunded')
       WHERE d.supplierId = :sid";
   $shParams = ['sid' => $supplierId];
   if ($fromDt !== null) { $shSql .= ' AND pay.paymentDate BETWEEN :from AND :to'; $shParams['from'] = $fromDt; $shParams['to'] = $toDt; }
@@ -372,7 +376,8 @@ function handleSupplierFulfilmentReport(PDO $pdo, array $auth): void {
   [$fromDt, $toDt] = reportRange();
 
   $sql =
-    "SELECT d.deliveryStatus, d.deliveryMethod, d.trackingCarrier, d.deliveryDate, d.estimatedDeliveryTime, o.orderDate
+    "SELECT d.orderId, d.deliveryStatus, d.deliveryMethod, d.trackingCarrier, d.trackingNumber,
+            d.shippingCost, d.courierFee, d.deliveryDate, d.estimatedDeliveryTime, o.orderDate
        FROM delivery d
        JOIN `order` o ON o.orderId = d.orderId
       WHERE d.supplierId = :sid";
@@ -387,6 +392,8 @@ function handleSupplierFulfilmentReport(PDO $pdo, array $auth): void {
   $delivered = 0; $onTime = 0; $ratedForOnTime = 0;
   $shipDaysSum = 0.0; $shipDaysN = 0;   // order → delivered elapsed time
   $channels = [];                       // fulfilment performance per channel (in-house / each 3PL carrier)
+  $byOrder = [];                        // per-parcel delivery cost, so the total deduction is auditable
+  $shippingTotal = 0.0; $courierTotal = 0.0;
   foreach ($rows as $r) {
     $s = $r['deliveryStatus'];
     if (isset($statuses[$s])) { $statuses[$s]++; }
@@ -396,6 +403,25 @@ function handleSupplierFulfilmentReport(PDO $pdo, array $auth): void {
     $channel = $r['deliveryMethod'] === 'InHouse'
       ? 'In-house'
       : (!empty($r['trackingCarrier']) ? $r['trackingCarrier'] : 'Standard (3PL)');
+
+    // per-order delivery cost line — only parcels that actually carry a cost, so
+    // the supplier can see exactly which orders make up their total delivery
+    // deduction. 3PL labels charge shippingCost; in-house charges courierFee.
+    $shipCost = round((float) $r['shippingCost'], 2);
+    $courFee  = round((float) $r['courierFee'], 2);
+    $lineCost = round($shipCost + $courFee, 2);
+    $shippingTotal += $shipCost;
+    $courierTotal  += $courFee;
+    if ($lineCost > 0) {
+      $byOrder[] = [
+        'orderId'      => (int) $r['orderId'],
+        'channel'      => $channel,
+        'method'       => $r['deliveryMethod'] === 'InHouse' ? 'In-house courier' : '3PL label',
+        'trackingNumber' => $r['trackingNumber'] ?: null,
+        'status'       => $s,
+        'cost'         => $lineCost,
+      ];
+    }
     if (!isset($channels[$channel])) {
       $channels[$channel] = ['channel' => $channel, 'parcels' => 0, 'delivered' => 0, 'failed' => 0,
                              'rated' => 0, 'onTime' => 0, 'shipSum' => 0.0, 'shipN' => 0];
@@ -439,6 +465,10 @@ function handleSupplierFulfilmentReport(PDO $pdo, array $auth): void {
   }
   usort($byChannel, fn($a, $b) => $b['parcels'] <=> $a['parcels']);
 
+  // biggest cost first, so the orders driving the total surface at the top
+  usort($byOrder, fn($a, $b) => $b['cost'] <=> $a['cost']);
+  $deliveryCost = round($shippingTotal + $courierTotal, 2);
+
   sendJson(200, true, [
     'summary' => [
       'totalDeliveries' => $total,
@@ -450,9 +480,13 @@ function handleSupplierFulfilmentReport(PDO $pdo, array $auth): void {
       'avgDeliveryDays' => $avgDeliveryDays,   // avg days from order to delivered
       'inHouse'         => $inHouse,
       'standard'        => $standard,
+      'deliveryCost'    => $deliveryCost,     // total delivery cost the supplier bears (3PL + in-house)
+      'shippingCost'    => round($shippingTotal, 2),   // 3PL label portion
+      'courierFee'      => round($courierTotal, 2),     // in-house courier portion
     ],
     'byStatus' => $statuses,
     'byChannel' => $byChannel,   // fulfilment performance per delivery channel
+    'byOrder' => $byOrder,       // per-order delivery cost making up the total deduction
     'period' => [
       'from' => $fromDt !== null ? substr($fromDt, 0, 10) : null,
       'to'   => $toDt   !== null ? substr($toDt, 0, 10)   : null,
@@ -981,11 +1015,14 @@ function handleAdminCommissionReport(PDO $pdo): void {
   $orders = (int) $oStmt->fetchColumn();
 
   // delivery cost recovered from suppliers (3PL label OR in-house courier fee),
-  // scoped to the company filter + window — reduces net-to-suppliers
+  // scoped to the company filter + window — reduces net-to-suppliers. 'Refunded'
+  // payments are included (unlike the gross/commission queries): a parcel that
+  // physically shipped incurred a real cost, so the supplier still bears it even
+  // when the sale is refunded. Pre-shipment cancels delete their delivery rows.
   $shSql = "SELECT COALESCE(SUM(d.shippingCost + d.courierFee), 0)
               FROM delivery d
               JOIN `order` o   ON o.orderId = d.orderId
-              JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus = 'Successful'";
+              JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus IN ('Successful', 'Refunded')";
   $shWhere = []; $shParams = [];
   if ($supplierId !== null) { $shWhere[] = 'd.supplierId = :sid'; $shParams['sid'] = $supplierId; }
   if ($fromDt !== null)     { $shWhere[] = 'pay.paymentDate BETWEEN :from AND :to'; $shParams['from'] = $fromDt; $shParams['to'] = $toDt; }
