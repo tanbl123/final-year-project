@@ -30,6 +30,7 @@ require __DIR__ . '/../../controllers/OrderController.php';
 require __DIR__ . '/../../controllers/ReviewController.php';
 require __DIR__ . '/../../controllers/RefundController.php';
 require __DIR__ . '/../../controllers/CommissionController.php';
+require __DIR__ . '/../../controllers/CourierFeeController.php';
 require __DIR__ . '/../../controllers/CatalogController.php';
 require __DIR__ . '/../../controllers/CartController.php';
 require __DIR__ . '/../../controllers/WishlistController.php';
@@ -686,6 +687,16 @@ if ($path === '/admin/commission') {
   $pdo  = getPDO();
   if ($method === 'GET')  handleGetCommission($pdo);
   if ($method === 'POST') handleSetCommission($pdo, $auth);
+  sendJson(405, false, null, ['code' => 'METHOD', 'message' => 'Method not allowed.']);
+}
+
+// ── admin in-house courier fee configuration ──
+if ($path === '/admin/courier-fee') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  if ($method === 'GET')  handleGetCourierFee($pdo, $config);
+  if ($method === 'POST') handleSetCourierFee($pdo, $auth);
   sendJson(405, false, null, ['code' => 'METHOD', 'message' => 'Method not allowed.']);
 }
 

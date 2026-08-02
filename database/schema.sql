@@ -519,6 +519,22 @@ CREATE TABLE commission (
     CONSTRAINT chk_commission_rate CHECK (commissionRateValue >= 0 AND commissionRateValue <= 100)
 ) ENGINE=InnoDB;
 
+-- Admin-configured flat fee paid to an in-house courier per completed delivery
+-- (also recovered from the supplier). One active fee at a time; changing it keeps
+-- the old value as history (status Inactive) so past changes are auditable.
+CREATE TABLE courier_fee (
+    courierFeeId  VARCHAR(10)   NOT NULL,               -- CFE0001
+    adminId       VARCHAR(10)   NOT NULL,
+    feeValue      DECIMAL(10,2) NOT NULL,               -- RM per in-house delivery
+    effectiveDate DATETIME      NOT NULL,
+    feeStatus     ENUM('Active','Inactive') NOT NULL DEFAULT 'Active',
+    PRIMARY KEY (courierFeeId),
+    KEY idx_courierfee_admin (adminId),
+    CONSTRAINT fk_courierfee_admin FOREIGN KEY (adminId) REFERENCES admin(adminId)
+        ON UPDATE CASCADE ON DELETE RESTRICT,
+    CONSTRAINT chk_courierfee_value CHECK (feeValue >= 0)
+) ENGINE=InnoDB;
+
 -- Record of money actually paid out to a supplier for an order, via Stripe
 -- Connect (separate charges & transfers). The customer pays the platform once
 -- (one `payment` row); the platform keeps the commission and sends each

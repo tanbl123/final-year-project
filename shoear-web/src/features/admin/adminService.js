@@ -350,3 +350,13 @@ export function getCommission() {
 export function setCommission(commissionRateValue) {
   return apiPost('/admin/commission', { commissionRateValue }, getToken());
 }
+
+// In-house courier fee: current active fee + change history + config default.
+export function getCourierFee() {
+  return apiGet('/admin/courier-fee', getToken());
+}
+
+// Set a new active in-house courier fee (RM per delivery); keeps the old as history.
+export function setCourierFee(feeValue) {
+  return apiPost('/admin/courier-fee', { feeValue }, getToken());
+}

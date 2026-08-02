@@ -470,8 +470,9 @@ function handleVerifyOtp(PDO $pdo, array $auth, string $deliveryId, array $confi
   $proofUrl = storeUploadedFile($_FILES['file'], 'image');
 
   // The courier earns a flat fee per completed parcel — snapshot it now so a
-  // later config change never rewrites past earnings.
-  $fee = (float) ($config['courier_fee_per_delivery'] ?? 0);
+  // later fee change never rewrites past earnings. Uses the admin-configured
+  // active fee, falling back to the config default when none is set.
+  $fee = activeCourierFee($pdo, $config);
 
   try {
     $pdo->beginTransaction();

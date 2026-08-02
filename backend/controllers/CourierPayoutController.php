@@ -65,7 +65,7 @@ function handleCourierEarnings(PDO $pdo, array $config, array $auth): void {
     'balance'         => $bal['balance'],
     'pendingCount'    => $bal['deliveries'],
     'lifetimeEarned'  => $lifetime,
-    'feePerDelivery'  => (float) ($config['courier_fee_per_delivery'] ?? 0),
+    'feePerDelivery'  => activeCourierFee($pdo, $config),
     'connected'       => (bool) $row['stripeAccountId'],
     'payoutsEnabled'  => (bool) $row['payoutsEnabled'],
     'currency'        => 'MYR',
