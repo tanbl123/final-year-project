@@ -3,7 +3,11 @@ import { getAdminSupplierReport } from '../adminService';
 import { useAuth } from '../../auth/AuthContext';
 import ReportPeriodBar from '../../../components/ReportPeriodBar';
 import ReportPreviewModal from '../../../components/ReportPreviewModal';
+import Pagination from '../../../components/Pagination';
+import { usePagination } from '../../../hooks/usePagination';
 import { ALL_TIME, rm, StatCard } from './reportUtils';
+
+const PAGE_SIZE = 15;
 
 // Supplier leaderboard: gross, units, active products, average rating.
 // `onDrill(supplierId, companyName)` jumps to that company's Platform Sales report.
@@ -28,6 +32,11 @@ function SupplierPerformanceReport({ onDrill }) {
 
   const has = !!data && data.summary.suppliers > 0;
   const star = (r) => (r != null ? `★ ${r}` : '—');
+
+  // paginate the on-screen leaderboard only (export/PDF keeps every row)
+  const rows = data?.bySupplier ?? [];
+  const { page, setPage, totalPages, pageItems } = usePagination(rows, PAGE_SIZE, `${range.from}|${range.to}`);
+  const offset = (page - 1) * PAGE_SIZE;
 
   function buildReportOpts() {
     return {
@@ -89,9 +98,9 @@ function SupplierPerformanceReport({ onDrill }) {
                 </tr>
               </thead>
               <tbody>
-                {data.bySupplier.map((s, i) => (
+                {pageItems.map((s, i) => (
                   <tr key={s.supplierId}>
-                    <td className="text-muted">{i + 1}</td>
+                    <td className="text-muted">{offset + i + 1}</td>
                     <td className="fw-semibold">{s.companyName}</td>
                     <td className="text-end">{s.units}</td>
                     <td className="text-end">{rm(s.gross)}</td>
@@ -112,6 +121,9 @@ function SupplierPerformanceReport({ onDrill }) {
                 ))}
               </tbody>
             </table>
+
+            <Pagination page={page} totalPages={totalPages} onChange={setPage}
+              summary={`Page ${page} of ${totalPages} · ${rows.length} suppliers · export includes all rows`} />
           </div>
         </>
       )}

@@ -3,7 +3,11 @@ import { getRefundReport } from './reportService';
 import { useAuth } from '../../auth/AuthContext';
 import ReportPeriodBar from '../../../components/ReportPeriodBar';
 import ReportPreviewModal from '../../../components/ReportPreviewModal';
+import Pagination from '../../../components/Pagination';
+import { usePagination } from '../../../hooks/usePagination';
 import { ALL_TIME, rm, StatCard } from './reportUtils';
+
+const PAGE_SIZE = 15;
 
 const STATUS_BADGE = {
   Pending: 'text-bg-secondary', Approved: 'text-bg-success',
@@ -32,6 +36,10 @@ function RefundReport() {
 
   const has = !!data && data.summary.refunds > 0;
   const rateStr = data?.summary?.refundRate != null ? `${data.summary.refundRate}%` : '—';
+
+  // paginate the on-screen table only (export/PDF keeps every row)
+  const rows = data?.refunds ?? [];
+  const { page, setPage, totalPages, pageItems } = usePagination(rows, PAGE_SIZE, `${range.from}|${range.to}`);
 
   function buildReportOpts() {
     return {
@@ -94,7 +102,7 @@ function RefundReport() {
                 </tr>
               </thead>
               <tbody>
-                {data.refunds.map((r) => (
+                {pageItems.map((r) => (
                   <tr key={r.refundId}>
                     <td className="text-muted">{r.orderId}</td>
                     <td>{r.reason}</td>
@@ -105,6 +113,9 @@ function RefundReport() {
                 ))}
               </tbody>
             </table>
+
+            <Pagination page={page} totalPages={totalPages} onChange={setPage}
+              summary={`Page ${page} of ${totalPages} · ${rows.length} refunds · export includes all rows`} />
           </div>
         </>
       )}

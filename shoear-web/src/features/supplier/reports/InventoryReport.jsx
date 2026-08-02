@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react';
 import { getInventoryReport } from './reportService';
 import { useAuth } from '../../auth/AuthContext';
 import ReportPreviewModal from '../../../components/ReportPreviewModal';
+import Pagination from '../../../components/Pagination';
+import { usePagination } from '../../../hooks/usePagination';
 import { rm, StatCard } from './reportUtils';
+
+const PAGE_SIZE = 15;
 
 const STATUS_BADGE = {
   out: { cls: 'text-bg-danger', label: 'Out of stock' },
@@ -28,6 +32,11 @@ function InventoryReport() {
   }, []);
 
   const has = !!data && data.summary.products > 0;
+
+  // paginate the on-screen table only (totals + PDF stay full). No period here —
+  // it's a live snapshot — so no reset key.
+  const rows = data?.products ?? [];
+  const { page, setPage, totalPages, pageItems } = usePagination(rows, PAGE_SIZE);
 
   function buildReportOpts() {
     return {
@@ -93,7 +102,7 @@ function InventoryReport() {
                 </tr>
               </thead>
               <tbody>
-                {data.products.map((p) => (
+                {pageItems.map((p) => (
                   <tr key={p.productId}>
                     <td className="fw-semibold">{p.productName}</td>
                     <td className="text-end">{p.variants}</td>
@@ -115,6 +124,9 @@ function InventoryReport() {
                 </tr>
               </tfoot>
             </table>
+
+            <Pagination page={page} totalPages={totalPages} onChange={setPage}
+              summary={`Page ${page} of ${totalPages} · ${rows.length} products · export includes all rows`} />
           </div>
         </>
       )}
