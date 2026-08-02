@@ -390,6 +390,9 @@ function AdminUsersPage() {
                     <dt className="col-4">Status</dt>
                     <dd className="col-8">
                       <span className={`badge text-bg-${STATUS_COLORS[detail.status] || 'secondary'}`}>{detail.status}</span>
+                      {detail.pendingSetup && (
+                        <span className="badge text-bg-warning ms-1" title="Invite sent — hasn't set a password yet">Pending set-up</span>
+                      )}
                     </dd>
                     {detail.role === 'Supplier' && detail.profile && (
                       <>

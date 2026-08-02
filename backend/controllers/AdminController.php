@@ -307,7 +307,8 @@ function handleListUsers(PDO $pdo): void {
 // GET /admin/users/{userId} — one user with their role-specific profile.
 function handleGetUser(PDO $pdo, string $userId): void {
   $stmt = $pdo->prepare(
-    'SELECT userId, username, fullName, email, phoneNumber, role, status, created_at, updated_at
+    'SELECT userId, username, fullName, email, phoneNumber, role, status, created_at, updated_at,
+            (setPasswordToken IS NOT NULL) AS pendingSetup
        FROM `user` WHERE userId = :id'
   );
   $stmt->execute(['id' => $userId]);
@@ -315,6 +316,7 @@ function handleGetUser(PDO $pdo, string $userId): void {
   if (!$u) {
     sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'User not found.']);
   }
+  $u['pendingSetup'] = (bool) $u['pendingSetup'];
 
   $profile = null;
   if ($u['role'] === 'Supplier') {
