@@ -9,6 +9,7 @@ import ClearableInput from '../../components/ClearableInput';
 import BusinessDetailsCard from './BusinessDetailsCard';
 import StoreNameCard from './StoreNameCard';
 import PayoutsCard from './PayoutsCard';
+import FulfilmentCard from './FulfilmentCard';
 
 const EMPTY_PW = { currentPassword: '', newPassword: '', confirmPassword: '' };
 
@@ -334,6 +335,11 @@ function ProfilePage() {
       {/* payouts (suppliers only) — Stripe Connect is the single source of truth
           for where sales income is sent; Stripe verifies + holds the bank details */}
       {me.role === 'Supplier' && <PayoutsCard />}
+
+      {/* fulfilment preference (suppliers only) — standing auto-ship setting */}
+      {me.role === 'Supplier' && (
+        <FulfilmentCard initialEnabled={Number(me.profile?.autoShipStandard) === 1} onToast={setToast} />
+      )}
 
       {/* change password */}
       <div className="card mt-4">
