@@ -13,6 +13,16 @@ const ACCENT = [79, 70, 229]; // indigo, matches the web theme
 
 const pad = (n) => String(n).padStart(2, '0');
 
+// jsPDF's standard fonts use WinAnsi encoding, which lacks a few math/arrow
+// symbols we happily show in on-screen labels (e.g. "Low stock (≤ 10)"). Left
+// as-is they render as garbage in the PDF, so swap them for ASCII equivalents.
+// Characters that ARE in WinAnsi (em dash —, middle dot ·, ×, etc.) are fine
+// and deliberately left untouched.
+const PDF_CHAR_MAP = { '≤': '<=', '≥': '>=', '≈': '~', '→': '->', '←': '<-' };
+const pdfSafe = (v) =>
+  typeof v === 'string' ? v.replace(/[≤≥≈→←]/g, (c) => PDF_CHAR_MAP[c]) : v;
+const pdfSafeRow = (row) => (Array.isArray(row) ? row.map(pdfSafe) : row);
+
 function makeReference(prefix, now) {
   return `${prefix}-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}` +
          `-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
@@ -95,7 +105,7 @@ export function buildReportDoc({
       startY: y,
       margin: { left: margin, right: margin },
       theme: 'plain',
-      body: summary.map((s) => [s.label, s.value]),
+      body: summary.map((s) => [pdfSafe(s.label), pdfSafe(s.value)]),
       styles: { fontSize: 10, cellPadding: 3 },
       columnStyles: { 0: { textColor: 110 }, 1: { fontStyle: 'bold', halign: 'right' } },
     });
@@ -114,9 +124,9 @@ export function buildReportDoc({
   autoTable(doc, {
     startY: y,
     margin: { left: margin, right: margin },
-    head: head.length ? [head] : undefined,
-    body,
-    foot: foot.length ? foot : undefined,
+    head: head.length ? [head.map(pdfSafe)] : undefined,
+    body: body.map(pdfSafeRow),
+    foot: foot.length ? foot.map(pdfSafeRow) : undefined,
     headStyles: { fillColor: ACCENT, textColor: 255, fontStyle: 'bold' },
     footStyles: { fillColor: [240, 240, 245], textColor: 20, fontStyle: 'bold' },
     styles: { fontSize: 9, cellPadding: 5 },
