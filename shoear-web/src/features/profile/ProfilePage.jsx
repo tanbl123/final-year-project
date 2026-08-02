@@ -267,13 +267,13 @@ function ProfilePage() {
               <div className="mb-3">
                 <label className="form-label">Phone number</label>
                 <ClearableInput type="text" inputMode="tel" maxLength="30" required
+                  placeholder="e.g. 0123456789"
                   className={(phoneError || fieldErrors.phoneNumber) ? 'is-invalid' : ''}
                   value={form.phoneNumber}
                   onChange={(e) => setField('phoneNumber', e.target.value)}
                   onClear={() => setField('phoneNumber', '')} />
-                {(phoneError || fieldErrors.phoneNumber)
-                  ? <div className="invalid-feedback d-block">{phoneError || fieldErrors.phoneNumber}</div>
-                  : <div className="form-text">e.g. 0123456789.</div>}
+                {(phoneError || fieldErrors.phoneNumber) &&
+                  <div className="invalid-feedback d-block">{phoneError || fieldErrors.phoneNumber}</div>}
               </div>
               <div className="d-flex gap-2">
                 <button type="submit" className="btn btn-primary" disabled={saving || !dirty || !!usernameError || !!phoneError}>
