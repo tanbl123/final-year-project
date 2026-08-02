@@ -113,6 +113,12 @@ export function createStaff({ fullName, email, role = 'ArSpecialist' }) {
   return apiPost('/admin/staff', { fullName, email, role }, getToken());
 }
 
+// Re-send a pending staff invite, optionally correcting the email/name first
+// (fixes a mistyped address). Issues a fresh set-password link.
+export function resendStaffInvite(userId, { fullName, email }) {
+  return apiPut(`/admin/staff/${userId}/resend-invite`, { fullName, email }, getToken());
+}
+
 // Full product detail (images, description, sizes, 3D model) for review before
 // approving/rejecting. Works for any status, unlike the customer catalog.
 export function getAdminProduct(productId) {

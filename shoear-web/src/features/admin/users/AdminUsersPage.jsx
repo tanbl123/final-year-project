@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getUsers, getUser, setUserStatus, createStaff } from '../adminService';
+import { getUsers, getUser, setUserStatus, createStaff, resendStaffInvite } from '../adminService';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Toast from '../../../components/Toast';
 import Pagination from '../../../components/Pagination';
@@ -65,6 +65,11 @@ function AdminUsersPage() {
   const [createErr, setCreateErr] = useState('');
   const [staffErrors, setStaffErrors] = useState({}); // per-field inline errors
 
+  const [resendForm, setResendForm] = useState(null); // resend-invite form { userId, fullName, email } (null = closed)
+  const [resending, setResending] = useState(false);
+  const [resendErr, setResendErr] = useState('');
+  const [resendErrors, setResendErrors] = useState({});
+
   // open/close the create form, clearing any previous input + errors
   function openCreate() { setCreateErr(''); setStaffErrors({}); setCreateForm({ ...EMPTY_STAFF }); }
   function closeCreate() { setCreateForm(null); setStaffErrors({}); setCreateErr(''); }
@@ -88,6 +93,53 @@ function AdminUsersPage() {
       if (msg) next[name] = msg; else delete next[name];
       return next;
     });
+  }
+
+  // ── resend a pending staff invite (with editable email/name) ──
+  function openResend(u) {
+    setResendErr(''); setResendErrors({});
+    setResendForm({ userId: u.userId, fullName: u.fullName, email: u.email });
+  }
+  function closeResend() { setResendForm(null); setResendErrors({}); setResendErr(''); }
+  function setResendField(name, value) {
+    setResendForm((f) => ({ ...f, [name]: value }));
+    setResendErrors((prev) => {
+      if (!(name in prev)) return prev;
+      const next = { ...prev };
+      const msg = staffFieldError(name, value);
+      if (msg) next[name] = msg; else delete next[name];
+      return next;
+    });
+  }
+  function blurResendField(name) {
+    setResendErrors((prev) => {
+      const next = { ...prev };
+      const msg = staffFieldError(name, resendForm?.[name]);
+      if (msg) next[name] = msg; else delete next[name];
+      return next;
+    });
+  }
+  async function submitResend(e) {
+    e.preventDefault();
+    const v = validateStaff(resendForm);
+    if (Object.keys(v).length) { setResendErrors(v); return; }
+    setResending(true); setResendErr('');
+    try {
+      const res = await resendStaffInvite(resendForm.userId, {
+        fullName: resendForm.fullName.trim(), email: resendForm.email.trim(),
+      });
+      // reflect any corrected email/name in the row immediately
+      setUsers((prev) => prev.map((x) => (x.userId === res.userId
+        ? { ...x, email: res.email, fullName: res.fullName } : x)));
+      setToast(res.inviteEmailSent === false
+        ? `Invite updated, but the email to ${res.email} couldn't be sent — check email settings.`
+        : `Invite re-sent to ${res.email}.`);
+      closeResend();
+    } catch (err) {
+      setResendErr(err.message);
+    } finally {
+      setResending(false);
+    }
   }
 
   const sort = useTableSort(users, {
@@ -200,6 +252,10 @@ function AdminUsersPage() {
       btns.push(<button key="re" className="btn btn-success btn-sm" disabled={busy}
         onClick={() => changeStatus(u, 'Active')}>Reactivate</button>);
     }
+    if (u.pendingSetup && u.role === 'ArSpecialist' && u.status !== 'Deleted') {
+      btns.push(<button key="ri" className="btn btn-outline-primary btn-sm" disabled={busy}
+        onClick={() => openResend(u)}>Resend invite</button>);
+    }
     if (u.status !== 'Deleted') {
       btns.push(<button key="del" className="btn btn-outline-danger btn-sm" disabled={busy}
         onClick={() => askConfirm(u, 'Deleted', 'Delete')}>Delete</button>);
@@ -282,6 +338,11 @@ function AdminUsersPage() {
                   <td><span className="badge text-bg-light">{roleLabel(u.role)}</span></td>
                   <td className="text-center">
                     <span className={`badge text-bg-${STATUS_COLORS[u.status] || 'secondary'}`}>{u.status}</span>
+                    {u.pendingSetup && (
+                      <div className="mt-1">
+                        <span className="badge text-bg-warning" title="Invite sent — hasn't set a password yet">Pending set-up</span>
+                      </div>
+                    )}
                   </td>
                   <td className="text-muted small">{new Date(u.created_at).toLocaleDateString()}</td>
                   <td className="text-center">
@@ -409,6 +470,50 @@ function AdminUsersPage() {
                 <button type="button" className="btn btn-light" onClick={closeCreate} disabled={creating}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={creating}>
                   {creating ? 'Creating…' : 'Create account'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* resend a pending staff invite (fix a wrong email + re-send the link) */}
+      {resendForm && (
+        <div className="modal show d-block" tabIndex="-1" style={{ background: 'rgba(0,0,0,.5)' }}
+          onClick={() => !resending && closeResend()}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <form className="modal-content" onSubmit={submitResend} noValidate>
+              <div className="modal-header">
+                <h5 className="modal-title">Resend invite</h5>
+                <button type="button" className="btn-close" onClick={closeResend} disabled={resending}></button>
+              </div>
+              <div className="modal-body">
+                <p className="text-muted small">
+                  This account hasn't set its password yet. Correct the email if it was mistyped, then
+                  re-send a fresh set-password link (any earlier link stops working).
+                </p>
+                {resendErr && <div className="alert alert-danger py-2">{resendErr}</div>}
+                <div className="mb-2">
+                  <label className="form-label small mb-1">Full name</label>
+                  <input className={`form-control ${resendErrors.fullName ? 'is-invalid' : ''}`}
+                    value={resendForm.fullName}
+                    onChange={(e) => setResendField('fullName', e.target.value)}
+                    onBlur={() => blurResendField('fullName')} />
+                  {resendErrors.fullName && <div className="invalid-feedback d-block">{resendErrors.fullName}</div>}
+                </div>
+                <div className="mb-1">
+                  <label className="form-label small mb-1">Email</label>
+                  <input type="email" className={`form-control ${resendErrors.email ? 'is-invalid' : ''}`}
+                    value={resendForm.email}
+                    onChange={(e) => setResendField('email', e.target.value)}
+                    onBlur={() => blurResendField('email')} />
+                  {resendErrors.email && <div className="invalid-feedback d-block">{resendErrors.email}</div>}
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-light" onClick={closeResend} disabled={resending}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={resending}>
+                  {resending ? 'Sending…' : 'Resend invite'}
                 </button>
               </div>
             </form>

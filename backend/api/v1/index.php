@@ -967,6 +967,14 @@ if ($method === 'POST' && $path === '/admin/staff') {
   handleCreateStaff($pdo, $config);
 }
 
+// re-send (and optionally correct the email/name of) a pending staff invite
+if ($method === 'PUT' && preg_match('#^/admin/staff/([^/]+)/resend-invite$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleResendStaffInvite($pdo, $config, $m[1]);
+}
+
 // ── admin delivery dispatch (require an Admin token) ──
 if ($method === 'GET' && $path === '/admin/deliveries') {
   $auth = requireAuth($secret);

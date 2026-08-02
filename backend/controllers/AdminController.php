@@ -288,13 +288,20 @@ function handleListUsers(PDO $pdo): void {
     $params['q3'] = '%' . $search . '%';
   }
 
-  $sql = 'SELECT userId, username, fullName, email, phoneNumber, role, status, created_at FROM `user`';
+  // pendingSetup = an invited staff account that hasn't set its password yet
+  // (the one-time token is cleared on activation), so the UI can flag it.
+  $sql = 'SELECT userId, username, fullName, email, phoneNumber, role, status, created_at,
+                 (setPasswordToken IS NOT NULL) AS pendingSetup
+            FROM `user`';
   if ($where) { $sql .= ' WHERE ' . implode(' AND ', $where); }
   $sql .= ' ORDER BY created_at DESC';
 
   $stmt = $pdo->prepare($sql);
   $stmt->execute($params);
-  sendJson(200, true, ['users' => $stmt->fetchAll()]);
+  $rows = $stmt->fetchAll();
+  foreach ($rows as &$r) { $r['pendingSetup'] = (bool) $r['pendingSetup']; }
+  unset($r);
+  sendJson(200, true, ['users' => $rows]);
 }
 
 // GET /admin/users/{userId} — one user with their role-specific profile.
@@ -460,6 +467,72 @@ function handleCreateStaff(PDO $pdo, array $config): void {
     'fullName'        => $fullName,
     'role'            => 'ArSpecialist',
     'status'          => 'Active',
+    'inviteEmailSent' => $emailSent,
+  ]);
+}
+
+// PUT /admin/staff/{userId}/resend-invite — re-send the set-password invite for a
+// staff account that hasn't activated yet, optionally correcting the email/name
+// first (fixes a mistyped address). Issues a FRESH 48h token so any earlier link
+// is invalidated. Only valid while the account is still pending (token present);
+// once the staff member has set their password there's nothing to resend.
+function handleResendStaffInvite(PDO $pdo, array $config, string $userId): void {
+  $stmt = $pdo->prepare('SELECT userId, email, fullName, role, setPasswordToken FROM `user` WHERE userId = :id');
+  $stmt->execute(['id' => $userId]);
+  $u = $stmt->fetch();
+  if (!$u) {
+    sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'User not found.']);
+  }
+  if ($u['role'] !== 'ArSpecialist') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Only staff invites can be resent.']);
+  }
+  if (empty($u['setPasswordToken'])) {
+    sendJson(409, false, null, ['code' => 'ALREADY_ACTIVE', 'message' => 'This account has already set its password — nothing to resend.']);
+  }
+  if (!mailConfigured($config)) {
+    sendJson(503, false, null, ['code' => 'MAIL_NOT_CONFIGURED',
+      'message' => 'Email sending is not configured, so the invite cannot be sent.']);
+  }
+
+  $body     = getJsonBody();
+  $email    = array_key_exists('email', $body) ? trim((string) $body['email']) : (string) $u['email'];
+  $fullName = array_key_exists('fullName', $body) ? trim((string) $body['fullName']) : (string) $u['fullName'];
+  if ($fullName === '' || mb_strlen($fullName) > 120) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Full name is required and must be 120 characters or fewer.']);
+  }
+  if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid email is required.']);
+  }
+  if ($email !== $u['email']) {
+    $chk = $pdo->prepare('SELECT userId FROM `user` WHERE email = :e AND userId <> :id LIMIT 1');
+    $chk->execute(['e' => $email, 'id' => $userId]);
+    if ($chk->fetchColumn()) {
+      sendJson(409, false, null, ['code' => 'DUPLICATE', 'message' => 'That email is already in use.']);
+    }
+  }
+
+  // Fresh one-time token (invalidates any earlier link) + apply the corrections.
+  $token = bin2hex(random_bytes(32));
+  $pdo->prepare(
+    "UPDATE `user`
+        SET email = :e, fullName = :fn,
+            setPasswordToken = :tok, setPasswordExpires = DATE_ADD(NOW(), INTERVAL 48 HOUR)
+      WHERE userId = :id"
+  )->execute(['e' => $email, 'fn' => $fullName, 'tok' => password_hash($token, PASSWORD_BCRYPT), 'id' => $userId]);
+
+  $appUrl = rtrim((string) ($config['app_url'] ?? 'http://localhost:5173'), '/');
+  $setUrl = $appUrl . '/set-password?email=' . rawurlencode($email) . '&token=' . $token;
+  $emailSent = true;
+  try {
+    sendStaffInviteEmail($config, $email, $fullName, $setUrl, 'ArSpecialist');
+  } catch (Throwable $e) {
+    $emailSent = false;
+  }
+
+  sendJson(200, true, [
+    'userId'          => $userId,
+    'email'           => $email,
+    'fullName'        => $fullName,
     'inviteEmailSent' => $emailSent,
   ]);
 }
