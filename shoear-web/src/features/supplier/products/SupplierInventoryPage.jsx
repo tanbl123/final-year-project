@@ -89,6 +89,7 @@ function SupplierInventoryPage() {
   );
 
   const counts = useMemo(() => ({
+    products: new Set(rows.map((r) => r.productId)).size,   // rows are per-size, so dedupe
     sizes: rows.length,
     low: rows.filter((r) => r.stock > 0 && r.stock <= LOW_STOCK).length,
     out: rows.filter((r) => r.stock === 0).length,
@@ -182,7 +183,10 @@ function SupplierInventoryPage() {
       <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
         <div>
           <h1 className="mb-1">📦 Inventory</h1>
-          <p className="text-muted mb-0">Adjust stock for every size — changes apply instantly, no re-approval.</p>
+          <p className="text-muted mb-0">
+            Adjust stock for every size — changes apply instantly, no re-approval.
+            {!loading && rows.length > 0 && <> · <strong>{counts.products}</strong> {counts.products === 1 ? 'product' : 'products'}</>}
+          </p>
         </div>
         <Link to="/products" className="btn btn-outline-secondary">← Products</Link>
       </div>

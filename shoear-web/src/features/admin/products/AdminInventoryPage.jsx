@@ -62,7 +62,10 @@ function AdminInventoryPage() {
   return (
     <div className="container py-4 text-start">
       <h1 className="mb-1">📦 Product Inventory</h1>
-      <p className="text-muted">Stock levels across all suppliers (read-only).</p>
+      <p className="text-muted">
+        Stock levels across all suppliers (read-only).
+        {!loading && <> · <strong>{visibleRows.length}</strong> {visibleRows.length === 1 ? 'product' : 'products'}</>}
+      </p>
 
       {error && (
         <div className="alert alert-danger py-2 d-flex justify-content-between align-items-center">
