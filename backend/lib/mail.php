@@ -292,25 +292,26 @@ function sendPasswordResetCodeEmail(array $config, string $toEmail, string $code
 // (something they already know — so we never print a password in the email),
 // and they're forced to set their own on first login. This tells them their
 // username and how to sign in.
-function sendStaffWelcomeEmail(array $config, string $toEmail, string $fullName, string $username, string $role): void {
+function sendStaffWelcomeEmail(array $config, string $toEmail, string $fullName, string $username, string $tempPassword, string $role): void {
   $roleLabel = $role === 'ArSpecialist' ? 'AR Specialist' : $role;
   $subject   = 'Welcome to ShoeAR — your account is ready';
   $textBody =
     "An administrator has created a ShoeAR $roleLabel account for you. We are pleased to welcome you to the team.\n\n" .
     "To sign in, please visit the ShoeAR staff login page and use the following details:\n" .
     "  • Username: $username  (you may also sign in with this email address)\n" .
-    "  • Temporary password: your mobile phone number (the one registered for you)\n\n" .
+    "  • Temporary password: $tempPassword\n\n" .
     "For your security, you will be asked to choose your own password immediately after your first sign-in. " .
     "Once you have done so, the temporary password will no longer be valid.\n\n" .
     "If you did not expect this email, please contact your administrator.";
   $text = "Dear $fullName,\n\n$textBody\n\nYours sincerely,\nThe ShoeAR Team";
   $safeUser = htmlspecialchars($username, ENT_QUOTES);
+  $safePw   = htmlspecialchars($tempPassword, ENT_QUOTES);
   $bodyHtml =
     '<p>An administrator has created a ShoeAR <strong>' . htmlspecialchars($roleLabel, ENT_QUOTES) . '</strong> account for you. We are pleased to welcome you to the team.</p>' .
     '<p>To sign in, please visit the ShoeAR <strong>staff login</strong> page and use the following details:</p>' .
     '<ul>' .
     '<li><strong>Username:</strong> ' . $safeUser . ' &nbsp;(you may also sign in with this email address)</li>' .
-    '<li><strong>Temporary password:</strong> your mobile phone number (the one registered for you)</li>' .
+    '<li><strong>Temporary password:</strong> ' . $safePw . '</li>' .
     '</ul>' .
     '<p style="color:#666">For your security, you will be asked to choose your own password immediately after your ' .
     'first sign-in. Once you have done so, the temporary password will no longer be valid.</p>' .

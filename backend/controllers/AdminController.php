@@ -411,8 +411,10 @@ function handleCreateStaff(PDO $pdo, array $config): void {
   $userId   = nextId($pdo, 'user', 'userId', 'USR');
   $arsId    = nextId($pdo, 'ar_specialist', 'arSpecialistId', 'ARS');
   $username = generateStaffUsername($pdo, $fullName);
-  // Temporary password = the phone number as entered. mustChangePassword forces
-  // them to replace it on first login.
+  // Temporary password = the phone number EXACTLY as entered. We deliberately do
+  // NOT run normalizeMyPhone() here (unlike customer/supplier registration): the
+  // phone doubles as the temp password, so it must match what the specialist is
+  // told to type. Stored raw so display == what was entered == the password.
   $hash = password_hash($phone, PASSWORD_BCRYPT);
 
   $pdo->beginTransaction();
@@ -435,7 +437,7 @@ function handleCreateStaff(PDO $pdo, array $config): void {
   // details on manually (username + "your phone number is the temp password").
   $emailSent = true;
   try {
-    sendStaffWelcomeEmail($config, $email, $fullName, $username, 'ArSpecialist');
+    sendStaffWelcomeEmail($config, $email, $fullName, $username, $phone, 'ArSpecialist');
   } catch (Throwable $e) {
     $emailSent = false;
   }
