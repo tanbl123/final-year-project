@@ -1,4 +1,4 @@
-import { apiGet, apiPost, getToken } from '../../../api/client';
+import { apiGet, apiPost, apiPatch, getToken } from '../../../api/client';
 
 // Carriers a supplier can pick when shipping a Standard (3PL) parcel.
 export const STANDARD_CARRIERS = ['J&T Express', 'Pos Laju', 'Ninja Van', 'DHL eCommerce', 'GDEX', 'City-Link', 'Other'];
@@ -17,6 +17,11 @@ export function bookStandardParcel(deliveryId) {
 // Resolves with { total, booked, failed }.
 export function shipAllPendingStandard() {
   return apiPost('/supplier/deliveries/ship-all-pending', {}, getToken());
+}
+
+// Turn the standing auto-ship preference on/off.
+export function setAutoShip(enabled) {
+  return apiPatch('/supplier/auto-ship', { enabled }, getToken());
 }
 
 // Mark a shipped Standard parcel as delivered.

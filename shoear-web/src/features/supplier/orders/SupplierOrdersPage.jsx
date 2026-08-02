@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { getSupplierOrders, shipAllPendingStandard } from './orderService';
+import { getSupplierOrders, shipAllPendingStandard, setAutoShip } from './orderService';
 import Pagination from '../../../components/Pagination';
 import SortableTh from '../../../components/SortableTh';
 import Toast from '../../../components/Toast';
@@ -30,6 +30,7 @@ function SupplierOrdersPage() {
   const [needsActionOnly, setNeedsActionOnly] = useState(false);
   const [toast, setToast] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [autoShip, setAutoShipState] = useState(false);   // standing auto-ship preference
 
   // pending Standard (3PL) parcels the supplier still has to ship — the bulk
   // "book & ship all" action targets exactly these
@@ -61,9 +62,23 @@ function SupplierOrdersPage() {
   function load() {
     setLoading(true);
     getSupplierOrders({ status })
-      .then((data) => setOrders(data.orders))
+      .then((data) => { setOrders(data.orders); setAutoShipState(!!data.autoShipStandard); })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+  }
+
+  // standing preference: auto-book & ship every new standard parcel
+  async function toggleAutoShip(next) {
+    setError('');
+    try {
+      await setAutoShip(next);
+      setAutoShipState(next);
+      setToast(next
+        ? 'Auto-ship on — new standard parcels will be booked & shipped automatically.'
+        : 'Auto-ship off.');
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   // one-click: auto-book & ship every pending Standard parcel via EasyParcel
@@ -94,12 +109,22 @@ function SupplierOrdersPage() {
           <h1 className="mb-1">🧾 Orders</h1>
           <p className="text-muted">Orders that include your products — showing your items and your share only.</p>
         </div>
-        {pendingStandardCount > 0 && (
-          <button className="btn btn-success" onClick={bulkShip} disabled={bulkBusy}
-            title="Auto-book a courier + tracking number for every pending standard parcel (via EasyParcel).">
-            {bulkBusy ? 'Booking…' : `📦 Book & ship all pending (${pendingStandardCount})`}
-          </button>
-        )}
+        <div className="d-flex flex-column align-items-end gap-2">
+          {pendingStandardCount > 0 && (
+            <button className="btn btn-success" onClick={bulkShip} disabled={bulkBusy}
+              title="Auto-book a courier + tracking number for every pending standard parcel (via EasyParcel).">
+              {bulkBusy ? 'Booking…' : `📦 Book & ship all pending (${pendingStandardCount})`}
+            </button>
+          )}
+          <div className="form-check form-switch mb-0">
+            <input className="form-check-input" type="checkbox" role="switch" id="autoShip"
+              checked={autoShip} onChange={(e) => toggleAutoShip(e.target.checked)} />
+            <label className="form-check-label small text-muted" htmlFor="autoShip"
+              title="When on, new standard (3PL) parcels are booked & shipped automatically via EasyParcel — no manual step.">
+              Auto-ship new standard orders
+            </label>
+          </div>
+        </div>
       </div>
 
       <Toast message={toast} onClose={() => setToast('')} />

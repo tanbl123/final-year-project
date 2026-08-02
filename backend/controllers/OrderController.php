@@ -109,7 +109,14 @@ function handleListSupplierOrders(PDO $pdo, array $auth): void {
     $r['supplierSubtotal'] = (float) $r['supplierSubtotal'];
   }
   unset($r);
-  sendJson(200, true, ['orders' => $rows]);
+
+  // the supplier's standing auto-ship preference, so the Orders page can show
+  // the toggle in the right state
+  $asStmt = $pdo->prepare('SELECT autoShipStandard FROM supplier WHERE supplierId = :id');
+  $asStmt->execute(['id' => $supplierId]);
+  $autoShip = (bool) $asStmt->fetchColumn();
+
+  sendJson(200, true, ['orders' => $rows, 'autoShipStandard' => $autoShip]);
 }
 
 // GET /supplier/orders/{orderId}  — one order in detail, limited to this

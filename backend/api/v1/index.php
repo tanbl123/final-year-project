@@ -1080,6 +1080,13 @@ if ($method === 'POST' && $path === '/supplier/deliveries/ship-all-pending') {
   handleShipAllPendingStandard($pdo, $config, $auth);
 }
 
+// supplier toggles the standing auto-ship preference
+if ($method === 'PATCH' && $path === '/supplier/auto-ship') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleSetAutoShip($pdo, $auth);
+}
+
 // supplier ships a Standard (3PL) parcel + records tracking, then marks delivered
 if ($method === 'POST' && preg_match('#^/supplier/deliveries/([^/]+)/ship$#', $path, $m)) {
   $auth = requireAuth($secret);

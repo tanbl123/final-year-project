@@ -128,6 +128,7 @@ CREATE TABLE supplier (
     taxNumber       VARCHAR(50)  NULL,                    -- SST / tax no. (optional)
     stripeAccountId VARCHAR(60)  NULL,                    -- Stripe Connect account (acct_...); bank details live in Stripe
     payoutsEnabled  TINYINT(1)   NOT NULL DEFAULT 0,      -- set once Stripe verifies payouts
+    autoShipStandard TINYINT(1)  NOT NULL DEFAULT 0,      -- auto-book & ship every new Standard (3PL) parcel via EasyParcel
     PRIMARY KEY (supplierId),
     UNIQUE KEY uq_supplier_user (userId),
     CONSTRAINT fk_supplier_user FOREIGN KEY (userId) REFERENCES `user`(userId)

@@ -220,6 +220,30 @@ function sweepStandardShipReminders(PDO $pdo, array $config): int {
   return $sent;
 }
 
+// Auto-book & ship pending Standard parcels for suppliers who turned ON the
+// standing auto-ship preference (hands-off). Uses the same EasyParcel booking as
+// the manual per-order / bulk actions. No-op if EasyParcel isn't configured.
+function sweepAutoShipStandard(PDO $pdo, array $config): int {
+  if (!function_exists('easyParcelEnabled') || !easyParcelEnabled($config)) { return 0; }
+  if (!function_exists('autoBookAndShipParcel')) { return 0; }
+  try {
+    $rows = $pdo->query(
+      "SELECT d.deliveryId, d.orderId
+         FROM delivery d
+         JOIN supplier s ON s.supplierId = d.supplierId
+        WHERE d.deliveryMethod = 'Standard' AND d.deliveryStatus = 'Pending'
+          AND s.autoShipStandard = 1"
+    )->fetchAll();
+  } catch (Throwable $e) {
+    return 0;
+  }
+  $booked = 0;
+  foreach ($rows as $r) {
+    if (autoBookAndShipParcel($pdo, $config, (string) $r['deliveryId'], (string) $r['orderId'])) { $booked++; }
+  }
+  return $booked;
+}
+
 // Run every time-based sweep. Returns per-sweep counts (handy for the demo).
 // Also tidies up expired unpaid orders (which notifies on auto-cancel).
 function runNotificationSweeps(PDO $pdo): array {
@@ -267,6 +291,7 @@ function sweepReloadRecommender(array $config): bool {
 function runAllSweeps(PDO $pdo, array $config): array {
   $result = runNotificationSweeps($pdo);
   $result['shipReminders'] = sweepStandardShipReminders($pdo, $config);   // needs $config for email
+  $result['autoShipped'] = sweepAutoShipStandard($pdo, $config);          // opted-in suppliers, EasyParcel
   if (function_exists('sweepCourierPayouts')) {
     $result['courierPayouts'] = sweepCourierPayouts($pdo, $config);
   }

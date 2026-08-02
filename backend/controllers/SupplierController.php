@@ -475,6 +475,29 @@ function handleShipStandardDelivery(PDO $pdo, array $config, array $auth, string
   ]);
 }
 
+// Auto-book one Standard parcel via EasyParcel and mark it shipped (notifying the
+// customer). Returns true on success; false if EasyParcel couldn't book it (the
+// parcel is left Pending). Shared by the manual bulk action and the auto-ship sweep.
+function autoBookAndShipParcel(PDO $pdo, array $config, string $deliveryId, string $orderId): bool {
+  try {
+    [$sender, $receiver, $parcel] = shipmentPartiesFor($pdo, $config, $deliveryId);
+    $b = easyParcelBook($pdo, $config, $sender, $receiver, $parcel);
+    if (!$b) { return false; }
+    $pdo->prepare(
+      "UPDATE delivery SET trackingCarrier = :c, trackingNumber = :t, deliveryStatus = 'OutForDelivery'
+        WHERE deliveryId = :id"
+    )->execute(['c' => $b['carrier'], 't' => $b['tracking'], 'id' => $deliveryId]);
+    if (function_exists('recomputeOrderStatus')) { recomputeOrderStatus($pdo, $orderId); }
+    if (function_exists('notifyOrderCustomer')) {
+      notifyOrderCustomer($pdo, $orderId, 'shipped', 'Your order has shipped 📦',
+        "Shipped via {$b['carrier']}. Tracking number: {$b['tracking']}.");
+    }
+    return true;
+  } catch (Throwable $e) {
+    return false;
+  }
+}
+
 // POST /supplier/deliveries/ship-all-pending — auto-book EVERY still-Pending
 // Standard parcel for this supplier in one go (EasyParcel). Any parcel that fails
 // to book is left Pending (the supplier can retry or ship it manually); the
@@ -495,26 +518,22 @@ function handleShipAllPendingStandard(PDO $pdo, array $config, array $auth): voi
 
   $booked = 0; $failed = 0;
   foreach ($rows as $r) {
-    try {
-      [$sender, $receiver, $parcel] = shipmentPartiesFor($pdo, $config, (string) $r['deliveryId']);
-      $b = easyParcelBook($pdo, $config, $sender, $receiver, $parcel);
-      if (!$b) { $failed++; continue; }
-      $pdo->prepare(
-        "UPDATE delivery SET trackingCarrier = :c, trackingNumber = :t, deliveryStatus = 'OutForDelivery'
-          WHERE deliveryId = :id"
-      )->execute(['c' => $b['carrier'], 't' => $b['tracking'], 'id' => $r['deliveryId']]);
-      if (function_exists('recomputeOrderStatus')) { recomputeOrderStatus($pdo, (string) $r['orderId']); }
-      if (function_exists('notifyOrderCustomer')) {
-        notifyOrderCustomer($pdo, (string) $r['orderId'], 'shipped', 'Your order has shipped 📦',
-          "Shipped via {$b['carrier']}. Tracking number: {$b['tracking']}.");
-      }
-      $booked++;
-    } catch (Throwable $e) {
-      $failed++;
-    }
+    if (autoBookAndShipParcel($pdo, $config, (string) $r['deliveryId'], (string) $r['orderId'])) { $booked++; }
+    else { $failed++; }
   }
 
   sendJson(200, true, ['total' => count($rows), 'booked' => $booked, 'failed' => $failed]);
+}
+
+// PATCH /supplier/auto-ship — turn the standing auto-ship preference on/off.
+// When on, a background sweep auto-books every new Standard parcel via EasyParcel.
+function handleSetAutoShip(PDO $pdo, array $auth): void {
+  $supplierId = requireSupplierId($pdo, $auth);
+  $body = getJsonBody();
+  $enabled = !empty($body['enabled']) ? 1 : 0;
+  $pdo->prepare('UPDATE supplier SET autoShipStandard = :v WHERE supplierId = :id')
+      ->execute(['v' => $enabled, 'id' => $supplierId]);
+  sendJson(200, true, ['autoShipStandard' => (bool) $enabled]);
 }
 
 // POST /supplier/deliveries/{deliveryId}/delivered — supplier confirms a shipped
