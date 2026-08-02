@@ -237,7 +237,7 @@ function AdminUsersPage() {
 
   // contextual actions per current status
   function renderActions(u) {
-    if (u.role === 'Admin') return <span className="text-muted">—</span>;
+    if (u.role === 'Admin') return null;   // admins have no row actions — just View
     const busy = busyId === u.userId;
     const btns = [];
     if (u.status === 'Pending') {
@@ -252,13 +252,15 @@ function AdminUsersPage() {
       btns.push(<button key="re" className="btn btn-success btn-sm" disabled={busy}
         onClick={() => changeStatus(u, 'Active')}>Reactivate</button>);
     }
-    if (u.pendingSetup && u.role === 'ArSpecialist' && u.status !== 'Deleted') {
-      btns.push(<button key="ri" className="btn btn-outline-primary btn-sm" disabled={busy}
-        onClick={() => openResend(u)}>Resend invite</button>);
-    }
+    // Delete stays on the primary line (consistent with every other row); the
+    // occasional Resend invite comes last so it wraps to a second line if needed.
     if (u.status !== 'Deleted') {
       btns.push(<button key="del" className="btn btn-outline-danger btn-sm" disabled={busy}
         onClick={() => askConfirm(u, 'Deleted', 'Delete')}>Delete</button>);
+    }
+    if (u.pendingSetup && u.role === 'ArSpecialist' && u.status !== 'Deleted') {
+      btns.push(<button key="ri" className="btn btn-outline-primary btn-sm" disabled={busy}
+        onClick={() => openResend(u)}>Resend invite</button>);
     }
     // return the buttons as siblings (not a nested flex) so they share the cell's
     // single flex-wrap row with the View button instead of stacking beneath it
