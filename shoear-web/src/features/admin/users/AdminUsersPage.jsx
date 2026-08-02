@@ -18,7 +18,7 @@ const STATUS_COLORS = {
 };
 const roleLabel = (r) => (r === 'DeliveryPersonnel' ? 'Delivery' : r === 'ArSpecialist' ? 'AR Specialist' : r);
 
-const EMPTY_STAFF = { username: '', fullName: '', email: '', password: '' };
+const EMPTY_STAFF = { username: '', fullName: '', email: '' };  // no password — set by the staff member via emailed invite
 
 function AdminUsersPage() {
   const [users, setUsers] = useState([]);
@@ -103,7 +103,9 @@ function AdminUsersPage() {
     try {
       const created = await createStaff(createForm);
       setCreateForm(null);
-      setToast(`AR Specialist “${created.fullName}” created.`);
+      setToast(created.inviteEmailSent === false
+        ? `AR Specialist “${created.fullName}” created, but the invite email failed to send — ask them to use “Forgot password” to set their password.`
+        : `AR Specialist “${created.fullName}” created — an email was sent inviting them to set their password.`);
       load();
     } catch (err) {
       setCreateErr(err.message || 'Could not create the account.');
@@ -326,8 +328,9 @@ function AdminUsersPage() {
               </div>
               <div className="modal-body">
                 <p className="text-muted small">
-                  Creates an active internal-staff account. They sign in at the staff login and
-                  land in the AR queue. Share the password with them to change after first login.
+                  Creates an active internal-staff account. They'll get an email inviting them to
+                  set their own password (via “Forgot password”), then sign in at the staff login
+                  and land in the AR queue. You never see or set their password.
                 </p>
                 {createErr && <div className="alert alert-danger py-2">{createErr}</div>}
                 <div className="mb-2">
@@ -340,16 +343,11 @@ function AdminUsersPage() {
                   <input className="form-control" value={createForm.username} required
                     onChange={(e) => setCreateForm((f) => ({ ...f, username: e.target.value }))} />
                 </div>
-                <div className="mb-2">
+                <div className="mb-1">
                   <label className="form-label small mb-1">Email</label>
                   <input type="email" className="form-control" value={createForm.email} required
                     onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))} />
-                </div>
-                <div className="mb-1">
-                  <label className="form-label small mb-1">Temporary password</label>
-                  <input type="text" className="form-control" value={createForm.password} required minLength={8}
-                    onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))} />
-                  <div className="form-text">At least 8 characters.</div>
+                  <div className="form-text">A real inbox — the set-password invite is sent here.</div>
                 </div>
               </div>
               <div className="modal-footer">

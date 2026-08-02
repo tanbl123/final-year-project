@@ -287,6 +287,36 @@ function sendPasswordResetCodeEmail(array $config, string $toEmail, string $code
   sendMail($config, $toEmail, '', $subject, $text, $html);
 }
 
+// Sent when an admin provisions a new internal-staff account (e.g. an AR
+// Specialist). The account exists but has no password the admin knows — the
+// staff member sets their own via the "Forgot password" flow, so nothing
+// sensitive is ever emailed. This welcomes them and points the way.
+function sendStaffWelcomeEmail(array $config, string $toEmail, string $fullName, string $role): void {
+  $roleLabel = $role === 'ArSpecialist' ? 'AR Specialist' : $role;
+  $subject   = 'Welcome to ShoeAR — set your password';
+  $text =
+    "An administrator has created a ShoeAR $roleLabel account for you, using this email address.\n\n" .
+    "To set your password and sign in:\n" .
+    "  1. Go to the ShoeAR staff login page.\n" .
+    "  2. Click \"Forgot password\".\n" .
+    "  3. Enter this email address ($toEmail) — you'll receive a 6-digit code.\n" .
+    "  4. Enter the code and choose your own password.\n\n" .
+    "For your security, the administrator does not know your password — only you will.";
+  $safeEmail = htmlspecialchars($toEmail, ENT_QUOTES);
+  $bodyHtml =
+    '<p>An administrator has created a ShoeAR <strong>' . htmlspecialchars($roleLabel, ENT_QUOTES) . '</strong> account for you, using this email address.</p>' .
+    '<p>To set your password and sign in:</p>' .
+    '<ol>' .
+    '<li>Go to the ShoeAR <strong>staff login</strong> page.</li>' .
+    '<li>Click <strong>“Forgot password”</strong>.</li>' .
+    '<li>Enter this email address (<strong>' . $safeEmail . '</strong>) — you\'ll receive a 6-digit code.</li>' .
+    '<li>Enter the code and choose your own password.</li>' .
+    '</ol>' .
+    '<p style="color:#666">For your security, the administrator does not know your password — only you will.</p>';
+  $html = formalLetterHtml($fullName, $bodyHtml, '👟 ShoeAR');
+  sendMail($config, $toEmail, $fullName, $subject, $text, $html);
+}
+
 // Sent when someone tries to REGISTER with an email that already has an
 // account. We never tell the browser the email exists (anti-enumeration); the
 // heads-up goes only to the real inbox owner.

@@ -946,7 +946,7 @@ if ($method === 'POST' && $path === '/admin/staff') {
   $auth = requireAuth($secret);
   requireAdmin($auth);
   $pdo  = getPDO();
-  handleCreateStaff($pdo);
+  handleCreateStaff($pdo, $config);
 }
 
 // ── admin delivery dispatch (require an Admin token) ──

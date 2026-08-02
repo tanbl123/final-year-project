@@ -348,13 +348,17 @@ function handleSetUserStatus(PDO $pdo, array $auth, string $userId): void {
 // POST /admin/staff — an admin provisions an internal-staff account. There is no
 // public sign-up for staff (admins are seeded, suppliers self-register), so this
 // is the only creation path. Currently the sole staff role is AR Specialist.
-// Body: { username, email, fullName, password, role? }.
-function handleCreateStaff(PDO $pdo): void {
+// Body: { username, email, fullName, role? }.
+//
+// The admin does NOT set a password: the account is created with a random,
+// unusable one, and the staff member sets their OWN password via the emailed
+// invite ("Forgot password" flow). So nothing sensitive is ever emailed and the
+// admin never knows the password.
+function handleCreateStaff(PDO $pdo, array $config): void {
   $body     = getJsonBody();
   $username = trim($body['username'] ?? '');
   $email    = trim($body['email'] ?? '');
   $fullName = trim($body['fullName'] ?? '');
-  $password = (string) ($body['password'] ?? '');
   $role     = trim($body['role'] ?? 'ArSpecialist');
 
   // Only AR Specialist is provisionable here for now (guard against creating
@@ -368,8 +372,11 @@ function handleCreateStaff(PDO $pdo): void {
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid email is required.']);
   }
-  if (strlen($password) < 8) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Password must be at least 8 characters.']);
+  // The staff member sets their own password via an emailed invite, so email
+  // must be configured — otherwise we'd create an account nobody can sign into.
+  if (!mailConfigured($config)) {
+    sendJson(503, false, null, ['code' => 'MAIL_NOT_CONFIGURED',
+      'message' => 'Email sending is not configured, so the set-password invite cannot be sent. Configure SMTP before adding staff.']);
   }
 
   // username/email must be unique (same constraint as registration)
@@ -381,7 +388,9 @@ function handleCreateStaff(PDO $pdo): void {
 
   $userId = nextId($pdo, 'user', 'userId', 'USR');
   $arsId  = nextId($pdo, 'ar_specialist', 'arSpecialistId', 'ARS');
-  $hash   = password_hash($password, PASSWORD_BCRYPT);
+  // Random, unusable password — no one (not even the admin) knows it. The staff
+  // member replaces it with their own via the "Forgot password" invite below.
+  $hash   = password_hash(bin2hex(random_bytes(18)), PASSWORD_BCRYPT);
 
   $pdo->beginTransaction();
   try {
@@ -398,14 +407,25 @@ function handleCreateStaff(PDO $pdo): void {
     sendJson(500, false, null, ['code' => 'CREATE_FAILED', 'message' => 'Could not create the staff account.']);
   }
 
+  // Send the set-password invite. The account already exists, so if the email
+  // fails we don't roll back — we tell the admin so they can have the staff
+  // member use "Forgot password" manually.
+  $emailSent = true;
+  try {
+    sendStaffWelcomeEmail($config, $email, $fullName, 'ArSpecialist');
+  } catch (Throwable $e) {
+    $emailSent = false;
+  }
+
   sendJson(201, true, [
-    'userId'         => $userId,
-    'arSpecialistId' => $arsId,
-    'username'       => $username,
-    'email'          => $email,
-    'fullName'       => $fullName,
-    'role'           => 'ArSpecialist',
-    'status'         => 'Active',
+    'userId'          => $userId,
+    'arSpecialistId'  => $arsId,
+    'username'        => $username,
+    'email'           => $email,
+    'fullName'        => $fullName,
+    'role'            => 'ArSpecialist',
+    'status'          => 'Active',
+    'inviteEmailSent' => $emailSent,
   ]);
 }
 

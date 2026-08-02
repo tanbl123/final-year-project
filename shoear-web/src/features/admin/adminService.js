@@ -95,9 +95,11 @@ export function getArQueue() {
 }
 
 // Admin provisions an internal-staff account (currently AR Specialist only).
-// { username, email, fullName, password } → the created account.
-export function createStaff({ username, email, fullName, password, role = 'ArSpecialist' }) {
-  return apiPost('/admin/staff', { username, email, fullName, password, role }, getToken());
+// No password is set here — the staff member receives an email inviting them to
+// set their own via "Forgot password". { username, email, fullName } → the
+// created account (with inviteEmailSent).
+export function createStaff({ username, email, fullName, role = 'ArSpecialist' }) {
+  return apiPost('/admin/staff', { username, email, fullName, role }, getToken());
 }
 
 // Full product detail (images, description, sizes, 3D model) for review before
