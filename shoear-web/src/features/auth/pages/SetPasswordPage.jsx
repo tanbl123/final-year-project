@@ -53,13 +53,54 @@ function SetPasswordPage() {
     );
   }
 
+  // Validate one field against the latest values (same rules as submit).
+  function pwFieldError(name, pw, cf) {
+    if (name === 'password') return validatePassword(pw);
+    if (name === 'confirm') {
+      if (cf === '') return 'Please confirm your password.';
+      if (pw !== cf) return 'Passwords do not match.';
+    }
+    return '';
+  }
+
+  // Live validation on every keystroke: an empty field doesn't show "required"
+  // while typing (that's only enforced on submit); password & confirm are linked
+  // so confirm re-checks when the password changes.
+  function handleChange(name, val) {
+    const nextPw = name === 'password' ? val : password;
+    const nextCf = name === 'confirm' ? val : confirm;
+    if (name === 'password') setPassword(val); else setConfirm(val);
+    setFormError('');
+    setErrors((prev) => {
+      const next = { ...prev };
+      const msg = val === '' ? '' : pwFieldError(name, nextPw, nextCf);
+      if (msg) next[name] = msg; else delete next[name];
+      if (name === 'password' && nextCf !== '') {
+        const cm = pwFieldError('confirm', nextPw, nextCf);
+        if (cm) next.confirm = cm; else delete next.confirm;
+      }
+      return next;
+    });
+  }
+
+  // Validate a field when the user leaves it (catches the empty case too).
+  function handleBlur(name) {
+    setErrors((prev) => {
+      const next = { ...prev };
+      const msg = pwFieldError(name, password, confirm);
+      if (msg) next[name] = msg; else delete next[name];
+      return next;
+    });
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setFormError('');
     const errs = {};
-    const pwMsg = validatePassword(password);
+    const pwMsg = pwFieldError('password', password, confirm);
     if (pwMsg) errs.password = pwMsg;
-    if (confirm !== password) errs.confirm = 'Passwords do not match.';
+    const cfMsg = pwFieldError('confirm', password, confirm);
+    if (cfMsg) errs.confirm = cfMsg;
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setErrors({});
 
@@ -95,7 +136,8 @@ function SetPasswordPage() {
             <div className="input-group has-validation">
               <input type={shown.password ? 'text' : 'password'}
                 className={`form-control ${errors.password ? 'is-invalid' : ''}`}
-                value={password} onChange={(e) => setPassword(e.target.value)}
+                value={password} onChange={(e) => handleChange('password', e.target.value)}
+                onBlur={() => handleBlur('password')}
                 autoComplete="new-password" style={{ backgroundImage: 'none' }} />
               <button type="button" className="btn btn-outline-secondary d-flex align-items-center"
                 onClick={() => toggleShown('password')} tabIndex={-1}
@@ -111,7 +153,8 @@ function SetPasswordPage() {
             <div className="input-group has-validation">
               <input type={shown.confirm ? 'text' : 'password'}
                 className={`form-control ${errors.confirm ? 'is-invalid' : ''}`}
-                value={confirm} onChange={(e) => setConfirm(e.target.value)}
+                value={confirm} onChange={(e) => handleChange('confirm', e.target.value)}
+                onBlur={() => handleBlur('confirm')}
                 autoComplete="new-password" style={{ backgroundImage: 'none' }} />
               <button type="button" className="btn btn-outline-secondary d-flex align-items-center"
                 onClick={() => toggleShown('confirm')} tabIndex={-1}
