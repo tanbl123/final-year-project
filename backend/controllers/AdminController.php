@@ -365,18 +365,17 @@ function generateStaffUsername(PDO $pdo, string $fullName): string {
 // POST /admin/staff — an admin provisions an internal-staff account. There is no
 // public sign-up for staff (admins are seeded, suppliers self-register), so this
 // is the only creation path. Currently the sole staff role is AR Specialist.
-// Body: { fullName, email, phoneNumber, role? }.
+// Body: { fullName, email, role? }.
 //
-// The admin does NOT choose a username or a lasting password: the SYSTEM
-// generates the username, and the temporary password is the staff member's own
-// phone number (something they already know — so we never print a password in
-// the email). The account is flagged mustChangePassword, so on first login they
-// must set their own password and the admin-known temporary value stops working.
+// No credential is ever emailed. The account is created with a random, unusable
+// password; we email a ONE-TIME set-password LINK (a 48h token) and the staff
+// member chooses their own password before they can sign in. The SYSTEM also
+// generates the username (login is by email). So nothing sensitive is exposed
+// in the email and the admin never knows the password.
 function handleCreateStaff(PDO $pdo, array $config): void {
   $body     = getJsonBody();
   $email    = trim($body['email'] ?? '');
   $fullName = trim($body['fullName'] ?? '');
-  $phone    = trim($body['phoneNumber'] ?? '');
   $role     = trim($body['role'] ?? 'ArSpecialist');
 
   // Only AR Specialist is provisionable here for now (guard against creating
@@ -390,15 +389,10 @@ function handleCreateStaff(PDO $pdo, array $config): void {
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid email is required.']);
   }
-  // Same Malaysian phone pattern the customer app uses (local "0…" or "+60…").
-  // (It also serves as the temporary password.)
-  if (!preg_match('/^(0\d{8,10}|\+?60\d{8,10})$/', $phone)) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid Malaysian phone number is required.']);
-  }
-  // We email the sign-in instructions, so email must be configured.
+  // We email the set-password link, so email must be configured.
   if (!mailConfigured($config)) {
     sendJson(503, false, null, ['code' => 'MAIL_NOT_CONFIGURED',
-      'message' => 'Email sending is not configured, so the welcome email cannot be sent. Configure SMTP before adding staff.']);
+      'message' => 'Email sending is not configured, so the set-password invite cannot be sent. Configure SMTP before adding staff.']);
   }
 
   // email must be unique (username is generated, so it can't collide)
@@ -411,33 +405,39 @@ function handleCreateStaff(PDO $pdo, array $config): void {
   $userId   = nextId($pdo, 'user', 'userId', 'USR');
   $arsId    = nextId($pdo, 'ar_specialist', 'arSpecialistId', 'ARS');
   $username = generateStaffUsername($pdo, $fullName);
-  // Temporary password = the phone number EXACTLY as entered. We deliberately do
-  // NOT run normalizeMyPhone() here (unlike customer/supplier registration): the
-  // phone doubles as the temp password, so it must match what the specialist is
-  // told to type. Stored raw so display == what was entered == the password.
-  $hash = password_hash($phone, PASSWORD_BCRYPT);
+  // Random, unusable password — nobody knows it. The staff member sets their own
+  // via the emailed one-time link before they can sign in.
+  $hash  = password_hash(bin2hex(random_bytes(18)), PASSWORD_BCRYPT);
+  // One-time set-password token (unguessable). We store only its hash; the raw
+  // token travels only in the emailed link. Reuse the password_reset store.
+  $token = bin2hex(random_bytes(32));
 
   $pdo->beginTransaction();
   try {
+    // Store the token HASH + a 48h expiry on the user row (isolated from the
+    // forgot-password flow); the raw token travels only in the emailed link.
     $pdo->prepare(
-      "INSERT INTO `user` (userId, username, password, email, fullName, phoneNumber, role, status, mustChangePassword)
-       VALUES (:id, :u, :pw, :e, :fn, :ph, 'ArSpecialist', 'Active', 1)"
-    )->execute(['id' => $userId, 'u' => $username, 'pw' => $hash, 'e' => $email, 'fn' => $fullName, 'ph' => $phone]);
+      "INSERT INTO `user` (userId, username, password, email, fullName, role, status, setPasswordToken, setPasswordExpires)
+       VALUES (:id, :u, :pw, :e, :fn, 'ArSpecialist', 'Active', :tok, DATE_ADD(NOW(), INTERVAL 48 HOUR))"
+    )->execute(['id' => $userId, 'u' => $username, 'pw' => $hash, 'e' => $email, 'fn' => $fullName,
+                'tok' => password_hash($token, PASSWORD_BCRYPT)]);
 
     $pdo->prepare('INSERT INTO ar_specialist (arSpecialistId, userId) VALUES (:aid, :uid)')
         ->execute(['aid' => $arsId, 'uid' => $userId]);
+
     $pdo->commit();
   } catch (Throwable $e) {
     $pdo->rollBack();
     sendJson(500, false, null, ['code' => 'CREATE_FAILED', 'message' => 'Could not create the staff account.']);
   }
 
-  // Send the welcome/sign-in email. The account already exists, so if the email
-  // fails we don't roll back — we tell the admin so they can pass the sign-in
-  // details on manually (username + "your phone number is the temp password").
+  // Build the set-password link (frontend route) and email it. No credential is
+  // included. If the email fails, the account still exists — tell the admin.
+  $appUrl  = rtrim((string) ($config['app_url'] ?? 'http://localhost:5173'), '/');
+  $setUrl  = $appUrl . '/set-password?email=' . rawurlencode($email) . '&token=' . $token;
   $emailSent = true;
   try {
-    sendStaffWelcomeEmail($config, $email, $fullName, $username, $phone, 'ArSpecialist');
+    sendStaffInviteEmail($config, $email, $fullName, $setUrl, 'ArSpecialist');
   } catch (Throwable $e) {
     $emailSent = false;
   }

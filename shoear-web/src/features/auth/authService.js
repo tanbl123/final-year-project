@@ -121,3 +121,9 @@ export function updateMe(data) {
 export function changePassword(currentPassword, newPassword) {
   return apiPost('/auth/change-password', { currentPassword, newPassword }, getToken());
 }
+
+// Set a password from a one-time staff-invite link (POST /auth/set-password).
+// No auth token — the email+token from the link authorise it. Resolves { message }.
+export function setPasswordWithToken(email, token, newPassword) {
+  return apiPost('/auth/set-password', { email, token, newPassword });
+}

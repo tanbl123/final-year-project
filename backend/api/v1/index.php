@@ -449,6 +449,12 @@ if ($method === 'POST' && $path === '/auth/reset-password') {
   handleResetPassword($pdo);
 }
 
+// consume a one-time staff-invite token and set the account's password (public)
+if ($method === 'POST' && $path === '/auth/set-password') {
+  $pdo = getPDO();
+  handleSetPasswordWithToken($pdo);
+}
+
 // live username availability for the sign-up / profile forms (public)
 if ($method === 'GET' && $path === '/auth/username-available') {
   $pdo = getPDO();

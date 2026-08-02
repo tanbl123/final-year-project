@@ -18,16 +18,12 @@ const STATUS_COLORS = {
 };
 const roleLabel = (r) => (r === 'DeliveryPersonnel' ? 'Delivery' : r === 'ArSpecialist' ? 'AR Specialist' : r);
 
-const EMPTY_STAFF = { fullName: '', email: '', phone: '' };  // username auto-generated; phone is the temp password
+const EMPTY_STAFF = { fullName: '', email: '' };  // username auto-generated; password set by the staff member via link
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-// Same Malaysian phone pattern the customer app uses (edit_profile_screen.dart):
-// local "0…" or international "+60…" (E.164). Kept in sync for consistency.
-const PHONE_RE = /^(0\d{8,10}|\+?60\d{8,10})$/;
 const NAME_MAX = 120;                       // user.fullName VARCHAR(120)
 
-// Inline per-field validation for the Add-AR-Specialist form. Name (non-empty,
-// max length), a well-formed email, and a valid Malaysian phone number.
-// Returns an error string, or '' when the field is valid.
+// Inline per-field validation for the Add-AR-Specialist form: a name (non-empty,
+// max length) and a well-formed email. Returns an error string, or '' when valid.
 function staffFieldError(name, value) {
   const v = (value || '').trim();
   if (name === 'fullName') {
@@ -39,15 +35,11 @@ function staffFieldError(name, value) {
     if (v === '') return 'Email is required.';
     return EMAIL_RE.test(v) ? '' : 'Please enter a valid email address.';
   }
-  if (name === 'phone') {
-    if (v === '') return 'Phone number is required.';
-    return PHONE_RE.test(v) ? '' : 'Enter a valid Malaysian phone number, e.g. 0123456789.';
-  }
   return '';
 }
 function validateStaff(form) {
   const errs = {};
-  ['fullName', 'email', 'phone'].forEach((k) => {
+  ['fullName', 'email'].forEach((k) => {
     const msg = staffFieldError(k, form[k]);
     if (msg) errs[k] = msg;
   });
@@ -167,8 +159,8 @@ function AdminUsersPage() {
       const created = await createStaff(createForm);
       setCreateForm(null);
       setToast(created.inviteEmailSent === false
-        ? `AR Specialist “${created.fullName}” created (username ${created.username}), but the welcome email failed — tell them to sign in with their phone number as the temporary password.`
-        : `AR Specialist “${created.fullName}” created — a welcome email with sign-in details was sent (username ${created.username}).`);
+        ? `AR Specialist “${created.fullName}” created, but the invite email failed to send — the set-password link couldn't be delivered. Check email settings and try again.`
+        : `AR Specialist “${created.fullName}” created — a set-password link was emailed to ${created.email}.`);
       load();
     } catch (err) {
       setCreateErr(err.message || 'Could not create the account.');
@@ -391,9 +383,9 @@ function AdminUsersPage() {
               </div>
               <div className="modal-body">
                 <p className="text-muted small">
-                  Creates an active internal-staff account. The system generates their username and
-                  emails their sign-in details to the address below; they set their own password on
-                  first login.
+                  Creates an active internal-staff account. The system generates their username, and
+                  a secure one-time link to set their own password is emailed to the address below.
+                  They then sign in with their email. You never see or set their password.
                 </p>
                 {createErr && <div className="alert alert-danger py-2">{createErr}</div>}
                 <div className="mb-2">
@@ -404,21 +396,13 @@ function AdminUsersPage() {
                     onBlur={() => blurStaffField('fullName')} />
                   {staffErrors.fullName && <div className="invalid-feedback d-block">{staffErrors.fullName}</div>}
                 </div>
-                <div className="mb-2">
+                <div className="mb-1">
                   <label className="form-label small mb-1">Email</label>
                   <input type="email" className={`form-control ${staffErrors.email ? 'is-invalid' : ''}`}
                     value={createForm.email}
                     onChange={(e) => setStaffField('email', e.target.value)}
                     onBlur={() => blurStaffField('email')} />
                   {staffErrors.email && <div className="invalid-feedback d-block">{staffErrors.email}</div>}
-                </div>
-                <div className="mb-1">
-                  <label className="form-label small mb-1">Phone number</label>
-                  <input type="tel" className={`form-control ${staffErrors.phone ? 'is-invalid' : ''}`}
-                    value={createForm.phone}
-                    onChange={(e) => setStaffField('phone', e.target.value)}
-                    onBlur={() => blurStaffField('phone')} />
-                  {staffErrors.phone && <div className="invalid-feedback d-block">{staffErrors.phone}</div>}
                 </div>
               </div>
               <div className="modal-footer">

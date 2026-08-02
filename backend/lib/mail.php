@@ -288,34 +288,29 @@ function sendPasswordResetCodeEmail(array $config, string $toEmail, string $code
 }
 
 // Sent when an admin provisions a new internal-staff account (e.g. an AR
-// Specialist). The temporary password is the staff member's own phone number
-// (something they already know — so we never print a password in the email),
-// and they're forced to set their own on first login. This tells them their
-// username and how to sign in.
-function sendStaffWelcomeEmail(array $config, string $toEmail, string $fullName, string $username, string $tempPassword, string $role): void {
+// Specialist). Contains NO credentials — just a one-time link to set their own
+// password. Nothing sensitive is emailed, so nothing can be exposed. After
+// setting a password they sign in with their email address.
+function sendStaffInviteEmail(array $config, string $toEmail, string $fullName, string $setPasswordUrl, string $role): void {
   $roleLabel = $role === 'ArSpecialist' ? 'AR Specialist' : $role;
-  $subject   = 'Welcome to ShoeAR — your account is ready';
+  $subject   = 'Welcome to ShoeAR — set your password';
   $textBody =
     "An administrator has created a ShoeAR $roleLabel account for you. We are pleased to welcome you to the team.\n\n" .
-    "To sign in, please visit the ShoeAR staff login page and use the following details:\n" .
-    "  • Username: $username  (you may also sign in with this email address)\n" .
-    "  • Temporary password: $tempPassword\n\n" .
-    "For your security, you will be asked to choose your own password immediately after your first sign-in. " .
-    "Once you have done so, the temporary password will no longer be valid.\n\n" .
-    "If you did not expect this email, please contact your administrator.";
+    "To get started, please set your password using the secure link below (valid for 48 hours):\n" .
+    "$setPasswordUrl\n\n" .
+    "After setting your password, sign in at the ShoeAR staff login page using this email address.\n\n" .
+    "If you did not expect this email, you can safely ignore it.";
   $text = "Dear $fullName,\n\n$textBody\n\nYours sincerely,\nThe ShoeAR Team";
-  $safeUser = htmlspecialchars($username, ENT_QUOTES);
-  $safePw   = htmlspecialchars($tempPassword, ENT_QUOTES);
+  $safeUrl = htmlspecialchars($setPasswordUrl, ENT_QUOTES);
   $bodyHtml =
     '<p>An administrator has created a ShoeAR <strong>' . htmlspecialchars($roleLabel, ENT_QUOTES) . '</strong> account for you. We are pleased to welcome you to the team.</p>' .
-    '<p>To sign in, please visit the ShoeAR <strong>staff login</strong> page and use the following details:</p>' .
-    '<ul>' .
-    '<li><strong>Username:</strong> ' . $safeUser . ' &nbsp;(you may also sign in with this email address)</li>' .
-    '<li><strong>Temporary password:</strong> ' . $safePw . '</li>' .
-    '</ul>' .
-    '<p style="color:#666">For your security, you will be asked to choose your own password immediately after your ' .
-    'first sign-in. Once you have done so, the temporary password will no longer be valid.</p>' .
-    '<p style="color:#666">If you did not expect this email, please contact your administrator.</p>';
+    '<p>To get started, please set your password using the secure button below (valid for 48 hours):</p>' .
+    '<p style="margin:20px 0">' .
+    '<a href="' . $safeUrl . '" style="background:#4f46e5;color:#fff;text-decoration:none;padding:11px 20px;border-radius:6px;font-weight:bold;display:inline-block">Set your password</a>' .
+    '</p>' .
+    '<p style="color:#666;font-size:13px">Or copy this link into your browser:<br>' . $safeUrl . '</p>' .
+    '<p>After setting your password, sign in at the ShoeAR <strong>staff login</strong> page using this email address.</p>' .
+    '<p style="color:#666">If you did not expect this email, you can safely ignore it.</p>';
   $html = formalLetterHtml($fullName, $bodyHtml, '👟 ShoeAR');
   sendMail($config, $toEmail, $fullName, $subject, $text, $html);
 }

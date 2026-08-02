@@ -1,6 +1,6 @@
 import {
   createBrowserRouter, createRoutesFromElements, RouterProvider,
-  Route, Outlet, Link, Navigate, useNavigate, useLocation,
+  Route, Outlet, Link, Navigate, useNavigate,
 } from 'react-router-dom';
 import { useAuth } from './features/auth/AuthContext';
 import ProductsPage from './features/supplier/products/ProductsPage';
@@ -51,7 +51,6 @@ import { useState } from 'react';
 function Layout() {
   const { user, logout } = useAuth();   // 👈 tune in to the auth broadcast
   const navigate = useNavigate();
-  const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
 
   function handleLogout() {
@@ -89,16 +88,6 @@ function Layout() {
 
   // login / register pages are full-screen on their own (no app shell)
   if (!user) {
-    return <Outlet />;
-  }
-
-  // A user provisioned with a temporary password must set their own before
-  // reaching anything else — lock them onto the set-password screen (also shown
-  // full-screen, no app shell) until the flag clears.
-  if (user.mustChangePassword && location.pathname !== '/set-password') {
-    return <Navigate to="/set-password" replace />;
-  }
-  if (user.mustChangePassword) {
     return <Outlet />;
   }
 
@@ -155,10 +144,8 @@ const router = createBrowserRouter(
       <Route path="/admin/login" element={<LoginPage variant="admin" />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      {/* forced first-login password change (staff temp password → own) */}
-      <Route path="/set-password" element={
-        <ProtectedRoute><SetPasswordPage /></ProtectedRoute>
-      } />
+      {/* public one-time set-password page (staff invite link) */}
+      <Route path="/set-password" element={<SetPasswordPage />} />
 
       {/* rejected suppliers fix & resubmit their application here */}
       <Route path="/resubmit" element={

@@ -1375,6 +1375,51 @@ function handleResetPassword(PDO $pdo): void {
   sendJson(200, true, ['message' => 'Your password has been reset. You can now log in.']);
 }
 
+// POST /auth/set-password — consume a one-time staff-invite token (from the
+// emailed set-password link) and set the account's password. Body:
+// { email, token, newPassword }. The token is long and unguessable and is stored
+// hashed on the user row (setPasswordToken); this is separate from the
+// forgot-password code flow, so there's no short-code to brute-force here.
+function handleSetPasswordWithToken(PDO $pdo): void {
+  $body  = getJsonBody();
+  $email = trim($body['email'] ?? '');
+  $token = trim($body['token'] ?? '');
+  $new   = (string) ($body['newPassword'] ?? '');
+
+  if ($email === '' || $token === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'This set-password link is invalid or incomplete.']);
+  }
+  $pwErr = passwordPolicyError($new);
+  if ($pwErr) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => $pwErr]);
+  }
+
+  $stmt = $pdo->prepare(
+    'SELECT userId, setPasswordToken, (setPasswordExpires < NOW()) AS expired
+       FROM `user` WHERE email = :e'
+  );
+  $stmt->execute(['e' => $email]);
+  $row = $stmt->fetch();
+  if (!$row || empty($row['setPasswordToken']) || !password_verify($token, $row['setPasswordToken'])) {
+    sendJson(400, false, null, ['code' => 'BAD_TOKEN',
+      'message' => 'This set-password link is invalid. Please ask your administrator to resend it.']);
+  }
+  if ((int) $row['expired'] === 1) {
+    sendJson(400, false, null, ['code' => 'TOKEN_EXPIRED',
+      'message' => 'This set-password link has expired. Please ask your administrator to resend it.']);
+  }
+
+  // Set the password and consume the token (clear it + the expiry).
+  $hash = password_hash($new, PASSWORD_BCRYPT);
+  $pdo->prepare(
+    'UPDATE `user`
+        SET password = :p, mustChangePassword = 0, setPasswordToken = NULL, setPasswordExpires = NULL
+      WHERE userId = :id'
+  )->execute(['p' => $hash, 'id' => $row['userId']]);
+
+  sendJson(200, true, ['message' => 'Your password has been set. You can now sign in.']);
+}
+
 // PATCH /auth/me/phone — set or update the phone number. Used at checkout for
 // Google Sign-In customers who haven't provided a phone number yet.
 function handleUpdateName(PDO $pdo, array $auth): void {
