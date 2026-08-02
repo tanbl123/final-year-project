@@ -67,9 +67,9 @@ function ArDashboardPage() {
           <div className="row g-3 mb-4">
             <Stat label="Awaiting preparation" value={stats.awaiting} tone="warning"
               hint="Try-on products with no lens yet" />
-            <Stat label="Prepared this week" value={stats.preparedThisWeek} tone="success"
+            <Stat label="Completed this week" value={stats.preparedThisWeek} tone="success"
               hint="AR-ready in the last 7 days" />
-            <Stat label="Prepared (all time)" value={stats.prepared} tone="primary"
+            <Stat label="Completed (all time)" value={stats.prepared} tone="primary"
               hint="Total products made AR-ready" />
           </div>
 
@@ -106,11 +106,11 @@ function ArDashboardPage() {
               </div>
             </div>
 
-            {/* Recently prepared — recent activity */}
+            {/* Recently completed — recent activity */}
             <div className="col-lg-6">
               <div className="card h-100">
                 <div className="card-header d-flex justify-content-between align-items-center">
-                  <span className="fw-semibold">Recently prepared</span>
+                  <span className="fw-semibold">Recently completed</span>
                   <Link to="/ar/completed" className="btn btn-sm btn-outline-secondary">View all</Link>
                 </div>
                 <div className="list-group list-group-flush">
