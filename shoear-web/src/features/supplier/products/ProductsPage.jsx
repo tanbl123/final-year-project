@@ -8,8 +8,9 @@ import Pagination from '../../../components/Pagination';
 import { usePagination } from '../../../hooks/usePagination';
 import { fetchProducts, deleteProduct } from './productService';
 import { usePayoutBlocked } from '../usePayoutBlocked';
+import { matchesArFilter } from '../../../utils/arFilter';
 
-const FILTER_KEYS = ['name', 'brand', 'maxPrice', 'categoryId', 'status'];
+const FILTER_KEYS = ['name', 'brand', 'maxPrice', 'categoryId', 'status', 'ar'];
 const PAGE_SIZE = 12;
 
 function ProductsPage() {
@@ -27,6 +28,7 @@ function ProductsPage() {
     maxPrice: searchParams.get('maxPrice') || '',
     categoryId: searchParams.get('categoryId') || '',
     status: searchParams.get('status') || '',
+    ar: searchParams.get('ar') || '',
   }), [searchParams]);
   function setFilters(next) {
     setSearchParams((prev) => {
@@ -114,6 +116,7 @@ function ProductsPage() {
       if (filters.categoryId && p.categoryId !== filters.categoryId) return false;
       if (filters.status && p.status !== filters.status) return false;
       if (maxPrice !== null && !Number.isNaN(maxPrice) && p.price > maxPrice) return false;
+      if (!matchesArFilter(p, filters.ar)) return false;
       return true;
     });
   }, [products, filters]);

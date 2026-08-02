@@ -5,6 +5,7 @@ import ClearableInput from '../../../components/ClearableInput';
 import SortableTh from '../../../components/SortableTh';
 import { usePagination } from '../../../hooks/usePagination';
 import { useTableSort } from '../../../hooks/useTableSort';
+import { AR_FILTER_OPTIONS, matchesArFilter } from '../../../utils/arFilter';
 import ProductReviewModal from './ProductReviewModal';
 
 const PAGE_SIZE = 12;
@@ -15,12 +16,16 @@ function AdminInventoryPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filters, setFilters] = useState({ status: '', search: '' });
+  const [filters, setFilters] = useState({ status: '', search: '', ar: '' });
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [reviewId, setReviewId] = useState('');   // product previewed in the modal
 
+  // Status + search are filtered server-side (they re-fetch); the virtual-try-on
+  // filter is applied client-side on the rows already loaded.
+  const visibleRows = rows.filter((r) => matchesArFilter(r, filters.ar));
+
   // Click any column header to sort; Sizes/Total stock compare numerically.
-  const sort = useTableSort(rows, {
+  const sort = useTableSort(visibleRows, {
     initialKey: 'productName',
     initialDir: 'asc',
     getValue: (r, k) => {
@@ -30,7 +35,7 @@ function AdminInventoryPage() {
     },
   });
 
-  const { page, setPage, totalPages, pageItems } = usePagination(sort.sorted, PAGE_SIZE);
+  const { page, setPage, totalPages, pageItems } = usePagination(sort.sorted, PAGE_SIZE, filters.ar);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(filters.search), 300);
@@ -68,14 +73,14 @@ function AdminInventoryPage() {
 
       <div className="card card-body mb-4">
         <div className="row g-2 align-items-end">
-          <div className="col-md-7">
+          <div className="col-md-6">
             <label className="form-label small text-muted mb-1">Search</label>
             <ClearableInput type="text" placeholder="Product or supplier"
               value={filters.search}
               onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
               onClear={() => setFilters((f) => ({ ...f, search: '' }))} />
           </div>
-          <div className="col-md-5">
+          <div className="col-md-3">
             <label className="form-label small text-muted mb-1">Status</label>
             <select className="form-select" value={filters.status}
               onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
@@ -83,12 +88,19 @@ function AdminInventoryPage() {
               {['Approved', 'Pending', 'Rejected'].map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
+          <div className="col-md-3">
+            <label className="form-label small text-muted mb-1">Virtual try-on</label>
+            <select className="form-select" value={filters.ar}
+              onChange={(e) => setFilters((f) => ({ ...f, ar: e.target.value }))}>
+              {AR_FILTER_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
       {loading ? (
         <p className="text-muted">Loading…</p>
-      ) : rows.length === 0 ? (
+      ) : visibleRows.length === 0 ? (
         <div className="card card-body text-center text-muted">No products match these filters.</div>
       ) : (
         <div className="table-responsive">
@@ -132,7 +144,7 @@ function AdminInventoryPage() {
           </table>
 
           <Pagination page={page} totalPages={totalPages} onChange={setPage}
-            summary={`Page ${page} of ${totalPages} · ${rows.length} products`} />
+            summary={`Page ${page} of ${totalPages} · ${visibleRows.length} products`} />
         </div>
       )}
 

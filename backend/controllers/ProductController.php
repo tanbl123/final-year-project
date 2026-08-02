@@ -62,7 +62,10 @@ function handleListProducts(PDO $pdo, array $auth): void {
             (SELECT pi.productImageUrl FROM product_image pi
               WHERE pi.productId = p.productId ORDER BY pi.productImageId LIMIT 1) AS imageUrl,
             (SELECT COALESCE(SUM(pv.stockQuantity), 0) FROM product_variant pv
-              WHERE pv.productId = p.productId) AS totalStock
+              WHERE pv.productId = p.productId) AS totalStock,
+            p.virtualTryOnEnable AS virtualTryOnEnable,
+            (SELECT pm.arReadyAt IS NOT NULL FROM product_model pm
+              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arReady
      FROM product p
      JOIN category c ON c.categoryId = p.categoryId
      WHERE p.supplierId = :sid AND p.productStatus <> "Removed"
@@ -71,9 +74,12 @@ function handleListProducts(PDO $pdo, array $auth): void {
   $stmt->execute(['sid' => $supplierId]);
   $rows = $stmt->fetchAll();
   foreach ($rows as &$r) {
-    $r['price']      = (float) $r['price'];
-    $r['totalStock'] = (int) $r['totalStock'];
+    $r['price']              = (float) $r['price'];
+    $r['totalStock']         = (int) $r['totalStock'];
+    $r['virtualTryOnEnable'] = (bool) $r['virtualTryOnEnable'];
+    $r['arReady']            = (bool) $r['arReady'];   // has a live Camera Kit lens
   }
+  unset($r);
   sendJson(200, true, $rows);
 }
 
@@ -822,7 +828,10 @@ function handleListAdminInventory(PDO $pdo): void {
     "SELECT p.productId, p.productName, p.productBrand AS brand, p.productStatus AS status,
             s.companyName AS supplierName,
             (SELECT COALESCE(SUM(pv.stockQuantity), 0) FROM product_variant pv WHERE pv.productId = p.productId) AS totalStock,
-            (SELECT COUNT(*) FROM product_variant pv WHERE pv.productId = p.productId) AS sizeCount
+            (SELECT COUNT(*) FROM product_variant pv WHERE pv.productId = p.productId) AS sizeCount,
+            p.virtualTryOnEnable AS virtualTryOnEnable,
+            (SELECT pm.arReadyAt IS NOT NULL FROM product_model pm
+              WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arReady
        FROM product p
        JOIN supplier s ON s.supplierId = p.supplierId
       WHERE " . implode(' AND ', $where) . "
@@ -832,8 +841,10 @@ function handleListAdminInventory(PDO $pdo): void {
   $stmt->execute($params);
   $rows = $stmt->fetchAll();
   foreach ($rows as &$r) {
-    $r['totalStock'] = (int) $r['totalStock'];
-    $r['sizeCount']  = (int) $r['sizeCount'];
+    $r['totalStock']         = (int) $r['totalStock'];
+    $r['sizeCount']          = (int) $r['sizeCount'];
+    $r['virtualTryOnEnable'] = (bool) $r['virtualTryOnEnable'];
+    $r['arReady']            = (bool) $r['arReady'];   // has a live Camera Kit lens
   }
   unset($r);
   sendJson(200, true, ['inventory' => $rows]);
