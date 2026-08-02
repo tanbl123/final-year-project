@@ -475,6 +475,48 @@ function handleShipStandardDelivery(PDO $pdo, array $config, array $auth, string
   ]);
 }
 
+// POST /supplier/deliveries/ship-all-pending — auto-book EVERY still-Pending
+// Standard parcel for this supplier in one go (EasyParcel). Any parcel that fails
+// to book is left Pending (the supplier can retry or ship it manually); the
+// response reports how many booked vs failed.
+function handleShipAllPendingStandard(PDO $pdo, array $config, array $auth): void {
+  $supplierId = requireSupplierId($pdo, $auth);
+  if (!easyParcelEnabled($config)) {
+    sendJson(409, false, null, ['code' => 'NOT_CONFIGURED',
+      'message' => 'Auto-booking is not set up. Ship each parcel manually with a courier and tracking number.']);
+  }
+
+  $stmt = $pdo->prepare(
+    "SELECT deliveryId, orderId FROM delivery
+      WHERE supplierId = :sid AND deliveryMethod = 'Standard' AND deliveryStatus = 'Pending'"
+  );
+  $stmt->execute(['sid' => $supplierId]);
+  $rows = $stmt->fetchAll();
+
+  $booked = 0; $failed = 0;
+  foreach ($rows as $r) {
+    try {
+      [$sender, $receiver, $parcel] = shipmentPartiesFor($pdo, $config, (string) $r['deliveryId']);
+      $b = easyParcelBook($pdo, $config, $sender, $receiver, $parcel);
+      if (!$b) { $failed++; continue; }
+      $pdo->prepare(
+        "UPDATE delivery SET trackingCarrier = :c, trackingNumber = :t, deliveryStatus = 'OutForDelivery'
+          WHERE deliveryId = :id"
+      )->execute(['c' => $b['carrier'], 't' => $b['tracking'], 'id' => $r['deliveryId']]);
+      if (function_exists('recomputeOrderStatus')) { recomputeOrderStatus($pdo, (string) $r['orderId']); }
+      if (function_exists('notifyOrderCustomer')) {
+        notifyOrderCustomer($pdo, (string) $r['orderId'], 'shipped', 'Your order has shipped 📦',
+          "Shipped via {$b['carrier']}. Tracking number: {$b['tracking']}.");
+      }
+      $booked++;
+    } catch (Throwable $e) {
+      $failed++;
+    }
+  }
+
+  sendJson(200, true, ['total' => count($rows), 'booked' => $booked, 'failed' => $failed]);
+}
+
 // POST /supplier/deliveries/{deliveryId}/delivered — supplier confirms a shipped
 // Standard parcel has arrived (their 3PL tracking shows delivered). In production
 // this would be driven by a carrier webhook or the customer's "order received".

@@ -13,6 +13,12 @@ export function bookStandardParcel(deliveryId) {
   return apiPost(`/supplier/deliveries/${deliveryId}/ship`, { auto: true }, getToken());
 }
 
+// Auto-book & ship ALL of this supplier's pending Standard parcels in one go.
+// Resolves with { total, booked, failed }.
+export function shipAllPendingStandard() {
+  return apiPost('/supplier/deliveries/ship-all-pending', {}, getToken());
+}
+
 // Mark a shipped Standard parcel as delivered.
 export function markStandardDelivered(deliveryId) {
   return apiPost(`/supplier/deliveries/${deliveryId}/delivered`, {}, getToken());

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { getSupplierOrders } from './orderService';
+import { getSupplierOrders, shipAllPendingStandard } from './orderService';
 import Pagination from '../../../components/Pagination';
 import SortableTh from '../../../components/SortableTh';
+import Toast from '../../../components/Toast';
 import { usePagination } from '../../../hooks/usePagination';
 import { useTableSort } from '../../../hooks/useTableSort';
 
@@ -27,6 +28,13 @@ function SupplierOrdersPage() {
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const [needsActionOnly, setNeedsActionOnly] = useState(false);
+  const [toast, setToast] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  // pending Standard (3PL) parcels the supplier still has to ship — the bulk
+  // "book & ship all" action targets exactly these
+  const pendingStandardCount = orders.filter(
+    (o) => o.myDeliveryMethod === 'Standard' && o.myDeliveryStatus === 'Pending').length;
 
   // "Needs my action" = a Standard (3PL) parcel still Pending → the supplier
   // has to ship it. In-house parcels are handled by a courier, so they're excluded.
@@ -57,6 +65,22 @@ function SupplierOrdersPage() {
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }
+
+  // one-click: auto-book & ship every pending Standard parcel via EasyParcel
+  async function bulkShip() {
+    setBulkBusy(true); setError('');
+    try {
+      const res = await shipAllPendingStandard();
+      if (res.total === 0) setToast('No pending standard parcels to ship.');
+      else if (res.failed === 0) setToast(`Booked & shipped ${res.booked} parcel${res.booked === 1 ? '' : 's'}.`);
+      else setToast(`Booked ${res.booked} of ${res.total} — ${res.failed} couldn't be booked, ship those manually.`);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBulkBusy(false);
+    }
+  }
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
@@ -65,8 +89,20 @@ function SupplierOrdersPage() {
 
   return (
     <div className="container py-4 text-start">
-      <h1 className="mb-1">🧾 Orders</h1>
-      <p className="text-muted">Orders that include your products — showing your items and your share only.</p>
+      <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+          <h1 className="mb-1">🧾 Orders</h1>
+          <p className="text-muted">Orders that include your products — showing your items and your share only.</p>
+        </div>
+        {pendingStandardCount > 0 && (
+          <button className="btn btn-success" onClick={bulkShip} disabled={bulkBusy}
+            title="Auto-book a courier + tracking number for every pending standard parcel (via EasyParcel).">
+            {bulkBusy ? 'Booking…' : `📦 Book & ship all pending (${pendingStandardCount})`}
+          </button>
+        )}
+      </div>
+
+      <Toast message={toast} onClose={() => setToast('')} />
 
       {error && (
         <div className="alert alert-danger py-2 d-flex justify-content-between align-items-center">

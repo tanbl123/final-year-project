@@ -1073,6 +1073,13 @@ if ($method === 'GET' && preg_match('#^/supplier/orders/([^/]+)$#', $path, $m)) 
   handleGetSupplierOrder($pdo, $auth, $m[1], $config);
 }
 
+// supplier auto-books & ships ALL their pending Standard parcels at once
+if ($method === 'POST' && $path === '/supplier/deliveries/ship-all-pending') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleShipAllPendingStandard($pdo, $config, $auth);
+}
+
 // supplier ships a Standard (3PL) parcel + records tracking, then marks delivered
 if ($method === 'POST' && preg_match('#^/supplier/deliveries/([^/]+)/ship$#', $path, $m)) {
   $auth = requireAuth($secret);
