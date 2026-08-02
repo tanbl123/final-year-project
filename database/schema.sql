@@ -529,7 +529,8 @@ CREATE TABLE supplier_payout (
     stripeTransferId VARCHAR(60)   NULL,                 -- tr_... returned by Stripe
     grossAmount      DECIMAL(10,2) NOT NULL,             -- supplier's share of the order
     commissionAmount DECIMAL(10,2) NOT NULL,             -- platform commission on that share
-    netAmount        DECIMAL(10,2) NOT NULL,             -- amount transferred to the supplier
+    serviceTaxAmount DECIMAL(10,2) NOT NULL DEFAULT 0.00,-- SST 8% on the commission (supplier bears, platform remits)
+    netAmount        DECIMAL(10,2) NOT NULL,             -- amount transferred to the supplier (gross - commission - SST)
     currency         CHAR(3)       NOT NULL DEFAULT 'myr',
     payoutStatus     ENUM('Pending','Paid','Failed') NOT NULL DEFAULT 'Pending',
     created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,

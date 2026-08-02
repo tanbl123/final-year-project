@@ -272,11 +272,14 @@ foreach ($suppliers as $sid => $sup) {
   $price = (float) $sup['productPrice'];
   $gross = round($price * $qty, 2);
   $commission = round($gross * $rate / 100, 2);
-  $net   = round($gross - $commission, 2);
+  // SST 8% service tax on the platform's commission (Model A) — the supplier
+  // bears it, the platform remits it to the government (not platform revenue).
+  $serviceTax = round($commission * 8.0 / 100, 2);
+  $net   = round($gross - $commission - $serviceTax, 2);
   $total += $gross;
   $cart[$sid] = [
     'sup' => $sup, 'qty' => $qty, 'price' => $price,
-    'gross' => $gross, 'commission' => $commission, 'net' => $net,
+    'gross' => $gross, 'commission' => $commission, 'serviceTax' => $serviceTax, 'net' => $net,
   ];
 }
 
@@ -361,19 +364,19 @@ try {
       ]);
       $transferId = $transfer['id'];
       $status = 'Paid';
-      line(sprintf('  → %-8s net %s transferred  (commission %s kept)  [%s]',
-        $sid, money($c['net'], $currency), money($c['commission'], $currency), $transferId));
+      line(sprintf('  → %-8s net %s transferred  (commission %s kept, SST %s remitted)  [%s]',
+        $sid, money($c['net'], $currency), money($c['commission'], $currency), money($c['serviceTax'], $currency), $transferId));
     } catch (Throwable $e) {
       line("  ✗ transfer to {$sid} failed: {$e->getMessage()}");
     }
 
     $pdo->prepare(
       "INSERT INTO supplier_payout
-         (payoutId, supplierId, orderId, stripeTransferId, grossAmount, commissionAmount, netAmount, currency, payoutStatus)
-       VALUES (:pid, :sid, :oid, :tr, :gross, :comm, :net, :cur, :st)"
+         (payoutId, supplierId, orderId, stripeTransferId, grossAmount, commissionAmount, serviceTaxAmount, netAmount, currency, payoutStatus)
+       VALUES (:pid, :sid, :oid, :tr, :gross, :comm, :sst, :net, :cur, :st)"
     )->execute([
       'pid' => $payoutId, 'sid' => $sid, 'oid' => $orderId, 'tr' => $transferId,
-      'gross' => $c['gross'], 'comm' => $c['commission'], 'net' => $c['net'],
+      'gross' => $c['gross'], 'comm' => $c['commission'], 'sst' => $c['serviceTax'], 'net' => $c['net'],
       'cur' => $currency, 'st' => $status,
     ]);
   }
@@ -392,12 +395,14 @@ try {
 
 // ── 7. Summary ────────────────────────────────────────────────
 $totalCommission = array_sum(array_column($cart, 'commission'));
+$totalServiceTax = array_sum(array_column($cart, 'serviceTax'));
 $totalNet        = array_sum(array_column($cart, 'net'));
 rule();
 line('  DONE — money split in Stripe test mode');
 rule();
 line('  Customer paid (platform) : ' . money($total, $currency));
 line('  Admin commission kept    : ' . money($totalCommission, $currency));
+line('  SST 8% remitted (gov)    : ' . money($totalServiceTax, $currency));
 line('  Paid out to suppliers    : ' . money($totalNet, $currency));
 if (!empty($dispatch)) {
   foreach ($dispatch as $d) {

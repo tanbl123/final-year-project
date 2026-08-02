@@ -28,7 +28,11 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
 
   const has = !!data && data.summary.suppliers > 0;
   const rate = data?.commissionRate ?? 0;
-  const netToSuppliers = data ? data.summary.grossSales - data.summary.totalCommission : 0;
+  const sstRate = data?.serviceTaxRate ?? 0;
+  const serviceTax = data?.summary.totalServiceTax ?? 0;
+  const netToSuppliers = data
+    ? (data.summary.netToSuppliers ?? (data.summary.grossSales - data.summary.totalCommission - serviceTax))
+    : 0;
 
   function buildReportOpts() {
     return {
@@ -39,13 +43,14 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
       summary: [
         { label: 'Gross merchandise value (GMV)', value: rm(data.summary.grossSales) },
         { label: `Platform commission (${rate}%)`, value: rm(data.summary.totalCommission) },
+        { label: `SST (${sstRate}%) on commission`, value: rm(serviceTax) },
         { label: 'Net paid to suppliers', value: rm(netToSuppliers) },
         { label: 'Active selling suppliers', value: String(data.summary.suppliers) },
       ],
-      head: ['Supplier', 'Units', 'Gross (GMV)', `Commission (${rate}%)`],
-      body: data.bySupplier.map((s) => [s.companyName, s.units, rm(s.gross), rm(s.commission)]),
-      foot: [['Total', data.bySupplier.reduce((a, s) => a + s.units, 0), rm(data.summary.grossSales), rm(data.summary.totalCommission)]],
-      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
+      head: ['Supplier', 'Units', 'Gross (GMV)', `Commission (${rate}%)`, `SST (${sstRate}%)`],
+      body: data.bySupplier.map((s) => [s.companyName, s.units, rm(s.gross), rm(s.commission), rm(s.serviceTax)]),
+      foot: [['Total', data.bySupplier.reduce((a, s) => a + s.units, 0), rm(data.summary.grossSales), rm(data.summary.totalCommission), rm(serviceTax)]],
+      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
     };
   }
 
@@ -77,7 +82,8 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
           <div className="row g-3 mb-4">
             <StatCard label="GMV" value={rm(data.summary.grossSales)} sub="gross merchandise value" />
             <StatCard label={`Commission (${rate}%)`} value={rm(data.summary.totalCommission)} color="success" sub="platform revenue" />
-            <StatCard label="Paid to suppliers" value={rm(netToSuppliers)} />
+            <StatCard label={`SST (${sstRate}%)`} value={rm(serviceTax)} sub="on commission · remitted" />
+            <StatCard label="Paid to suppliers" value={rm(netToSuppliers)} sub="after commission & SST" />
             <StatCard label="Selling suppliers" value={data.summary.suppliers} />
           </div>
 
@@ -87,9 +93,10 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
               <thead>
                 <tr>
                   <th>Supplier</th>
-                  <th className="text-end" style={{ width: 100 }}>Units</th>
-                  <th className="text-end" style={{ width: 160 }}>Gross (GMV)</th>
-                  <th className="text-end" style={{ width: 160 }}>Commission ({rate}%)</th>
+                  <th className="text-end" style={{ width: 90 }}>Units</th>
+                  <th className="text-end" style={{ width: 150 }}>Gross (GMV)</th>
+                  <th className="text-end" style={{ width: 150 }}>Commission ({rate}%)</th>
+                  <th className="text-end" style={{ width: 130 }}>SST ({sstRate}%)</th>
                 </tr>
               </thead>
               <tbody>
@@ -99,6 +106,7 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
                     <td className="text-end">{s.units}</td>
                     <td className="text-end">{rm(s.gross)}</td>
                     <td className="text-end text-success">{rm(s.commission)}</td>
+                    <td className="text-end text-muted">{rm(s.serviceTax)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -108,6 +116,7 @@ function PlatformSalesReport({ company = { id: '', name: '' }, setCompany }) {
                   <td className="text-end">{data.bySupplier.reduce((a, s) => a + s.units, 0)}</td>
                   <td className="text-end">{rm(data.summary.grossSales)}</td>
                   <td className="text-end text-success">{rm(data.summary.totalCommission)}</td>
+                  <td className="text-end text-muted">{rm(serviceTax)}</td>
                 </tr>
               </tfoot>
             </table>

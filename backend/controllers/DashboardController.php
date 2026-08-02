@@ -135,6 +135,7 @@ function handleAdminDashboard(PDO $pdo): void {
       'gmv'        => round($gross, 2),
       'orders'     => (int) $row['orders'],
       'commission' => round($gross * $rate / 100, 2),
+      'serviceTax' => serviceTaxOn(round($gross * $rate / 100, 2)),   // SST 8% on commission
       'suppliers'  => $suppliers,
       'couriers'   => $couriers,
     ],
@@ -168,6 +169,7 @@ function handleSupplierDashboard(PDO $pdo, array $auth): void {
   $row = $g->fetch();
   $gross = (float) $row['gross'];
   $commission = round($gross * $rate / 100, 2);
+  $serviceTax = serviceTaxOn($commission);   // SST 8% on commission (supplier bears it)
 
   // needs-action counts (current state, not period-bound)
   $toShip = $pdo->prepare("SELECT COUNT(*) FROM delivery WHERE supplierId = :sid AND deliveryStatus IN ('Pending','Assigned')");
@@ -202,7 +204,9 @@ function handleSupplierDashboard(PDO $pdo, array $auth): void {
   sendJson(200, true, [
     'kpis' => [
       'grossSales'  => round($gross, 2),
-      'netEarnings' => round($gross - $commission, 2),
+      'commission'  => $commission,
+      'serviceTax'  => $serviceTax,
+      'netEarnings' => round($gross - $commission - $serviceTax, 2),
       'orders'      => (int) $row['orders'],
       'unitsSold'   => (int) $row['units'],
     ],

@@ -27,9 +27,13 @@ function SalesReport() {
 
   const hasSales = !!data && data.summary.products > 0;
   const growth = data?.period?.growthPct;
+  const rate = data?.commissionRate ?? 0;
+  const sstRate = data?.serviceTaxRate ?? 0;
+  const serviceTax = data?.summary.serviceTax ?? 0;
+  // what the supplier keeps on a line: gross − commission − SST(on that commission)
+  const netOf = (gross) => gross - (gross * rate / 100) * (1 + sstRate / 100);
 
   function buildReportOpts() {
-    const rate = data.commissionRate;
     return {
       title: 'Sales Report',
       generatedBy: user?.fullName,
@@ -38,15 +42,16 @@ function SalesReport() {
       summary: [
         { label: 'Gross sales', value: rm(data.summary.grossSales) },
         { label: `Commission (${rate}%)`, value: rm(data.summary.commission) },
-        { label: 'Net earnings (after commission)', value: rm(data.summary.netEarnings) },
+        { label: `SST (${sstRate}%) on commission`, value: rm(serviceTax) },
+        { label: 'Net earnings (after commission & SST)', value: rm(data.summary.netEarnings) },
         { label: 'Units sold', value: String(data.summary.unitsSold) },
         { label: 'Products sold', value: String(data.summary.products) },
         ...(growth != null
           ? [{ label: 'Gross sales vs previous period', value: `${growth > 0 ? '+' : ''}${growth}%` }]
           : []),
       ],
-      head: ['Product', 'Units', 'Gross sales', `Net (after ${rate}%)`],
-      body: data.byProduct.map((p) => [p.productName, p.units, rm(p.gross), rm(p.gross * (1 - rate / 100))]),
+      head: ['Product', 'Units', 'Gross sales', 'Net (after fees)'],
+      body: data.byProduct.map((p) => [p.productName, p.units, rm(p.gross), rm(netOf(p.gross))]),
       foot: [['Total', data.summary.unitsSold, rm(data.summary.grossSales), rm(data.summary.netEarnings)]],
       columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
     };
@@ -85,7 +90,8 @@ function SalesReport() {
           <div className="row g-3 mb-4">
             <StatCard label="Gross sales" value={rm(data.summary.grossSales)} sub={`${data.summary.unitsSold} units sold`} />
             <StatCard label={`Commission (${data.commissionRate}%)`} value={rm(data.summary.commission)} color="danger" />
-            <StatCard label="Net earnings" value={rm(data.summary.netEarnings)} color="success" sub="after commission" />
+            <StatCard label={`SST (${sstRate}%)`} value={rm(serviceTax)} color="danger" sub="on commission" />
+            <StatCard label="Net earnings" value={rm(data.summary.netEarnings)} color="success" sub="after commission & SST" />
             <StatCard label="Products sold" value={data.summary.products} />
           </div>
 
@@ -97,7 +103,7 @@ function SalesReport() {
                   <th>Product</th>
                   <th className="text-end" style={{ width: 110 }}>Units</th>
                   <th className="text-end" style={{ width: 160 }}>Gross sales</th>
-                  <th className="text-end" style={{ width: 180 }}>Net (after {data.commissionRate}%)</th>
+                  <th className="text-end" style={{ width: 180 }}>Net (after fees)</th>
                 </tr>
               </thead>
               <tbody>
@@ -106,7 +112,7 @@ function SalesReport() {
                     <td className="fw-semibold">{p.productName}</td>
                     <td className="text-end">{p.units}</td>
                     <td className="text-end">{rm(p.gross)}</td>
-                    <td className="text-end text-success">{rm(p.gross * (1 - data.commissionRate / 100))}</td>
+                    <td className="text-end text-success">{rm(netOf(p.gross))}</td>
                   </tr>
                 ))}
               </tbody>

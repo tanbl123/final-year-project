@@ -40,7 +40,7 @@ function AdminCommissionPage() {
   const supplierSort = useTableSort(filteredSuppliers, {
     initialKey: 'gross',
     initialDir: 'desc',
-    getValue: (s, k) => (['units', 'gross', 'commission'].includes(k) ? Number(s[k]) : s[k] ?? ''),
+    getValue: (s, k) => (['units', 'gross', 'commission', 'serviceTax'].includes(k) ? Number(s[k]) : s[k] ?? ''),
   });
   const supPage = usePagination(supplierSort.sorted, SUPPLIER_PAGE_SIZE);
 
@@ -91,6 +91,9 @@ function AdminCommissionPage() {
   const hasReport = !!data && data.summary.suppliers > 0;
   const growth = data?.period?.growthPct;
 
+  const sstRate = data?.serviceTaxRate ?? 0;
+  const serviceTax = data?.summary.totalServiceTax ?? 0;
+
   // Report options for preview + download (same document for both).
   function buildReportOpts() {
     const rate = data.commissionRate;
@@ -102,16 +105,17 @@ function AdminCommissionPage() {
       summary: [
         { label: 'Gross sales', value: rm(data.summary.grossSales) },
         { label: `Total commission (${rate}%)`, value: rm(data.summary.totalCommission) },
+        { label: `SST (${sstRate}%) on commission`, value: rm(serviceTax) },
         { label: 'Suppliers with sales', value: String(data.summary.suppliers) },
         { label: 'Current commission rate', value: currentRate != null ? `${currentRate}%` : '—' },
         ...(growth != null
           ? [{ label: 'Gross sales vs previous period', value: `${growth > 0 ? '+' : ''}${growth}%` }]
           : []),
       ],
-      head: ['Supplier', 'Units', 'Gross sales', `Commission (${rate}%)`],
-      body: data.bySupplier.map((s) => [s.companyName, s.units, rm(s.gross), rm(s.commission)]),
-      foot: [['Total', '—', rm(data.summary.grossSales), rm(data.summary.totalCommission)]],
-      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
+      head: ['Supplier', 'Units', 'Gross sales', `Commission (${rate}%)`, `SST (${sstRate}%)`],
+      body: data.bySupplier.map((s) => [s.companyName, s.units, rm(s.gross), rm(s.commission), rm(s.serviceTax)]),
+      foot: [['Total', '—', rm(data.summary.grossSales), rm(data.summary.totalCommission), rm(serviceTax)]],
+      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
     };
   }
 
@@ -217,19 +221,26 @@ function AdminCommissionPage() {
           ) : (
             <>
               <div className="row g-3 mb-4">
-                <div className="col-6 col-lg-4">
+                <div className="col-6 col-lg-3">
                   <div className="card h-100"><div className="card-body">
                     <div className="text-muted small text-uppercase">Gross sales</div>
                     <div className="fs-4 fw-semibold">{rm(data.summary.grossSales)}</div>
                   </div></div>
                 </div>
-                <div className="col-6 col-lg-4">
+                <div className="col-6 col-lg-3">
                   <div className="card h-100"><div className="card-body">
                     <div className="text-muted small text-uppercase">Commission ({data.commissionRate}%)</div>
                     <div className="fs-4 fw-semibold text-success">{rm(data.summary.totalCommission)}</div>
                   </div></div>
                 </div>
-                <div className="col-6 col-lg-4">
+                <div className="col-6 col-lg-3">
+                  <div className="card h-100"><div className="card-body">
+                    <div className="text-muted small text-uppercase">SST ({sstRate}%)</div>
+                    <div className="fs-4 fw-semibold">{rm(serviceTax)}</div>
+                    <div className="text-muted small">on commission · remitted</div>
+                  </div></div>
+                </div>
+                <div className="col-6 col-lg-3">
                   <div className="card h-100"><div className="card-body">
                     <div className="text-muted small text-uppercase">Suppliers with sales</div>
                     <div className="fs-4 fw-semibold">{data.summary.suppliers}</div>
@@ -253,8 +264,9 @@ function AdminCommissionPage() {
                       <tr>
                         <SortableTh label="Supplier" columnKey="companyName" sort={supplierSort} />
                         <SortableTh label="Units" columnKey="units" sort={supplierSort} className="text-end" style={{ width: 110 }} />
-                        <SortableTh label="Gross sales" columnKey="gross" sort={supplierSort} className="text-end" style={{ width: 160 }} />
-                        <SortableTh label={`Commission (${data.commissionRate}%)`} columnKey="commission" sort={supplierSort} className="text-end" style={{ width: 180 }} />
+                        <SortableTh label="Gross sales" columnKey="gross" sort={supplierSort} className="text-end" style={{ width: 150 }} />
+                        <SortableTh label={`Commission (${data.commissionRate}%)`} columnKey="commission" sort={supplierSort} className="text-end" style={{ width: 160 }} />
+                        <SortableTh label={`SST (${sstRate}%)`} columnKey="serviceTax" sort={supplierSort} className="text-end" style={{ width: 120 }} />
                       </tr>
                     </thead>
                     <tbody>
@@ -264,6 +276,7 @@ function AdminCommissionPage() {
                           <td className="text-end">{s.units}</td>
                           <td className="text-end">{rm(s.gross)}</td>
                           <td className="text-end text-success">{rm(s.commission)}</td>
+                          <td className="text-end text-muted">{rm(s.serviceTax)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -273,6 +286,7 @@ function AdminCommissionPage() {
                         <td className="text-end">—</td>
                         <td className="text-end">{rm(data.summary.grossSales)}</td>
                         <td className="text-end text-success">{rm(data.summary.totalCommission)}</td>
+                        <td className="text-end text-muted">{rm(serviceTax)}</td>
                       </tr>
                     </tfoot>
                   </table>

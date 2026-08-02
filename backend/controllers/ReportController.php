@@ -16,6 +16,22 @@ function activeCommissionRate(PDO $pdo): float {
   return $rate === false ? 0.0 : (float) $rate;
 }
 
+// Malaysian SST service-tax rate (%) applied to the platform's COMMISSION — the
+// platform's taxable service to sellers (Model A: the standard treatment; the
+// buyer is never charged SST on goods). Service tax rose from 6% to 8% on
+// 1 March 2024. The supplier bears it; the platform collects and remits it to
+// the government, so it is a pass-through, NOT platform revenue. Kept as a
+// single constant; move to a config table later if it needs history like the
+// commission rate.
+function serviceTaxRate(): float {
+  return 8.0;
+}
+
+// SST on a given commission amount, rounded to sen.
+function serviceTaxOn(float $commission): float {
+  return round($commission * serviceTaxRate() / 100, 2);
+}
+
 // Parse ?from=YYYY-MM-DD&to=YYYY-MM-DD into inclusive datetime bounds, or
 // [null, null] for an all-time report (no range given / invalid).
 function reportRange(): array {
@@ -122,13 +138,16 @@ function handleSupplierSalesReport(PDO $pdo, array $auth): void {
     ];
   }
   $commission = round($gross * $rate / 100, 2);
+  $serviceTax = serviceTaxOn($commission);   // SST 8% on the commission
 
   sendJson(200, true, [
     'commissionRate' => $rate,
+    'serviceTaxRate' => serviceTaxRate(),
     'summary' => [
       'grossSales'  => round($gross, 2),
       'commission'  => $commission,
-      'netEarnings' => round($gross - $commission, 2),
+      'serviceTax'  => $serviceTax,
+      'netEarnings' => round($gross - $commission - $serviceTax, 2),
       'unitsSold'   => $units,
       'products'    => count($byProduct),
     ],
@@ -674,27 +693,34 @@ function handleAdminCommissionReport(PDO $pdo): void {
   $stmt->execute($params);
   $rows = $stmt->fetchAll();
 
-  $totalGross = 0.0; $totalCommission = 0.0;
+  $totalGross = 0.0; $totalCommission = 0.0; $totalServiceTax = 0.0;
   $bySupplier = [];
   foreach ($rows as $r) {
     $g = (float) $r['gross'];
     $c = round($g * $rate / 100, 2);
+    $t = serviceTaxOn($c);              // SST 8% on this supplier's commission
     $totalGross += $g;
     $totalCommission += $c;
+    $totalServiceTax += $t;
     $bySupplier[] = [
       'supplierId'  => $r['supplierId'],
       'companyName' => $r['companyName'],
       'units'       => (int) $r['units'],
       'gross'       => round($g, 2),
       'commission'  => $c,
+      'serviceTax'  => $t,
     ];
   }
 
   sendJson(200, true, [
     'commissionRate' => $rate,
+    'serviceTaxRate' => serviceTaxRate(),
     'summary' => [
       'grossSales'      => round($totalGross, 2),
       'totalCommission' => round($totalCommission, 2),
+      'totalServiceTax' => round($totalServiceTax, 2),
+      // what actually reaches suppliers after commission AND the SST they bear
+      'netToSuppliers'  => round($totalGross - $totalCommission - $totalServiceTax, 2),
       'suppliers'       => count($bySupplier),
     ],
     'bySupplier' => $bySupplier,

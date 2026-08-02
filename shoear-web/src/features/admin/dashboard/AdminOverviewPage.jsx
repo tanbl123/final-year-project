@@ -87,6 +87,7 @@ function AdminOverviewPage() {
             <Kpi label="Gross sales (GMV)" value={rm(d.kpis.gmv)} />
             <Kpi label="Paid orders" value={d.kpis.orders} />
             <Kpi label="Commission earned" value={rm(d.kpis.commission)} color="success" />
+            <Kpi label="SST (8%) remitted" value={rm(d.kpis.serviceTax)} />
             <Kpi label="Active suppliers" value={d.kpis.suppliers} />
             <Kpi label="Active couriers" value={d.kpis.couriers} />
           </div>

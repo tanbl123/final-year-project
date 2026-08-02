@@ -78,7 +78,7 @@ function SupplierDashboardPage() {
           {/* KPIs */}
           <div className="row g-3 mb-4">
             <Kpi label="Gross sales" value={rm(d.kpis.grossSales)} sub={`${d.kpis.unitsSold} units sold`} />
-            <Kpi label="Net earnings" value={rm(d.kpis.netEarnings)} color="success" sub="after commission" />
+            <Kpi label="Net earnings" value={rm(d.kpis.netEarnings)} color="success" sub="after commission & SST" />
             <Kpi label="Paid orders" value={d.kpis.orders} />
             <Kpi label="Units sold" value={d.kpis.unitsSold} />
           </div>
