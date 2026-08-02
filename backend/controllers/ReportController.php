@@ -357,7 +357,7 @@ function handleSupplierFulfilmentReport(PDO $pdo, array $auth): void {
   [$fromDt, $toDt] = reportRange();
 
   $sql =
-    "SELECT d.deliveryStatus, d.deliveryMethod, d.deliveryDate, d.estimatedDeliveryTime, o.orderDate
+    "SELECT d.deliveryStatus, d.deliveryMethod, d.trackingCarrier, d.deliveryDate, d.estimatedDeliveryTime, o.orderDate
        FROM delivery d
        JOIN `order` o ON o.orderId = d.orderId
       WHERE d.supplierId = :sid";
@@ -371,25 +371,58 @@ function handleSupplierFulfilmentReport(PDO $pdo, array $auth): void {
   $inHouse = 0; $standard = 0;
   $delivered = 0; $onTime = 0; $ratedForOnTime = 0;
   $shipDaysSum = 0.0; $shipDaysN = 0;   // order → delivered elapsed time
+  $channels = [];                       // fulfilment performance per channel (in-house / each 3PL carrier)
   foreach ($rows as $r) {
     $s = $r['deliveryStatus'];
     if (isset($statuses[$s])) { $statuses[$s]++; }
     if ($r['deliveryMethod'] === 'InHouse') { $inHouse++; } else { $standard++; }
+
+    // channel label: in-house, or the 3PL carrier name (fall back to "Standard (3PL)")
+    $channel = $r['deliveryMethod'] === 'InHouse'
+      ? 'In-house'
+      : (!empty($r['trackingCarrier']) ? $r['trackingCarrier'] : 'Standard (3PL)');
+    if (!isset($channels[$channel])) {
+      $channels[$channel] = ['channel' => $channel, 'parcels' => 0, 'delivered' => 0, 'failed' => 0,
+                             'rated' => 0, 'onTime' => 0, 'shipSum' => 0.0, 'shipN' => 0];
+    }
+    $channels[$channel]['parcels']++;
+    if ($s === 'Failed') { $channels[$channel]['failed']++; }
+
     if ($s === 'Delivered') {
       $delivered++;
+      $channels[$channel]['delivered']++;
       if (!empty($r['deliveryDate']) && !empty($r['estimatedDeliveryTime'])) {
         $ratedForOnTime++;
-        if (strtotime($r['deliveryDate']) <= strtotime($r['estimatedDeliveryTime'])) { $onTime++; }
+        $channels[$channel]['rated']++;
+        if (strtotime($r['deliveryDate']) <= strtotime($r['estimatedDeliveryTime'])) {
+          $onTime++;
+          $channels[$channel]['onTime']++;
+        }
       }
       if (!empty($r['deliveryDate']) && !empty($r['orderDate'])) {
-        $shipDaysSum += (strtotime($r['deliveryDate']) - strtotime($r['orderDate'])) / 86400;
-        $shipDaysN++;
+        $elapsed = (strtotime($r['deliveryDate']) - strtotime($r['orderDate'])) / 86400;
+        $shipDaysSum += $elapsed; $shipDaysN++;
+        $channels[$channel]['shipSum'] += $elapsed; $channels[$channel]['shipN']++;
       }
     }
   }
   $total = count($rows);
   $onTimeRate = $ratedForOnTime > 0 ? round($onTime / $ratedForOnTime * 100, 1) : null;
   $avgDeliveryDays = $shipDaysN > 0 ? round($shipDaysSum / $shipDaysN, 1) : null;
+
+  // finalise per-channel rates, drop internal accumulators, order by parcel volume
+  $byChannel = [];
+  foreach ($channels as $c) {
+    $byChannel[] = [
+      'channel'         => $c['channel'],
+      'parcels'         => $c['parcels'],
+      'delivered'       => $c['delivered'],
+      'failed'          => $c['failed'],
+      'onTimeRate'      => $c['rated'] > 0 ? round($c['onTime'] / $c['rated'] * 100, 1) : null,
+      'avgDeliveryDays' => $c['shipN'] > 0 ? round($c['shipSum'] / $c['shipN'], 1) : null,
+    ];
+  }
+  usort($byChannel, fn($a, $b) => $b['parcels'] <=> $a['parcels']);
 
   sendJson(200, true, [
     'summary' => [
@@ -404,6 +437,7 @@ function handleSupplierFulfilmentReport(PDO $pdo, array $auth): void {
       'standard'        => $standard,
     ],
     'byStatus' => $statuses,
+    'byChannel' => $byChannel,   // fulfilment performance per delivery channel
     'period' => [
       'from' => $fromDt !== null ? substr($fromDt, 0, 10) : null,
       'to'   => $toDt   !== null ? substr($toDt, 0, 10)   : null,

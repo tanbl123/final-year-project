@@ -33,6 +33,8 @@ function FulfilmentReport() {
   const has = !!data && data.summary.totalDeliveries > 0;
   const onTimeStr = data?.summary?.onTimeRate != null ? `${data.summary.onTimeRate}%` : '—';
   const shipDaysStr = data?.summary?.avgDeliveryDays != null ? `${data.summary.avgDeliveryDays} days` : '—';
+  const pct = (v) => (v == null ? '—' : `${v}%`);
+  const days = (v) => (v == null ? '—' : `${v}`);
 
   function buildReportOpts() {
     return {
@@ -49,10 +51,12 @@ function FulfilmentReport() {
         { label: 'Avg delivery time', value: shipDaysStr },
         { label: 'In-house / Standard', value: `${data.summary.inHouse} / ${data.summary.standard}` },
       ],
-      head: ['Delivery status', 'Parcels'],
-      body: Object.entries(data.byStatus).map(([s, n]) => [STATUS_LABELS[s] || s, n]),
-      foot: [['Total', data.summary.totalDeliveries]],
-      columnStyles: { 1: { halign: 'right' } },
+      head: ['Channel', 'Parcels', 'Delivered', 'On-time %', 'Avg days', 'Failed'],
+      body: (data.byChannel ?? []).map((c) => [
+        c.channel, c.parcels, c.delivered, pct(c.onTimeRate), days(c.avgDeliveryDays), c.failed,
+      ]),
+      foot: [['Total', data.summary.totalDeliveries, data.summary.delivered, onTimeStr, days(data.summary.avgDeliveryDays), data.summary.failed]],
+      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
     };
   }
 
@@ -88,9 +92,47 @@ function FulfilmentReport() {
             <StatCard label="Failed" value={data.summary.failed} color={data.summary.failed > 0 ? 'danger' : 'dark'} />
           </div>
 
+          <h5 className="mb-3">Fulfilment by channel</h5>
+          <div className="table-responsive mb-4">
+            <table className="table align-middle">
+              <thead>
+                <tr>
+                  <th>Channel</th>
+                  <th className="text-end">Parcels</th>
+                  <th className="text-end">Delivered</th>
+                  <th className="text-end">On-time %</th>
+                  <th className="text-end">Avg days</th>
+                  <th className="text-end">Failed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data.byChannel ?? []).map((c) => (
+                  <tr key={c.channel}>
+                    <td className="fw-semibold">{c.channel}</td>
+                    <td className="text-end">{c.parcels}</td>
+                    <td className="text-end">{c.delivered}</td>
+                    <td className="text-end">{pct(c.onTimeRate)}</td>
+                    <td className="text-end">{days(c.avgDeliveryDays)}</td>
+                    <td className={'text-end ' + (c.failed > 0 ? 'text-danger' : 'text-muted')}>{c.failed}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="fw-semibold border-top">
+                  <td>Total</td>
+                  <td className="text-end">{data.summary.totalDeliveries}</td>
+                  <td className="text-end">{data.summary.delivered}</td>
+                  <td className="text-end">{onTimeStr}</td>
+                  <td className="text-end">{days(data.summary.avgDeliveryDays)}</td>
+                  <td className="text-end">{data.summary.failed}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
           <h5 className="mb-3">By delivery status</h5>
           <div className="table-responsive">
-            <table className="table align-middle">
+            <table className="table align-middle w-auto">
               <thead>
                 <tr>
                   <th>Delivery status</th>
