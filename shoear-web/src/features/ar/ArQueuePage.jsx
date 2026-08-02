@@ -9,9 +9,10 @@ import { usePagination } from '../../hooks/usePagination';
 
 const PAGE_SIZE = 10;
 
-// Whole days a product has been waiting since it was added, and how that reads.
-function waitInfo(createdAt) {
-  const days = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000));
+// Whole days a product has been waiting since it was submitted for review, and
+// how that reads.
+function waitInfo(since) {
+  const days = Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 86400000));
   const label = days === 0 ? 'today' : days === 1 ? '1 day' : `${days} days`;
   // amber after a few days, red after a week — a gentle SLA nudge
   const tone = days >= 7 ? 'danger' : days >= 3 ? 'warning' : 'muted';
@@ -53,11 +54,11 @@ function ArQueuePage() {
   const q = search.trim().toLowerCase();
   const filtered = q === '' ? products : products.filter((p) =>
     [p.productName, p.productBrand, p.categoryName].some((v) => (v || '').toLowerCase().includes(q)));
-  // default: longest-waiting first (oldest created_at)
+  // default: longest-waiting first (oldest submission)
   const sort = useTableSort(filtered, {
-    initialKey: 'created_at',
+    initialKey: 'submittedAt',
     initialDir: 'asc',
-    getValue: (p, k) => (k === 'created_at' ? new Date(p.created_at).getTime() : p[k]),
+    getValue: (p, k) => (k === 'submittedAt' ? new Date(p.submittedAt).getTime() : p[k]),
   });
   const { page, setPage, totalPages, pageItems } = usePagination(sort.sorted, PAGE_SIZE, q);
 
@@ -106,13 +107,13 @@ function ArQueuePage() {
                     <SortableTh label="Product" columnKey="productName" sort={sort} />
                     <SortableTh label="Category" columnKey="categoryName" sort={sort} style={{ width: 150 }} />
                     <SortableTh label="Listing" columnKey="productStatus" sort={sort} className="text-center" style={{ width: 110 }} />
-                    <SortableTh label="Waiting" columnKey="created_at" sort={sort} className="text-center" style={{ width: 140 }} />
+                    <SortableTh label="Waiting" columnKey="submittedAt" sort={sort} className="text-center" style={{ width: 140 }} />
                     <th className="text-center" style={{ width: 120 }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {pageItems.map((p) => {
-                    const w = waitInfo(p.created_at);
+                    const w = waitInfo(p.submittedAt);
                     return (
                       <tr key={p.productId}>
                         <td style={{ overflowWrap: 'anywhere' }}>
@@ -127,7 +128,7 @@ function ArQueuePage() {
                         </td>
                         <td className="text-center">
                           <span className={w.tone === 'muted' ? 'text-muted small' : `text-${w.tone} small fw-semibold`}
-                            title={`Added ${new Date(p.created_at).toLocaleDateString()}`}>
+                            title={`Submitted for review ${new Date(p.submittedAt).toLocaleDateString()}`}>
                             {w.label}
                             {w.days >= 7 && ' ⚠'}
                           </span>

@@ -16,8 +16,8 @@ function Stat({ label, value, tone = 'primary', hint }) {
 }
 
 // Whole days since a timestamp, with a colour tone (amber ≥3d, red ≥7d).
-function waitDays(createdAt) {
-  const days = Math.max(0, Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000));
+function waitDays(since) {
+  const days = Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / 86400000));
   const tone = days >= 7 ? 'danger' : days >= 3 ? 'warning' : 'muted';
   const label = days === 0 ? 'today' : days === 1 ? '1 day' : `${days} days`;
   return { days, tone, label };
@@ -89,7 +89,7 @@ function ArDashboardPage() {
                       Nothing awaiting — all caught up 🎉
                     </div>
                   ) : nextUp.map((p) => {
-                    const w = waitDays(p.created_at);
+                    const w = waitDays(p.submittedAt);
                     return (
                       <div key={p.productId} className="list-group-item d-flex justify-content-between align-items-center">
                         <div style={{ overflowWrap: 'anywhere' }}>

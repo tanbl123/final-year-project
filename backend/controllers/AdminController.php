@@ -462,6 +462,7 @@ function handleListArQueue(PDO $pdo): void {
   $stmt = $pdo->query(
     "SELECT p.productId, p.productName, p.productBrand, c.categoryName,
             s.companyName, p.productStatus, p.created_at,
+            COALESCE(p.submittedAt, p.created_at) AS submittedAt,
             (SELECT pm.arLensId FROM product_model pm
               WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) AS arLensId
        FROM product p
@@ -472,7 +473,7 @@ function handleListArQueue(PDO $pdo): void {
         AND EXISTS (SELECT 1 FROM product_model pm WHERE pm.productId = p.productId)
         AND (SELECT pm.arReadyAt FROM product_model pm
               WHERE pm.productId = p.productId ORDER BY pm.productModelId LIMIT 1) IS NULL
-      ORDER BY p.created_at ASC"
+      ORDER BY COALESCE(p.submittedAt, p.created_at) ASC"
   );
   sendJson(200, true, ['products' => $stmt->fetchAll()]);
 }

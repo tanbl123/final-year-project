@@ -233,6 +233,10 @@ CREATE TABLE product (
     virtualTryOnEnable  BOOLEAN       NOT NULL DEFAULT FALSE,
     created_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at          DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    -- when the product was (re)submitted for admin review; stamped on create and
+    -- re-stamped whenever the status transitions back INTO Pending (resubmit).
+    -- Deliberately NO "ON UPDATE" so an ordinary edit doesn't move it.
+    submittedAt         DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (productId),
     KEY idx_product_supplier (supplierId),
     KEY idx_product_category (categoryId),

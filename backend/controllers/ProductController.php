@@ -509,6 +509,11 @@ function handleUpdateProduct(PDO $pdo, array $auth, string $id): void {
   if ($identityChanged && in_array($current['productStatus'], ['Approved', 'Rejected'], true)) {
     $newStatus = 'Pending';
   }
+  // Re-stamp the review clock only on a real transition INTO Pending (a resubmit
+  // of a previously Approved/Rejected product) — not on edits made while already
+  // Pending, so the wait reflects the latest submission without ordinary edits
+  // restarting it.
+  $resubmitted = ($newStatus === 'Pending' && $current['productStatus'] !== 'Pending');
 
   // Pre-update snapshot, so we can fire wishlist nudges (price drop / back in
   // stock) after the commit. New total stock = sum of the incoming variants.
@@ -525,7 +530,8 @@ function handleUpdateProduct(PDO $pdo, array $auth, string $id): void {
       'UPDATE product
           SET productName = :name, productBrand = :brand, productDescription = :desc,
               productPrice = :price, categoryId = :cat, virtualTryOnEnable = :tryon,
-              productStatus = :status, rejectionReason = NULL
+              productStatus = :status, rejectionReason = NULL'
+          . ($resubmitted ? ', submittedAt = NOW()' : '') . '
         WHERE productId = :id AND supplierId = :sid'
     )->execute([
       'name'   => $name,
