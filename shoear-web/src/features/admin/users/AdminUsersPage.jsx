@@ -463,18 +463,20 @@ function AdminUsersPage() {
                 {createErr && <div className="alert alert-danger py-2">{createErr}</div>}
                 <div className="mb-2">
                   <label className="form-label small mb-1">Full name</label>
-                  <input className={`form-control ${staffErrors.fullName ? 'is-invalid' : ''}`}
+                  <ClearableInput className={staffErrors.fullName ? 'is-invalid' : ''}
                     value={createForm.fullName}
                     onChange={(e) => setStaffField('fullName', e.target.value)}
-                    onBlur={() => blurStaffField('fullName')} />
+                    onBlur={() => blurStaffField('fullName')}
+                    onClear={() => setStaffField('fullName', '')} />
                   {staffErrors.fullName && <div className="invalid-feedback d-block">{staffErrors.fullName}</div>}
                 </div>
                 <div className="mb-1">
                   <label className="form-label small mb-1">Email</label>
-                  <input type="email" className={`form-control ${staffErrors.email ? 'is-invalid' : ''}`}
+                  <ClearableInput type="email" className={staffErrors.email ? 'is-invalid' : ''}
                     value={createForm.email}
                     onChange={(e) => setStaffField('email', e.target.value)}
-                    onBlur={() => blurStaffField('email')} />
+                    onBlur={() => blurStaffField('email')}
+                    onClear={() => setStaffField('email', '')} />
                   {staffErrors.email && <div className="invalid-feedback d-block">{staffErrors.email}</div>}
                 </div>
               </div>
@@ -507,18 +509,20 @@ function AdminUsersPage() {
                 {resendErr && <div className="alert alert-danger py-2">{resendErr}</div>}
                 <div className="mb-2">
                   <label className="form-label small mb-1">Full name</label>
-                  <input className={`form-control ${resendErrors.fullName ? 'is-invalid' : ''}`}
+                  <ClearableInput className={resendErrors.fullName ? 'is-invalid' : ''}
                     value={resendForm.fullName}
                     onChange={(e) => setResendField('fullName', e.target.value)}
-                    onBlur={() => blurResendField('fullName')} />
+                    onBlur={() => blurResendField('fullName')}
+                    onClear={() => setResendField('fullName', '')} />
                   {resendErrors.fullName && <div className="invalid-feedback d-block">{resendErrors.fullName}</div>}
                 </div>
                 <div className="mb-1">
                   <label className="form-label small mb-1">Email</label>
-                  <input type="email" className={`form-control ${resendErrors.email ? 'is-invalid' : ''}`}
+                  <ClearableInput type="email" className={resendErrors.email ? 'is-invalid' : ''}
                     value={resendForm.email}
                     onChange={(e) => setResendField('email', e.target.value)}
-                    onBlur={() => blurResendField('email')} />
+                    onBlur={() => blurResendField('email')}
+                    onClear={() => setResendField('email', '')} />
                   {resendErrors.email && <div className="invalid-feedback d-block">{resendErrors.email}</div>}
                 </div>
               </div>
