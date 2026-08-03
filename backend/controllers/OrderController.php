@@ -218,7 +218,10 @@ function handleListAdminOrders(PDO $pdo): void {
   $sql =
     "SELECT o.orderId, o.orderDate, o.orderStatus, o.orderTotalAmount,
             buyer.fullName AS customerName,
-            (SELECT COUNT(*) FROM order_item oi WHERE oi.orderId = o.orderId) AS itemCount,
+            -- total units sold across the order (SUM of line quantities), so this
+            -- matches the per-line Qty in the detail: a single line of qty 5 shows
+            -- as 5, not 1.
+            (SELECT COALESCE(SUM(oi.orderQuantity), 0) FROM order_item oi WHERE oi.orderId = o.orderId) AS itemCount,
             pay.paymentStatus,
             (SELECT d.deliveryStatus FROM delivery d WHERE d.orderId = o.orderId
                ORDER BY FIELD(d.deliveryStatus,'Pending','Assigned','PickedUp','OutForDelivery','Delivered','Failed')
