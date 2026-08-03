@@ -8,7 +8,8 @@ class ApiException implements Exception {
   final String message;
   final int? statusCode;
   final String? code;
-  ApiException(this.message, {this.statusCode, this.code});
+  final Map<String, dynamic>? detail;   // extra structured info (e.g. appeal uid+token)
+  ApiException(this.message, {this.statusCode, this.code, this.detail});
   @override
   String toString() => message;
 }
@@ -87,6 +88,8 @@ class ApiClient {
         (err is Map ? err['message'] as String? : null) ?? 'Request failed.',
         statusCode: res.statusCode,
         code: err is Map ? err['code'] as String? : null,
+        detail: (err is Map && err['detail'] is Map)
+            ? (err['detail'] as Map).cast<String, dynamic>() : null,
       );
     }
     return json['data'];

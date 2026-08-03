@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'package:delivery/core/api/api_client.dart';
 import 'package:delivery/core/utils/snackbar.dart';
 import 'package:delivery/features/auth/state/auth_provider.dart';
 import 'package:delivery/features/auth/screens/register_screen.dart';
 import 'package:delivery/features/auth/screens/forgot_password_screen.dart';
+import 'package:delivery/features/appeal/appeal_screen.dart';
 
 /// Courier sign-in. The shell shows this whenever there's no session.
 class LoginScreen extends StatefulWidget {
@@ -23,6 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _passwordError;
   String? _loginError;           // message shown under password field
   bool   _identifierLoginRed = false; // red outline on identifier after failed login
+  Map<String, dynamic>? _appeal;      // {appealUid, appealToken} when suspended
 
   @override
   void dispose() {
@@ -58,6 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _passwordError        = _validatePassword(_password.text);
       _loginError           = null;
       _identifierLoginRed   = false;
+      _appeal               = null;
     });
     if (_identifierError != null || _passwordError != null) return;
 
@@ -66,7 +70,15 @@ class _LoginScreenState extends State<LoginScreen> {
       await context.read<AuthProvider>().login(_identifier.text.trim(), _password.text);
       // the shell swaps to the assignments screen on success
     } catch (e) {
-      if (mounted) setState(() { _loginError = e.toString(); _identifierLoginRed = true; });
+      if (!mounted) return;
+      // Suspended → credentials were valid; show the reason + an appeal button
+      // (the error carries the appeal uid + token) rather than red fields.
+      if (e is ApiException && e.code == 'SUSPENDED' &&
+          e.detail?['appealUid'] != null && e.detail?['appealToken'] != null) {
+        setState(() { _loginError = e.message; _appeal = e.detail; });
+      } else {
+        setState(() { _loginError = e.toString(); _identifierLoginRed = true; });
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -150,6 +162,19 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ),
+                        if (_appeal != null) ...[
+                          OutlinedButton.icon(
+                            onPressed: _loading ? null : () => Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => AppealScreen(
+                                uid: _appeal!['appealUid'].toString(),
+                                token: _appeal!['appealToken'].toString(),
+                              )),
+                            ),
+                            icon: const Icon(Icons.gavel_outlined),
+                            label: const Text('Appeal this suspension'),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
                         const SizedBox(height: 20),
                         FilledButton(
                           onPressed: _loading ? null : _submit,
