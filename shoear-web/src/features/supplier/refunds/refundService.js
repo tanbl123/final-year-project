@@ -9,8 +9,12 @@ export function getRefunds(filters = {}) {
 }
 
 // Admin: move a refund along its flow. status = 'Approved' | 'Rejected' | 'Completed'.
-export function setRefundStatus(refundId, status) {
-  return apiPatch(`/admin/refunds/${refundId}/status`, { status }, getToken());
+export function setRefundStatus(refundId, status, adminNote) {
+  return apiPatch(
+    `/admin/refunds/${refundId}/status`,
+    { status, ...(adminNote ? { adminNote } : {}) },
+    getToken(),
+  );
 }
 
 // Supplier: refunds on orders containing their products (read-only). { status }.

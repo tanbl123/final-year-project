@@ -89,7 +89,7 @@ function notifyOrderStatusChange(PDO $pdo, string $orderId, string $status): voi
 }
 
 // Map a refund status to friendly copy and notify the buyer.
-function notifyRefundStatusChange(PDO $pdo, string $customerId, string $orderId, string $status): void {
+function notifyRefundStatusChange(PDO $pdo, string $customerId, string $orderId, string $status, string $note = ''): void {
   $copy = [
     'Approved'  => ['Refund approved',  "Your refund for order $orderId was approved."],
     'Rejected'  => ['Refund rejected',  "Your refund request for order $orderId was rejected."],
@@ -97,6 +97,8 @@ function notifyRefundStatusChange(PDO $pdo, string $customerId, string $orderId,
   ];
   if (!isset($copy[$status])) { return; }
   [$title, $body] = $copy[$status];
+  $note = trim($note);
+  if ($note !== '') { $body .= ' Reason: ' . $note; }
   notifyCustomerById($pdo, $customerId, 'refund', $title, $body, $orderId);
 }
 

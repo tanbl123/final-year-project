@@ -555,6 +555,7 @@ CREATE TABLE refund (
     refundStatus ENUM('Pending','Approved','Rejected','Completed') NOT NULL DEFAULT 'Pending',
     requestDate  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     refundProof  TEXT          NULL,                      -- evidence photo URL, or JSON array of URLs
+    adminNote    VARCHAR(500)  NULL,                      -- admin's decision note (required on Reject, optional on Approve)
     PRIMARY KEY (refundId),
     KEY idx_refund_order (orderId),
     KEY idx_refund_customer (customerId),

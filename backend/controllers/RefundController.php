@@ -50,7 +50,7 @@ function handleListRefunds(PDO $pdo): void {
 
   $sql =
     "SELECT r.refundId, r.orderId, r.refundReason, r.refundAmount, r.refundStatus,
-            r.requestDate, r.refundProof,
+            r.requestDate, r.refundProof, r.adminNote,
             buyer.fullName AS customerName,
             o.orderTotalAmount, o.orderStatus
        FROM refund r
@@ -81,6 +81,14 @@ function handleSetRefundStatus(PDO $pdo, string $refundId, array $config = []): 
   $status = trim($body['status'] ?? '');
   if (!in_array($status, ['Approved', 'Rejected', 'Completed'], true)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Invalid status.']);
+  }
+
+  // Admin decision note: REQUIRED when rejecting (the customer is told why),
+  // optional when approving. Stored and included in the customer notification.
+  $adminNote = trim($body['adminNote'] ?? '');
+  if (mb_strlen($adminNote) > 500) { $adminNote = mb_substr($adminNote, 0, 500); }
+  if ($status === 'Rejected' && $adminNote === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A reason is required when rejecting a refund.']);
   }
 
   $stmt = $pdo->prepare('SELECT orderId, customerId, refundStatus, refundAmount FROM refund WHERE refundId = :id');
@@ -120,8 +128,15 @@ function handleSetRefundStatus(PDO $pdo, string $refundId, array $config = []): 
 
   try {
     $pdo->beginTransaction();
-    $pdo->prepare('UPDATE refund SET refundStatus = :s WHERE refundId = :id')
-        ->execute(['s' => $status, 'id' => $refundId]);
+    // Record the admin's note alongside the decision (Approve/Reject). Leave it
+    // untouched on 'Completed' (that step carries no new note).
+    if (in_array($status, ['Approved', 'Rejected'], true)) {
+      $pdo->prepare('UPDATE refund SET refundStatus = :s, adminNote = :note WHERE refundId = :id')
+          ->execute(['s' => $status, 'note' => ($adminNote !== '' ? $adminNote : null), 'id' => $refundId]);
+    } else {
+      $pdo->prepare('UPDATE refund SET refundStatus = :s WHERE refundId = :id')
+          ->execute(['s' => $status, 'id' => $refundId]);
+    }
 
     // money actually returned → reflect it on the payment record
     if ($status === 'Completed') {
@@ -155,9 +170,10 @@ function handleSetRefundStatus(PDO $pdo, string $refundId, array $config = []): 
     sendJson(500, false, null, ['code' => 'DB_ERROR', 'message' => 'Could not update the refund.']);
   }
 
-  // notify the buyer of the outcome (best-effort; after commit)
+  // notify the buyer of the outcome (best-effort; after commit) — include the
+  // admin's note so the customer sees WHY (especially on a rejection)
   if (function_exists('notifyRefundStatusChange')) {
-    notifyRefundStatusChange($pdo, $refund['customerId'], $refund['orderId'], $status);
+    notifyRefundStatusChange($pdo, $refund['customerId'], $refund['orderId'], $status, $adminNote);
   }
   // once the refund COMPLETES the money is netted against the supplier's payout,
   // so email the affected supplier(s) — their channel is the web, not push.
