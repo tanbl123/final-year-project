@@ -150,13 +150,17 @@ function AdminCourierChangesPage() {
                 <DiffRow label="Licence class" from={r.curLicenseClass} to={r.newLicenseClass} />
                 <DiffRow label="Licence expiry" from={fmtDate(r.curLicenseExpiry)} to={fmtDate(r.newLicenseExpiry)} />
                 <DiffRow label="Licence type" from={licenceType(r.curLicenseIsDigital)} to={licenceType(r.newLicenseIsDigital)} />
-                {Number(r.newLicenseIsDigital) === 1 ? (
+                {/* Render a doc row whenever EITHER side has a file, so switching
+                    licence type (digital<->physical) still shows the old document
+                    that the other type doesn't use — never hides it from review. */}
+                {(r.curELicenseUrl || r.newELicenseUrl) && (
                   <DiffRow label="Digital licence" from={r.curELicenseUrl} to={r.newELicenseUrl} isDoc />
-                ) : (
-                  <>
-                    <DiffRow label="Licence (front)" from={r.curLicensePhotoUrl} to={r.newLicensePhotoUrl} isDoc />
-                    <DiffRow label="Licence (back)" from={r.curLicensePhotoBackUrl} to={r.newLicensePhotoBackUrl} isDoc />
-                  </>
+                )}
+                {(r.curLicensePhotoUrl || r.newLicensePhotoUrl) && (
+                  <DiffRow label="Licence (front)" from={r.curLicensePhotoUrl} to={r.newLicensePhotoUrl} isDoc />
+                )}
+                {(r.curLicensePhotoBackUrl || r.newLicensePhotoBackUrl) && (
+                  <DiffRow label="Licence (back)" from={r.curLicensePhotoBackUrl} to={r.newLicensePhotoBackUrl} isDoc />
                 )}
               </div>
             </div>
