@@ -196,9 +196,6 @@ function PayoutsCard() {
                 )}
               </>
             )}
-            {status.disabledReason && (
-              <p className="small text-muted mb-2">Stripe status: {status.disabledReason}</p>
-            )}
             <div className="d-flex gap-2">
               <button className="btn btn-primary" onClick={connect} disabled={working}>
                 {working ? 'Opening Stripe…' : 'Continue onboarding'}
