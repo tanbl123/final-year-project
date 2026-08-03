@@ -1053,7 +1053,8 @@ function handleMe(PDO $pdo, array $auth): void {
   $profile = null;
   if ($u['role'] === 'Supplier') {
     $p = $pdo->prepare('SELECT supplierId, companyName, displayName, displayNameUpdatedAt,
-                               companyAddress, operationalAddress, autoShipStandard
+                               companyAddress, operationalAddress, autoShipStandard,
+                               companyPhotoUrl, companyPhotoPendingUrl, companyPhotoStatus, companyPhotoNote
                           FROM supplier WHERE userId = :id');
   } elseif ($u['role'] === 'Customer') {
     $p = $pdo->prepare('SELECT customerId, shippingAddress, addressLine1,

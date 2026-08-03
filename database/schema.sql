@@ -114,6 +114,13 @@ CREATE TABLE supplier (
     companyName     VARCHAR(150) NOT NULL,                -- LEGAL registered business name (SSM); admin-verified, used for invoices/admin
     displayName          VARCHAR(150) NOT NULL DEFAULT '', -- customer-facing STORE name; self-editable (30-day cooldown). Falls back to companyName.
     displayNameUpdatedAt DATETIME     NULL,               -- last store-name change (drives the cooldown)
+    -- customer-facing company logo (square). Supplier-uploaded, admin-moderated:
+    -- only an Approved logo (companyPhotoUrl) is ever shown; a new upload lands in
+    -- companyPhotoPendingUrl as 'Pending' until an admin approves/rejects it.
+    companyPhotoUrl        VARCHAR(255) NULL,             -- live, approved logo
+    companyPhotoPendingUrl VARCHAR(255) NULL,             -- uploaded logo awaiting review
+    companyPhotoStatus     ENUM('None','Pending','Approved','Rejected') NOT NULL DEFAULT 'None',
+    companyPhotoNote       VARCHAR(255) NULL,             -- admin reason on reject
     companyAddress  VARCHAR(255) NOT NULL,                -- registered business address (matches SSM); combined single line
     companyLine1    VARCHAR(150) NULL,                    -- structured business address parts
     companyPostcode VARCHAR(10)  NULL,

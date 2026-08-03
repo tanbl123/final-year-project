@@ -102,6 +102,19 @@ export function updateStoreName(displayName) {
   return apiPatch('/supplier/display-name', { displayName }, getToken());
 }
 
+// Upload an image (authenticated, supplier) → resolves with { url }.
+export function uploadImage(file) {
+  const form = new FormData();
+  form.append('kind', 'image');
+  form.append('file', file);
+  return apiUpload('/uploads', form, getToken());
+}
+
+// Submit a newly-uploaded company logo for admin review (lands as Pending).
+export function submitCompanyLogo(url) {
+  return apiPost('/supplier/company-photo', { url }, getToken());
+}
+
 // The signed-in user's own profile (GET /auth/me).
 export function getMe() {
   return apiGet('/auth/me', getToken());

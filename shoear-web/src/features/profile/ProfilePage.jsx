@@ -7,6 +7,7 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import EyeIcon from '../../components/EyeIcon';
 import ClearableInput from '../../components/ClearableInput';
 import BusinessDetailsCard from './BusinessDetailsCard';
+import CompanyLogoCard from './CompanyLogoCard';
 import StoreNameCard from './StoreNameCard';
 import PayoutsCard from './PayoutsCard';
 import FulfilmentCard from './FulfilmentCard';
@@ -63,6 +64,11 @@ function ProfilePage() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
+
+  // re-fetch the profile (e.g. after submitting a company logo for review)
+  function reloadMe() {
+    getMe().then(setMe).catch((err) => setError(err.message));
+  }
 
   function startEdit() {
     setForm({ fullName: me.fullName, phoneNumber: me.phoneNumber || '', username: me.username || '' });
@@ -327,6 +333,11 @@ function ProfilePage() {
           onSaved={(nm) => setStoreNameOverride(nm)}
           onToast={setToast}
         />
+      )}
+
+      {/* company logo (suppliers only) — customer-facing brand mark, admin-moderated */}
+      {me.role === 'Supplier' && (
+        <CompanyLogoCard profile={me.profile} onSaved={reloadMe} onToast={setToast} />
       )}
 
       {/* business details (suppliers only) — verified identity + re-approval flow */}

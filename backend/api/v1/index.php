@@ -601,6 +601,11 @@ if ($method === 'PATCH' && $path === '/supplier/display-name') {
   $pdo  = getPDO();
   handleUpdateDisplayName($pdo, $auth);
 }
+if ($method === 'POST' && $path === '/supplier/company-photo') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleSubmitCompanyPhoto($pdo, $auth);
+}
 
 // ── courier vehicle/licence (post-approval changes via re-approval) ──
 if ($method === 'GET' && $path === '/courier/verification') {
@@ -798,6 +803,19 @@ if ($method === 'POST' && preg_match('#^/admin/supplier-changes/([^/]+)/reject$#
   requireAdmin($auth);
   $pdo  = getPDO();
   handleRejectChangeRequest($pdo, $auth, $m[1]);
+}
+
+if ($method === 'GET' && $path === '/admin/company-photos') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleListPendingCompanyPhotos($pdo);
+}
+if ($method === 'POST' && preg_match('#^/admin/suppliers/([^/]+)/company-photo/review$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleReviewCompanyPhoto($pdo, $auth, $m[1]);
 }
 
 // courier vehicle/licence change requests (re-approval queue)

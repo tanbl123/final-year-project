@@ -322,7 +322,8 @@ function handleGetUser(PDO $pdo, string $userId): void {
   $profile = null;
   if ($u['role'] === 'Supplier') {
     $p = $pdo->prepare('SELECT supplierId, companyName, displayName, companyAddress, operationalAddress,
-                               businessRegNo, businessLicenseUrl
+                               businessRegNo, businessLicenseUrl,
+                               companyPhotoUrl, companyPhotoStatus
                           FROM supplier WHERE userId = :id');
   } elseif ($u['role'] === 'Customer') {
     $p = $pdo->prepare('SELECT customerId, shippingAddress FROM customer WHERE userId = :id');
@@ -749,6 +750,63 @@ function handleRejectChangeRequest(PDO $pdo, array $auth, string $requestId): vo
   sendJson(200, true, ['requestId' => $requestId, 'status' => 'Rejected']);
 }
 
+// ── supplier company logo moderation ─────────────────────────────────
+// GET /admin/company-photos — suppliers whose newly-uploaded company logo is
+// awaiting review (the current approved logo, if any, is shown for comparison).
+function handleListPendingCompanyPhotos(PDO $pdo): void {
+  $stmt = $pdo->query(
+    "SELECT s.supplierId, s.companyName, s.displayName, u.email,
+            s.companyPhotoUrl AS currentUrl, s.companyPhotoPendingUrl AS pendingUrl
+       FROM supplier s JOIN `user` u ON u.userId = s.userId
+      WHERE s.companyPhotoStatus = 'Pending'
+      ORDER BY s.supplierId ASC"
+  );
+  sendJson(200, true, ['photos' => $stmt->fetchAll()]);
+}
+
+// POST /admin/suppliers/{supplierId}/company-photo/review — body { decision, reason? }.
+// 'approve' → the pending logo becomes the live one; 'reject' → the upload is
+// discarded (the previously-approved logo, if any, stays live) and a reason is
+// recorded so the supplier knows why.
+function handleReviewCompanyPhoto(PDO $pdo, array $auth, string $supplierId): void {
+  $body     = getJsonBody();
+  $decision = trim($body['decision'] ?? '');
+
+  $stmt = $pdo->prepare('SELECT companyPhotoStatus FROM supplier WHERE supplierId = :sid');
+  $stmt->execute(['sid' => $supplierId]);
+  $row = $stmt->fetch();
+  if (!$row) {
+    sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Supplier not found.']);
+  }
+  if ($row['companyPhotoStatus'] !== 'Pending') {
+    sendJson(409, false, null, ['code' => 'CONFLICT', 'message' => 'There is no pending company logo to review.']);
+  }
+
+  if ($decision === 'approve') {
+    $pdo->prepare(
+      "UPDATE supplier
+          SET companyPhotoUrl = companyPhotoPendingUrl, companyPhotoPendingUrl = NULL,
+              companyPhotoStatus = 'Approved', companyPhotoNote = NULL
+        WHERE supplierId = :sid"
+    )->execute(['sid' => $supplierId]);
+    sendJson(200, true, ['supplierId' => $supplierId, 'companyPhotoStatus' => 'Approved']);
+  } elseif ($decision === 'reject') {
+    $reason = trim($body['reason'] ?? '');
+    if ($reason === '') {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A reason is required so the supplier knows what to fix.']);
+    }
+    if (mb_strlen($reason) > 255) { $reason = mb_substr($reason, 0, 255); }
+    $pdo->prepare(
+      "UPDATE supplier
+          SET companyPhotoPendingUrl = NULL, companyPhotoStatus = 'Rejected', companyPhotoNote = :rn
+        WHERE supplierId = :sid"
+    )->execute(['rn' => $reason, 'sid' => $supplierId]);
+    sendJson(200, true, ['supplierId' => $supplierId, 'companyPhotoStatus' => 'Rejected']);
+  } else {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Decision must be approve or reject.']);
+  }
+}
+
 // ── courier vehicle/licence change requests ──────────────────────────
 // GET /admin/courier-changes — pending plate/licence change requests with the
 // current (live) values alongside the proposed ones, so the admin sees the diff.
@@ -875,7 +933,8 @@ function adminBadgeCounts(PDO $pdo): array {
     // Main / Moderation approval queues
     'suppliers'  => "SELECT COUNT(*) FROM `user` WHERE role = 'Supplier' AND status = 'Pending'",
     'couriers'   => "SELECT COUNT(*) FROM `user` WHERE role = 'DeliveryPersonnel' AND status = 'Pending'",
-    'changes'    => "SELECT COUNT(*) FROM supplier_change_request WHERE requestStatus = 'Pending'",
+    'changes'    => "SELECT (SELECT COUNT(*) FROM supplier_change_request WHERE requestStatus = 'Pending')
+                            + (SELECT COUNT(*) FROM supplier WHERE companyPhotoStatus = 'Pending')",
     'courierChanges' => "SELECT COUNT(*) FROM courier_change_request WHERE requestStatus = 'Pending'",
     'products'   => "SELECT COUNT(*) FROM product WHERE productStatus = 'Pending'",
     // Operations queues

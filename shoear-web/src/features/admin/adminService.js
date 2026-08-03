@@ -216,6 +216,15 @@ export function rejectChangeRequest(requestId, reason) {
   return apiPost(`/admin/supplier-changes/${requestId}/reject`, { reason }, getToken());
 }
 
+// ── supplier company-logo moderation ─────────────────────────────────
+export function getPendingCompanyPhotos() {
+  return apiGet('/admin/company-photos', getToken());
+}
+
+export function reviewCompanyPhoto(supplierId, decision, reason) {
+  return apiPost(`/admin/suppliers/${supplierId}/company-photo/review`, { decision, reason }, getToken());
+}
+
 // ── courier vehicle/licence change requests (re-approval queue) ───────
 export function getCourierChangeRequests() {
   return apiGet('/admin/courier-changes', getToken());

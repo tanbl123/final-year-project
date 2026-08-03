@@ -4,6 +4,7 @@ import Toast from '../../../components/Toast';
 import { usePagination } from '../../../hooks/usePagination';
 import {
   getSupplierChangeRequests, approveChangeRequest, rejectChangeRequest, refreshBadges,
+  getPendingCompanyPhotos, reviewCompanyPhoto,
 } from '../adminService';
 
 // One field's current → proposed value. Highlights when it actually changed.
@@ -38,14 +39,54 @@ function AdminBusinessChangesPage() {
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState('');
 
+  // company-logo moderation
+  const [photos, setPhotos] = useState([]);
+  const [photoBusy, setPhotoBusy] = useState('');
+  const [photoRejecting, setPhotoRejecting] = useState(null);
+  const [photoReason, setPhotoReason] = useState('');
+  const [photoReasonError, setPhotoReasonError] = useState('');
+
   useEffect(() => {
     let active = true;
-    getSupplierChangeRequests()
-      .then((data) => { if (active) setRequests(data.requests); })
+    Promise.all([getSupplierChangeRequests(), getPendingCompanyPhotos()])
+      .then(([chg, ph]) => { if (active) { setRequests(chg.requests); setPhotos(ph.photos); } })
       .catch((err) => { if (active) setError(err.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
+
+  async function approvePhoto(p) {
+    setPhotoBusy(p.supplierId);
+    setError('');
+    try {
+      await reviewCompanyPhoto(p.supplierId, 'approve');
+      setPhotos((prev) => prev.filter((x) => x.supplierId !== p.supplierId));
+      setNotice(`Company logo for ${p.companyName} approved.`);
+      refreshBadges();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPhotoBusy('');
+    }
+  }
+
+  async function confirmPhotoReject() {
+    if (photoReason.trim() === '') { setPhotoReasonError('Please give a reason — the supplier sees this.'); return; }
+    const p = photoRejecting;
+    setPhotoBusy(p.supplierId);
+    setPhotoRejecting(null);
+    setError('');
+    try {
+      await reviewCompanyPhoto(p.supplierId, 'reject', photoReason.trim());
+      setPhotos((prev) => prev.filter((x) => x.supplierId !== p.supplierId));
+      setNotice(`Company logo for ${p.companyName} rejected.`);
+      refreshBadges();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPhotoBusy('');
+    }
+  }
 
   async function approve(r) {
     setBusyId(r.requestId);
@@ -89,6 +130,47 @@ function AdminBusinessChangesPage() {
       {/* success confirmations are transient → toast (errors stay inline below) */}
       <Toast message={notice} onClose={() => setNotice('')} />
       {error && <div className="alert alert-danger py-2">{error}</div>}
+
+      {/* company logos awaiting moderation */}
+      {!loading && photos.length > 0 && (
+        <div className="mb-4">
+          <h5 className="mb-2">🖼️ Company logos awaiting review</h5>
+          <div className="d-flex flex-column gap-3">
+            {photos.map((p) => (
+              <div key={p.supplierId} className="card">
+                <div className="card-body d-flex align-items-center gap-3 flex-wrap">
+                  <div className="text-center">
+                    <div className="text-muted small mb-1">New</div>
+                    <a href={p.pendingUrl} target="_blank" rel="noreferrer">
+                      <img src={p.pendingUrl} alt="Proposed logo" className="border rounded"
+                        style={{ width: 80, height: 80, objectFit: 'cover' }} />
+                    </a>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-muted small mb-1">Current</div>
+                    {p.currentUrl
+                      ? <a href={p.currentUrl} target="_blank" rel="noreferrer">
+                          <img src={p.currentUrl} alt="Current logo" className="border rounded"
+                            style={{ width: 80, height: 80, objectFit: 'cover' }} /></a>
+                      : <div className="border rounded bg-light d-flex align-items-center justify-content-center text-muted small"
+                          style={{ width: 80, height: 80 }}>none</div>}
+                  </div>
+                  <div className="flex-grow-1">
+                    <div className="fw-semibold">{p.companyName}</div>
+                    <div className="text-muted small">{p.email}</div>
+                  </div>
+                  <div className="text-nowrap">
+                    <button className="btn btn-success btn-sm me-2" disabled={photoBusy === p.supplierId}
+                      onClick={() => approvePhoto(p)}>{photoBusy === p.supplierId ? '…' : 'Approve'}</button>
+                    <button className="btn btn-outline-danger btn-sm" disabled={photoBusy === p.supplierId}
+                      onClick={() => { setPhotoRejecting(p); setPhotoReason(''); setPhotoReasonError(''); }}>Reject</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-muted">Loading…</p>
@@ -168,6 +250,38 @@ function AdminBusinessChangesPage() {
                 <div className="modal-footer">
                   <button type="button" className="btn btn-outline-secondary" onClick={() => setRejecting(null)}>Cancel</button>
                   <button type="button" className="btn btn-warning" onClick={confirmReject}>Reject</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="modal-backdrop show"></div>
+        </>
+      )}
+
+      {photoRejecting && (
+        <>
+          <div className="modal d-block" tabIndex="-1" role="dialog">
+            <div className="modal-dialog modal-dialog-centered" role="document">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">Reject logo for {photoRejecting.companyName}</h5>
+                  <button type="button" className="btn-close" onClick={() => setPhotoRejecting(null)}></button>
+                </div>
+                <div className="modal-body text-start">
+                  <label className="form-label">Reason (shown to the supplier)</label>
+                  <textarea
+                    className={`form-control ${photoReasonError ? 'is-invalid' : ''}`}
+                    rows={3}
+                    value={photoReason}
+                    placeholder="e.g. The image is blurry / contains text or content that isn't a company logo."
+                    onChange={(e) => { setPhotoReason(e.target.value); setPhotoReasonError(''); }}
+                  />
+                  {photoReasonError && <div className="invalid-feedback">{photoReasonError}</div>}
+                  <p className="text-muted small mt-2 mb-0">Their current logo (if any) stays live; they can upload a new one.</p>
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-outline-secondary" onClick={() => setPhotoRejecting(null)}>Cancel</button>
+                  <button type="button" className="btn btn-warning" onClick={confirmPhotoReject}>Reject</button>
                 </div>
               </div>
             </div>

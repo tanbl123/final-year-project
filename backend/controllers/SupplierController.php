@@ -352,6 +352,32 @@ function handleUpdateDisplayName(PDO $pdo, array $auth): void {
   sendJson(200, true, ['displayName' => $displayName, 'nextChangeAt' => $next]);
 }
 
+// POST /supplier/company-photo — body { url }. Submit a newly-uploaded company
+// logo for admin review. It lands as 'Pending' (the current approved logo, if
+// any, stays live) until an admin approves or rejects it. The image is uploaded
+// first via POST /uploads (kind=image), which returns the URL passed here.
+function handleSubmitCompanyPhoto(PDO $pdo, array $auth): void {
+  $supplierId = requireSupplierId($pdo, $auth);
+  $body = getJsonBody();
+  $url  = trim($body['url'] ?? '');
+
+  // Accept only a URL we issued (an uploads path), so this can't point elsewhere.
+  if ($url === '' || strpos($url, '/uploads/') === false) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please upload a valid image first.']);
+  }
+  if (mb_strlen($url) > 255) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Image URL is too long.']);
+  }
+
+  $pdo->prepare(
+    "UPDATE supplier
+        SET companyPhotoPendingUrl = :u, companyPhotoStatus = 'Pending', companyPhotoNote = NULL
+      WHERE supplierId = :sid"
+  )->execute(['u' => $url, 'sid' => $supplierId]);
+
+  sendJson(200, true, ['companyPhotoStatus' => 'Pending', 'companyPhotoPendingUrl' => $url]);
+}
+
 // ── standard shipping (3PL) — supplier ships the parcel themselves ──────────
 // Carriers a supplier can pick when shipping a Standard parcel.
 const STANDARD_CARRIERS = ['J&T Express', 'Pos Laju', 'Ninja Van', 'DHL eCommerce', 'GDEX', 'City-Link', 'Other'];
