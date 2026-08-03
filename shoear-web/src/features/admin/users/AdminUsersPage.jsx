@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getUsers, getUser, setUserStatus, createStaff, resendStaffInvite } from '../adminService';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Toast from '../../../components/Toast';
@@ -190,6 +191,19 @@ function AdminUsersPage() {
     const t = setTimeout(() => setDebouncedSearch(filters.search), 300);
     return () => clearTimeout(t);
   }, [filters.search]);
+
+  // Deep-link: /admin/users?open=<userId> (e.g. clicking a name on the Flagged
+  // page) auto-opens that user's detail modal, then clears the param so it
+  // doesn't re-open on refresh.
+  const [searchParams, setSearchParams] = useSearchParams();
+  useEffect(() => {
+    const openId = searchParams.get('open');
+    if (!openId) return;
+    openDetail(openId);
+    searchParams.delete('open');
+    setSearchParams(searchParams, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function load() {
     setLoading(true);

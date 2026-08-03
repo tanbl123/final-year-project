@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Toast from '../../../components/Toast';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import StarRating from '../../../components/StarRating';
@@ -84,7 +85,9 @@ function AdminFlagsPage() {
                   {/* reported user */}
                   <div className="text-muted small text-uppercase" style={{ letterSpacing: '.03em' }}>Reported user</div>
                   <div className="fw-semibold">
-                    {f.targetName}
+                    {f.targetUserId
+                      ? <Link to={`/admin/users?open=${f.targetUserId}`} title="View user details">{f.targetName}</Link>
+                      : f.targetName}
                     {f.targetRole && <span className="text-muted small ms-2">{f.targetRole}</span>}
                     <span className={`badge ms-2 text-bg-${f.targetStatus === 'Suspended' ? 'secondary' : 'success'}`}>{f.targetStatus}</span>
                   </div>
@@ -109,7 +112,10 @@ function AdminFlagsPage() {
 
                   {/* reporter */}
                   <div className="text-muted small mt-2">
-                    Reported by <strong>{f.reporterName}</strong>
+                    Reported by{' '}
+                    {f.reporterUserId
+                      ? <Link to={`/admin/users?open=${f.reporterUserId}`} className="fw-semibold" title="View user details">{f.reporterName}</Link>
+                      : <strong>{f.reporterName}</strong>}
                     {f.reporterEmail && <> · {f.reporterEmail}</>}
                     {f.reporterRole && <> · {f.reporterRole}</>}
                     {' · '}{new Date(f.created_at).toLocaleDateString()}
