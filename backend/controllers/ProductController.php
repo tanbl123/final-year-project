@@ -777,9 +777,19 @@ function handleSupplierBadgeCounts(PDO $pdo, array $auth): void {
   );
   $toShip->execute(['sid' => $supplierId]);
 
+  // published reviews on this supplier's products that they haven't replied to yet
+  $unrepliedReviews = $pdo->prepare(
+    "SELECT COUNT(*) FROM review r
+       JOIN product p ON p.productId = r.productId
+      WHERE p.supplierId = :sid AND r.reviewStatus = 'Published'
+        AND (r.supplierReply IS NULL OR r.supplierReply = '')"
+  );
+  $unrepliedReviews->execute(['sid' => $supplierId]);
+
   sendJson(200, true, ['counts' => [
     'inventory' => (int) $lowStock->fetchColumn(),
     'orders'    => (int) $toShip->fetchColumn(),
+    'reviews'   => (int) $unrepliedReviews->fetchColumn(),
   ]]);
 }
 

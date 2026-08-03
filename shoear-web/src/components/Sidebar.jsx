@@ -53,7 +53,7 @@ const SUPPLIER_NAV = [
     { to: '/dashboard', label: 'Dashboard', icon: '📊', end: true },
   ] },
   { group: 'Catalog', items: [
-    { to: '/products', label: 'Products', icon: '👟' },
+    { to: '/products', label: 'Products', icon: '👟', badge: 'reviews' },
     { to: '/inventory', label: 'Inventory', icon: '📦', badge: 'inventory' },
   ] },
   { group: 'Sales', items: [
