@@ -2,6 +2,24 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getAppealContext, submitAppeal } from '../appealService';
 
+// Defined at module scope (NOT inside the component) so its identity is stable
+// across renders — otherwise React remounts the subtree on every keystroke and
+// the textarea loses focus after one character.
+function Shell({ children }) {
+  return (
+    <div className="login-shell">
+      <div className="login-box">
+        <div className="login-brand">
+          <div className="login-badge"><img src="/shoear-shoe-v2.png" alt="ShoeAR" /></div>
+          <h1 className="login-title">Shoe<span style={{ color: '#4f46e5' }}>AR</span></h1>
+          <p className="login-sub">Appeal a suspension</p>
+        </div>
+        <div className="card card-body login-card text-start">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 // Public appeal page reached from the token-secured link in a suspension email
 // (/appeal?uid=…&token=…). No login (the user is suspended). Shows why they were
 // suspended and lets them submit one appeal, which lands in the admin queue.
@@ -39,19 +57,6 @@ function AppealPage() {
       setSubmitting(false);
     }
   }
-
-  const Shell = ({ children }) => (
-    <div className="login-shell">
-      <div className="login-box">
-        <div className="login-brand">
-          <div className="login-badge"><img src="/shoear-shoe-v2.png" alt="ShoeAR" /></div>
-          <h1 className="login-title">Shoe<span style={{ color: '#4f46e5' }}>AR</span></h1>
-          <p className="login-sub">Appeal a suspension</p>
-        </div>
-        <div className="card card-body login-card text-start">{children}</div>
-      </div>
-    </div>
-  );
 
   if (!uid || !token) {
     return <Shell><div className="alert alert-danger mb-0">This appeal link is invalid or incomplete. Please use the link from your suspension email.</div></Shell>;
