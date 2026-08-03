@@ -145,9 +145,14 @@ class _CatalogScreenState extends State<CatalogScreen> with WidgetsBindingObserv
       final res = await _load(_page + 1);
       if (!mounted) return;
       setState(() {
-        _items.addAll(res.items);
+        // Skip any product we already have — a safety net so a boundary row can
+        // never render twice even if the backend ever returns an overlap.
+        final seen = _items.map((e) => e.id).toSet();
+        _items.addAll(res.items.where((p) => !seen.contains(p.id)));
         _page = res.page;
-        _total = res.total;
+        // An empty page means we've reached the end; pin _total to what we hold
+        // so _hasMore turns false and we don't keep re-fetching at the bottom.
+        _total = res.items.isEmpty ? _items.length : res.total;
         _loadingMore = false;
       });
     } catch (_) {

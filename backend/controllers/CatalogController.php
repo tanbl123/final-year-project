@@ -31,9 +31,14 @@ function handleListCatalog(PDO $pdo): void {
   $count->execute($params);
   $total = (int) $count->fetchColumn();
 
-  $order = 'p.created_at DESC';                       // default: newest
-  if ($sort === 'price_asc')  { $order = 'p.productPrice ASC'; }
-  if ($sort === 'price_desc') { $order = 'p.productPrice DESC'; }
+  // A productId tiebreaker makes the ordering TOTAL (deterministic). Without it,
+  // rows that tie on the sort key (e.g. many products sharing the same
+  // created_at, or the same price) have an undefined order under LIMIT/OFFSET,
+  // so a boundary row can repeat across pages — showing as a "duplicate" at the
+  // end of the scroll.
+  $order = 'p.created_at DESC, p.productId DESC';     // default: newest
+  if ($sort === 'price_asc')  { $order = 'p.productPrice ASC, p.productId ASC'; }
+  if ($sort === 'price_desc') { $order = 'p.productPrice DESC, p.productId ASC'; }
 
   $sql =
     "SELECT p.productId AS id, p.productName AS name, p.productBrand AS brand,
