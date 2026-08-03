@@ -223,6 +223,27 @@ function handleCreateRefund(PDO $pdo, array $auth, string $orderId, array $confi
   if ($reason === '') {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A refund reason is required.']);
   }
+
+  // Reason category (from the app's dropdown). Physical-problem reasons need at
+  // least one evidence photo; the rest don't. Kept in sync with the app.
+  $catLabels = [
+    'damaged'    => 'Damaged in transit',
+    'defective'  => 'Defective / faulty',
+    'wrong_item' => 'Wrong item received',
+    'missing'    => 'Missing item or parts',
+    'not_fit'    => "Doesn't fit",
+    'other'      => 'Other',
+  ];
+  $photoRequired = ['damaged', 'defective', 'wrong_item', 'missing'];
+  $category = trim($body['refundCategory'] ?? '');
+  if ($category !== '' && in_array($category, $photoRequired, true) && $proof === '') {
+    sendJson(400, false, null, ['code' => 'PHOTO_REQUIRED',
+      'message' => 'Please add at least one photo as evidence for this refund reason.']);
+  }
+  // Prefix the human-readable category so the admin sees it in the reason.
+  if ($category !== '' && isset($catLabels[$category])) {
+    $reason = $catLabels[$category] . ' — ' . $reason;
+  }
   if (mb_strlen($reason) > 255) { $reason = mb_substr($reason, 0, 255); }
 
   $o = $pdo->prepare("SELECT orderStatus, orderTotalAmount, orderDate FROM `order` WHERE orderId = :oid AND customerId = :cid");

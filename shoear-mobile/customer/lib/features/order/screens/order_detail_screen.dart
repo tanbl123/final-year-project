@@ -225,7 +225,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   Future<void> _requestRefund() async {
     // The dialog owns its controller/image and validates inline; it returns the
     // reason + an optional proof photo only once valid.
-    final result = await showModalBottomSheet<(String, List<File>)>(
+    final result = await showModalBottomSheet<(String, String, List<File>)>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -235,14 +235,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       builder: (_) => const _RefundSheet(),
     );
     if (result == null) return; // cancelled
-    final (reason, proofs) = result;
+    final (category, reason, proofs) = result;
     final orders = context.read<OrderService>();
     try {
       final urls = <String>[];
       for (final p in proofs) {
         urls.add(await orders.uploadRefundProof(p));
       }
-      await orders.requestRefund(widget.orderId, reason, refundProofs: urls);
+      await orders.requestRefund(widget.orderId, reason, refundProofs: urls, category: category);
       if (!mounted) return;
       context.showSnack('Refund request submitted.');
       _refresh();
@@ -985,6 +985,18 @@ class _StandardTrackingCard extends StatelessWidget {
   }
 }
 
+// Refund reason categories. The physical-problem reasons (requiresPhoto = true)
+// need at least one evidence photo; the rest don't. Codes are kept in sync with
+// the backend (RefundController).
+const List<(String code, String label, bool requiresPhoto)> _kRefundReasons = [
+  ('damaged',    'Damaged in transit',    true),
+  ('defective',  'Defective / faulty',    true),
+  ('wrong_item', 'Wrong item received',   true),
+  ('missing',    'Missing item or parts', true),
+  ('not_fit',    "Doesn't fit",           false),
+  ('other',      'Other',                 false),
+];
+
 // ── Refund request bottom sheet (Shopee/Lazada-style evidence form) ─────────
 class _RefundSheet extends StatefulWidget {
   const _RefundSheet();
@@ -996,8 +1008,15 @@ class _RefundSheet extends StatefulWidget {
 class _RefundSheetState extends State<_RefundSheet> {
   static const _maxPhotos = 5;
   final _ctrl = TextEditingController();
-  String? _error;
-  final List<File> _proofs = []; // optional supporting photos
+  String? _category;       // selected reason code
+  String? _catError;       // inline error under the reason dropdown
+  String? _error;          // inline error under the detail field
+  String? _photoError;     // inline error under the photos section
+  final List<File> _proofs = []; // supporting photos (required for some reasons)
+
+  // Does the currently-selected reason require at least one photo?
+  bool get _photoRequired =>
+      _kRefundReasons.any((r) => r.$1 == _category && r.$3);
 
   @override
   void dispose() {
@@ -1033,11 +1052,16 @@ class _RefundSheetState extends State<_RefundSheet> {
       maxWidth: 1200,
       imageQuality: 85,
     );
-    if (picked != null) setState(() => _proofs.add(File(picked.path)));
+    if (picked != null) setState(() { _proofs.add(File(picked.path)); _photoError = null; });
   }
 
   void _submit() {
     final reason = _ctrl.text.trim();
+    setState(() { _catError = null; _error = null; _photoError = null; });
+    if (_category == null) {
+      setState(() => _catError = 'Please choose a reason.');
+      return;
+    }
     if (reason.isEmpty) {
       setState(() => _error = 'A reason is required.');
       return;
@@ -1046,7 +1070,11 @@ class _RefundSheetState extends State<_RefundSheet> {
       setState(() => _error = 'Please give a bit more detail (at least 5 characters).');
       return;
     }
-    Navigator.of(context).pop((reason, _proofs));
+    if (_photoRequired && _proofs.isEmpty) {
+      setState(() => _photoError = 'Please add at least one photo for this reason.');
+      return;
+    }
+    Navigator.of(context).pop((_category!, reason, _proofs));
   }
 
   @override
@@ -1078,12 +1106,47 @@ class _RefundSheetState extends State<_RefundSheet> {
                 style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
             const SizedBox(height: 18),
 
-            // ── Reason ──────────────────────────────────────────────────
+            // ── Reason (category) ───────────────────────────────────────
             const Text('Reason', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<String>(
+              value: _category,
+              isExpanded: true,
+              decoration: InputDecoration(
+                hintText: 'Choose a reason',
+                filled: true,
+                fillColor: Colors.grey.shade50,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                errorText: _catError,
+              ),
+              items: [
+                for (final r in _kRefundReasons)
+                  DropdownMenuItem(value: r.$1, child: Text(r.$2)),
+              ],
+              onChanged: (v) => setState(() {
+                _category = v;
+                _catError = null;
+                _photoError = null;
+              }),
+            ),
+            if (_photoRequired) ...[
+              const SizedBox(height: 6),
+              Row(children: [
+                Icon(Icons.info_outline, size: 14, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text('A photo is required for this reason.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                ),
+              ]),
+            ],
+            const SizedBox(height: 14),
+
+            // ── Details ─────────────────────────────────────────────────
+            const Text('Details', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
             const SizedBox(height: 8),
             TextField(
               controller: _ctrl,
-              autofocus: true,
               minLines: 3,
               maxLines: 5,
               maxLength: 255,
@@ -1105,10 +1168,15 @@ class _RefundSheetState extends State<_RefundSheet> {
               children: [
                 const Text('Photos', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                 const SizedBox(width: 6),
-                Text('(optional · ${_proofs.length}/$_maxPhotos)',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                Text('(${_photoRequired ? 'required' : 'optional'} · ${_proofs.length}/$_maxPhotos)',
+                    style: TextStyle(fontSize: 12,
+                        color: _photoRequired ? Theme.of(context).colorScheme.error : Colors.grey.shade600)),
               ],
             ),
+            if (_photoError != null) ...[
+              const SizedBox(height: 4),
+              Text(_photoError!, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.error)),
+            ],
             const SizedBox(height: 10),
             Wrap(
               spacing: 10,
