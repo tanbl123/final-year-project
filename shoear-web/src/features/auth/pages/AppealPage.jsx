@@ -88,12 +88,12 @@ function AppealPage() {
         </div>
       )}
       <form onSubmit={onSubmit} noValidate>
-        {submitError && <div className="alert alert-danger py-2">{submitError}</div>}
         <label className="form-label small mb-1">Your appeal</label>
-        <textarea className="form-control" rows={5} maxLength={1000}
+        <textarea className={`form-control ${submitError ? 'is-invalid' : ''}`} rows={5} maxLength={1000}
           value={message}
           placeholder="Explain why your account should be reinstated…"
           onChange={(e) => { setMessage(e.target.value); if (submitError) setSubmitError(''); }} />
+        {submitError && <div className="invalid-feedback d-block">{submitError}</div>}
         <div className="text-muted small mt-1 text-end">{message.length}/1000</div>
         <button type="submit" className="btn btn-primary w-100 mt-3" disabled={submitting}>
           {submitting ? 'Submitting…' : 'Submit appeal'}
