@@ -16,6 +16,7 @@ function AdminFlagsPage() {
   const [confirm, setConfirm] = useState(null);   // { flag, action, title, message, color }
   const [detail, setDetail] = useState(null);     // user shown in the in-place detail popup
   const [detailLoading, setDetailLoading] = useState(false);
+  const [warn, setWarn] = useState(null);         // { flag, message } for the "ask to edit" popup
 
   // View a user's details WITHOUT leaving the moderation queue — open the shared
   // detail modal right here so the admin can decide on the flag afterwards.
@@ -42,21 +43,24 @@ function AdminFlagsPage() {
     return () => { active = false; };
   }, []);
 
-  async function act(flag, action) {
+  async function act(flag, action, note) {
     setBusyId(flag.flagId);
     setError('');
     try {
-      await resolveFlag(flag.flagId, action);
-      // dismiss clears one flag; remove_review clears flags on that review;
+      await resolveFlag(flag.flagId, action, note);
+      // dismiss clears one flag; remove_review/warn clear flags on that review;
       // remove_avatar/suspend clear every open flag for that user.
       setFlags((prev) => prev.filter((f) => {
         if (action === 'dismiss') return f.flagId !== flag.flagId;
-        if (action === 'remove_review') return f.reviewId !== flag.reviewId;
+        if (action === 'remove_review' || action === 'warn') {
+          return flag.reviewId ? f.reviewId !== flag.reviewId : f.flagId !== flag.flagId;
+        }
         return f.targetUserId !== flag.targetUserId;
       }));
       setNotice(
         action === 'remove_avatar' ? `Removed ${flag.targetName}'s avatar.`
         : action === 'remove_review' ? 'Review removed.'
+        : action === 'warn'        ? `Asked ${flag.targetName} to edit their review.`
         : action === 'suspend'     ? `${flag.targetName} suspended.`
         : 'Report dismissed.');
       refreshBadges();
@@ -151,6 +155,14 @@ function AdminFlagsPage() {
                       Remove review
                     </button>
                   )}
+                  {/* Soft option: ask the reviewer to edit/remove it themselves. */}
+                  {f.reviewId && f.reviewStatus === 'Published' && (
+                    <button className="btn btn-outline-primary btn-sm" disabled={busyId === f.flagId}
+                      onClick={() => setWarn({ flag: f,
+                        message: `Your review${f.productName ? ` of “${f.productName}”` : ''} was reported. Please make sure it follows our community guidelines — you can edit or remove it from the product page.` })}>
+                      Ask to edit
+                    </button>
+                  )}
                   {/* Only offer avatar removal when there's an uploaded photo. */}
                   {f.targetAvatar && (
                     <button className="btn btn-outline-danger btn-sm" disabled={busyId === f.flagId}
@@ -182,6 +194,38 @@ function AdminFlagsPage() {
         onCancel={() => setConfirm(null)}
         onConfirm={() => { const c = confirm; setConfirm(null); if (c) act(c.flag, c.action); }}
       />
+
+      {/* "Ask to edit" — send the reviewer a message (editable) instead of a
+          strict take-down. The customer gets it in-app + push, deep-linked to
+          their review so they can fix it. */}
+      {warn && (
+        <div className="modal show d-block" tabIndex="-1" style={{ background: 'rgba(0,0,0,.5)' }}
+          onClick={() => setWarn(null)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title">Ask {warn.flag.targetName} to edit</h5>
+                <button type="button" className="btn-close" onClick={() => setWarn(null)}></button>
+              </div>
+              <div className="modal-body">
+                <label className="form-label small text-muted">Message to the customer (they'll get it in-app, linked to their review)</label>
+                <textarea className="form-control" rows={4} maxLength={200}
+                  value={warn.message}
+                  onChange={(e) => setWarn((w) => ({ ...w, message: e.target.value }))} />
+                <div className="text-muted small mt-1">The review stays visible — this just asks them to revise it.</div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-outline-secondary" onClick={() => setWarn(null)}>Cancel</button>
+                <button type="button" className="btn btn-primary"
+                  disabled={!warn.message.trim() || busyId === warn.flag.flagId}
+                  onClick={() => { const w = warn; setWarn(null); act(w.flag, 'warn', w.message.trim()); }}>
+                  Send request
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* in-place user detail — keeps the admin in the moderation queue */}
       <UserDetailModal detail={detail} loading={detailLoading} onClose={() => setDetail(null)} />

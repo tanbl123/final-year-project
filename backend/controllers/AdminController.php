@@ -878,6 +878,35 @@ function handleResolveFlag(PDO $pdo, array $auth, string $flagId): void {
     sendJson(200, true, ['flagId' => $flagId, 'flagStatus' => 'Resolved', 'action' => $action]);
   }
 
+  // Soft action: ASK the reviewer to fix it themselves. Sends them a notification
+  // (in-app + push, deep-linked to the product so they can edit/remove their
+  // review) with the admin's message, and clears the report — nothing is taken
+  // down. The middle ground between "dismiss" and "remove/suspend".
+  if ($action === 'warn') {
+    $productId = null; $productName = '';
+    if (!empty($flag['reviewId'])) {
+      $rv = $pdo->prepare("SELECT r.productId, p.productName FROM review r LEFT JOIN product p ON p.productId = r.productId WHERE r.reviewId = :rid");
+      $rv->execute(['rid' => $flag['reviewId']]);
+      if ($row = $rv->fetch()) { $productId = $row['productId'] ?: null; $productName = (string) ($row['productName'] ?? ''); }
+    }
+    $onProduct = $productName !== '' ? " on \"$productName\"" : '';
+    $body = $note !== ''
+      ? $note
+      : "Your review$onProduct was reported. Please make sure it follows our community guidelines — you can edit or remove it from the product page.";
+    if (function_exists('createNotification')) {
+      createNotification($pdo, (string) $target, 'review', 'Please review your post', $body, null, $productId);
+    }
+    $resNote = mb_substr('warned: ' . ($note !== '' ? $note : 'asked to edit'), 0, 255);
+    if (!empty($flag['reviewId'])) {
+      $pdo->prepare("UPDATE content_flag SET flagStatus='Resolved', resolutionNote=:n, reviewedBy=:by, reviewed_at=NOW() WHERE reviewId=:rid AND flagStatus='Open'")
+          ->execute(['n' => $resNote, 'by' => $auth['userId'], 'rid' => $flag['reviewId']]);
+    } else {
+      $pdo->prepare("UPDATE content_flag SET flagStatus='Resolved', resolutionNote=:n, reviewedBy=:by, reviewed_at=NOW() WHERE flagId=:id")
+          ->execute(['n' => $resNote, 'by' => $auth['userId'], 'id' => $flagId]);
+    }
+    sendJson(200, true, ['flagId' => $flagId, 'flagStatus' => 'Resolved', 'action' => 'warn']);
+  }
+
   // Take down the flagged REVIEW itself (the proportionate action for a content
   // report — abusive/spam text — vs suspending the whole account). Resolves
   // every open flag on that same review so the queue clears.
