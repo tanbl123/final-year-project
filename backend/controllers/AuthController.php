@@ -864,7 +864,7 @@ function handleGoogleAuth(PDO $pdo, string $secret, array $config): void {
 
   // 1. Look up by googleId (already linked)
   $stmt = $pdo->prepare(
-    'SELECT userId, role, fullName, phoneNumber, status, rejectionReason, googleId AS gid,
+    'SELECT userId, role, fullName, phoneNumber, status, rejectionReason, appealToken, googleId AS gid,
             (password IS NOT NULL) AS hasPassword
        FROM `user` WHERE googleId = :g LIMIT 1'
   );
@@ -874,7 +874,7 @@ function handleGoogleAuth(PDO $pdo, string $secret, array $config): void {
   // 2. Fall back to email match (implicit link — first Google sign-in for this email)
   if (!$user) {
     $stmt = $pdo->prepare(
-      'SELECT userId, role, fullName, phoneNumber, status, rejectionReason, googleId AS gid,
+      'SELECT userId, role, fullName, phoneNumber, status, rejectionReason, appealToken, googleId AS gid,
               (password IS NOT NULL) AS hasPassword
          FROM `user` WHERE email = :e LIMIT 1'
     );
@@ -888,8 +888,30 @@ function handleGoogleAuth(PDO $pdo, string $secret, array $config): void {
         'message' => 'This email belongs to a non-customer account and cannot be used here.']);
     }
     if ($user['status'] !== 'Active') {
-      sendJson(403, false, null, ['code' => 'NOT_ACTIVE',
-        'message' => 'Your account is ' . $user['status'] . '.']);
+      // Suspended → same as password login: surface the reason + a stable appeal
+      // token so the app can show a working appeal button.
+      if ($user['status'] === 'Suspended') {
+        $rawToken = (string) ($user['appealToken'] ?? '');
+        if ($rawToken === '') {
+          $rawToken = bin2hex(random_bytes(32));
+          try {
+            $pdo->prepare('UPDATE `user` SET appealToken = :tok WHERE userId = :id')
+                ->execute(['tok' => $rawToken, 'id' => $user['userId']]);
+          } catch (Throwable $e) { $rawToken = ''; }
+        }
+        $msg = !empty($user['rejectionReason'])
+          ? 'Your account has been suspended: ' . $user['rejectionReason']
+          : 'Your account has been suspended.';
+        $err = ['code' => 'SUSPENDED', 'message' => $msg];
+        if ($rawToken !== '') {
+          $err['detail'] = ['appealUid' => $user['userId'], 'appealToken' => $rawToken];
+        }
+        sendJson(403, false, null, $err);
+      }
+      $msg = !empty($user['rejectionReason'])
+        ? 'Your account is ' . $user['status'] . ': ' . $user['rejectionReason']
+        : 'Your account is ' . $user['status'] . '.';
+      sendJson(403, false, null, ['code' => 'NOT_ACTIVE', 'message' => $msg]);
     }
     // link googleId on first Google sign-in for an existing email account
     if (empty($user['gid'])) {

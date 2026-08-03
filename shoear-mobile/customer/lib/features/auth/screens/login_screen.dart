@@ -77,7 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _signInWithGoogle() async {
-    setState(() { _googleError = null; _loading = true; });
+    setState(() { _googleError = null; _appeal = null; _loading = true; });
     try {
       final googleUser = await GoogleSignIn(
         serverClientId: '348666062587-5egqu1595ghp3pt64ip0qq30fo30p332.apps.googleusercontent.com',
@@ -99,7 +99,14 @@ class _LoginScreenState extends State<LoginScreen> {
       await context.read<AuthProvider>().loginWithGoogle(idToken);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      if (mounted) setState(() { _googleError = e.toString(); _loading = false; });
+      if (!mounted) return;
+      // Suspended → surface the reason + appeal button (same as password login).
+      if (e is ApiException && e.code == 'SUSPENDED' &&
+          e.detail?['appealUid'] != null && e.detail?['appealToken'] != null) {
+        setState(() { _googleError = e.message; _appeal = e.detail; _loading = false; });
+      } else {
+        setState(() { _googleError = e.toString(); _loading = false; });
+      }
     }
   }
 
