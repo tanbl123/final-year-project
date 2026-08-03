@@ -68,7 +68,7 @@ function handleSetReviewStatus(PDO $pdo, string $reviewId): void {
 // Shared: confirm a review is on one of this supplier's products (or 404).
 function requireOwnReview(PDO $pdo, string $supplierId, string $reviewId): array {
   $stmt = $pdo->prepare(
-    "SELECT r.reviewStatus
+    "SELECT r.reviewStatus, r.supplierReply
        FROM review r
        JOIN product p ON p.productId = r.productId
       WHERE r.reviewId = :id AND p.supplierId = :sid"
@@ -121,9 +121,34 @@ function handleReplyToReview(PDO $pdo, array $auth, string $reviewId): void {
   if ($review['reviewStatus'] !== 'Published') {
     sendJson(409, false, null, ['code' => 'CONFLICT', 'message' => 'Cannot reply to a removed review.']);
   }
+  $isNewReply = empty($review['supplierReply']);   // notify on a first reply, not an edit
 
   $pdo->prepare('UPDATE review SET supplierReply = :rep, supplierReplyDate = NOW() WHERE reviewId = :id')
       ->execute(['rep' => $reply, 'id' => $reviewId]);
+
+  // Notify the review's author that the seller replied (in-app bell + FCM push).
+  // Only on a first reply, so editing the reply doesn't re-ping the customer.
+  if ($isNewReply && function_exists('createNotification')) {
+    $who = $pdo->prepare(
+      "SELECT u.userId, p.productName
+         FROM review r
+         JOIN customer c   ON c.customerId = r.customerId
+         JOIN `user` u     ON u.userId = c.userId
+         JOIN product p    ON p.productId = r.productId
+        WHERE r.reviewId = :id"
+    );
+    $who->execute(['id' => $reviewId]);
+    $info = $who->fetch();
+    if ($info) {
+      $snippet = mb_strlen($reply) > 90 ? mb_substr($reply, 0, 90) . '…' : $reply;
+      createNotification(
+        $pdo, (string) $info['userId'], 'ReviewReply',
+        'The seller replied to your review 💬',
+        'On "' . $info['productName'] . '": ' . $snippet
+      );
+    }
+  }
+
   sendJson(200, true, ['reviewId' => $reviewId, 'supplierReply' => $reply]);
 }
 
