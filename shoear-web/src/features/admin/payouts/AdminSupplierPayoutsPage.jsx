@@ -15,8 +15,8 @@ function AdminSupplierPayoutsPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busyId, setBusyId] = useState('');
-  const [openId, setOpenId] = useState('');       // supplier whose history is expanded
-  const [history, setHistory] = useState({});     // { [supplierId]: { payouts, ledger } | 'loading' }
+  const [historyFor, setHistoryFor] = useState(null); // supplier whose history modal is open (null = closed)
+  const [history, setHistory] = useState({});         // { [supplierId]: { payouts, ledger } | 'loading' } cache
   const [confirm, setConfirm] = useState(null);   // { supplier }
 
   // manual ledger adjustment: { supplier, direction: 'deduct'|'credit', amount, note } (null = closed)
@@ -44,7 +44,6 @@ function AdminSupplierPayoutsPage() {
       const res = await paySupplier(supplier.supplierId);
       setNotice(`Paid ${supplier.companyName} ${fmt(res.amount)} (${res.orderCount} order${res.orderCount === 1 ? '' : 's'}).`);
       setHistory((h) => { const next = { ...h }; delete next[supplier.supplierId]; return next; });
-      if (openId === supplier.supplierId) setOpenId('');
       load();
     } catch (err) {
       setError(err.message);
@@ -90,16 +89,15 @@ function AdminSupplierPayoutsPage() {
     }
   }
 
-  async function toggleHistory(supplierId) {
-    if (openId === supplierId) { setOpenId(''); return; }
-    setOpenId(supplierId);
-    if (!history[supplierId]) {
-      setHistory((h) => ({ ...h, [supplierId]: 'loading' }));
+  async function openHistory(supplier) {
+    setHistoryFor(supplier);
+    if (!history[supplier.supplierId]) {
+      setHistory((h) => ({ ...h, [supplier.supplierId]: 'loading' }));
       try {
-        const data = await getSupplierPayoutHistory(supplierId);
-        setHistory((h) => ({ ...h, [supplierId]: { payouts: data.payouts || [], ledger: data.ledger || [] } }));
+        const data = await getSupplierPayoutHistory(supplier.supplierId);
+        setHistory((h) => ({ ...h, [supplier.supplierId]: { payouts: data.payouts || [], ledger: data.ledger || [] } }));
       } catch (err) {
-        setHistory((h) => ({ ...h, [supplierId]: { payouts: [], ledger: [] } }));
+        setHistory((h) => ({ ...h, [supplier.supplierId]: { payouts: [], ledger: [] } }));
         setError(err.message);
       }
     }
@@ -182,8 +180,8 @@ function AdminSupplierPayoutsPage() {
                     <td className="text-end text-muted">{fmt(s.lifetimePaid)}</td>
                     <td className="text-end text-nowrap">
                       <button className="btn btn-outline-secondary btn-sm me-2"
-                        onClick={() => toggleHistory(s.supplierId)}>
-                        {openId === s.supplierId ? 'Hide' : 'History'}
+                        onClick={() => openHistory(s)}>
+                        History
                       </button>
                       <button className="btn btn-outline-secondary btn-sm me-2"
                         title="Post a manual credit or deduction to this supplier's balance"
@@ -209,99 +207,107 @@ function AdminSupplierPayoutsPage() {
                     </td>
                   </tr>
                 );
-              }).flatMap((row, i) => {
-                const s = sort.sorted[i];
-                const out = [row];
-                if (openId === s.supplierId) {
-                  const h = history[s.supplierId];
-                  out.push(
-                    <tr key={`${s.supplierId}-history`}>
-                      <td colSpan={6} className="bg-light">
-                        <div className="px-2 py-1">
-                          <div className="fw-semibold small mb-2">Payout history — {s.companyName}</div>
-                          {h === 'loading' ? (
-                            <div className="text-muted small">Loading…</div>
-                          ) : (
-                            <>
-                              {!h.payouts || h.payouts.length === 0 ? (
-                                <div className="text-muted small">No payouts yet.</div>
-                              ) : (
-                                <table className="table table-sm mb-0">
-                                  <thead>
-                                    <tr>
-                                      <th>Date</th>
-                                      <th className="text-end">Amount</th>
-                                      <th className="text-end">Orders</th>
-                                      <th>Type</th>
-                                      <th>Status</th>
-                                      <th>Stripe transfer</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {h.payouts.map((p) => (
-                                      <tr key={p.stripeTransferId || p.created_at}>
-                                        <td className="small">{new Date(p.created_at).toLocaleString()}</td>
-                                        <td className="text-end">{fmt(p.amount)}</td>
-                                        <td className="text-end">{p.orderCount}</td>
-                                        <td><span className="badge bg-light text-dark border">{p.isAuto ? 'Auto' : 'Manual'}</span></td>
-                                        <td>{statusBadge(p.payoutStatus)}</td>
-                                        <td className="small text-muted">{p.stripeTransferId || '—'}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              )}
-
-                              {h.ledger && h.ledger.length > 0 && (
-                                <>
-                                  <div className="fw-semibold small mt-3 mb-2">Adjustments &amp; clawbacks</div>
-                                  <table className="table table-sm mb-0">
-                                    <thead>
-                                      <tr>
-                                        <th>Date</th>
-                                        <th className="text-end">Amount</th>
-                                        <th>Type</th>
-                                        <th>Note</th>
-                                        <th>Settled</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {h.ledger.map((l) => (
-                                        <tr key={l.ledgerId}>
-                                          <td className="small">{new Date(l.created_at).toLocaleString()}</td>
-                                          <td className={'text-end fw-semibold ' + (l.amount < 0 ? 'text-danger' : 'text-success')}>
-                                            {l.amount < 0 ? '−' : '+'}{fmt(Math.abs(l.amount))}
-                                          </td>
-                                          <td>
-                                            <span className="badge bg-light text-dark border">
-                                              {l.entryType === 'RefundClawback' ? 'Refund clawback' : 'Adjustment'}
-                                            </span>
-                                          </td>
-                                          <td className="small">{l.note || '—'}{l.orderId ? <span className="text-muted"> ({l.orderId})</span> : null}</td>
-                                          <td className="small">
-                                            {l.settled
-                                              ? <span className="text-muted">✓ settled</span>
-                                              : <span className="text-warning">pending</span>}
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                }
-                return out;
               })}
             </tbody>
           </table>
         </div>
       )}
+
+      {/* payout history (modal — keeps the table clean as history grows) */}
+      {historyFor && (() => {
+        const h = history[historyFor.supplierId];
+        return (
+          <div className="modal show d-block" tabIndex="-1" style={{ background: 'rgba(0,0,0,.5)' }}
+            onClick={() => setHistoryFor(null)}>
+            <div className="modal-dialog modal-lg modal-dialog-scrollable" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">Payout history — {historyFor.companyName}</h5>
+                  <button type="button" className="btn-close" onClick={() => setHistoryFor(null)}></button>
+                </div>
+                <div className="modal-body">
+                  {h === 'loading' || !h ? (
+                    <p className="text-muted mb-0">Loading…</p>
+                  ) : (
+                    <>
+                      <div className="fw-semibold small mb-2">Payouts</div>
+                      {!h.payouts || h.payouts.length === 0 ? (
+                        <div className="text-muted small mb-0">No payouts yet.</div>
+                      ) : (
+                        <table className="table table-sm mb-0">
+                          <thead>
+                            <tr>
+                              <th>Date</th>
+                              <th className="text-end">Amount</th>
+                              <th className="text-end">Orders</th>
+                              <th>Type</th>
+                              <th>Status</th>
+                              <th>Stripe transfer</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {h.payouts.map((p) => (
+                              <tr key={p.stripeTransferId || p.created_at}>
+                                <td className="small">{new Date(p.created_at).toLocaleString()}</td>
+                                <td className="text-end">{fmt(p.amount)}</td>
+                                <td className="text-end">{p.orderCount}</td>
+                                <td><span className="badge bg-light text-dark border">{p.isAuto ? 'Auto' : 'Manual'}</span></td>
+                                <td>{statusBadge(p.payoutStatus)}</td>
+                                <td className="small text-muted">{p.stripeTransferId || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+
+                      {h.ledger && h.ledger.length > 0 && (
+                        <>
+                          <div className="fw-semibold small mt-4 mb-2">Adjustments &amp; clawbacks</div>
+                          <table className="table table-sm mb-0">
+                            <thead>
+                              <tr>
+                                <th>Date</th>
+                                <th className="text-end">Amount</th>
+                                <th>Type</th>
+                                <th>Note</th>
+                                <th>Settled</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {h.ledger.map((l) => (
+                                <tr key={l.ledgerId}>
+                                  <td className="small">{new Date(l.created_at).toLocaleString()}</td>
+                                  <td className={'text-end fw-semibold ' + (l.amount < 0 ? 'text-danger' : 'text-success')}>
+                                    {l.amount < 0 ? '−' : '+'}{fmt(Math.abs(l.amount))}
+                                  </td>
+                                  <td>
+                                    <span className="badge bg-light text-dark border">
+                                      {l.entryType === 'RefundClawback' ? 'Refund clawback' : 'Adjustment'}
+                                    </span>
+                                  </td>
+                                  <td className="small">{l.note || '—'}{l.orderId ? <span className="text-muted"> ({l.orderId})</span> : null}</td>
+                                  <td className="small">
+                                    {l.settled
+                                      ? <span className="text-muted">✓ settled</span>
+                                      : <span className="text-warning">pending</span>}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setHistoryFor(null)}>Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* manual balance adjustment */}
       {adjustForm && (
