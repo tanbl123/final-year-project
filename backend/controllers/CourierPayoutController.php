@@ -296,6 +296,21 @@ function payOutCourierBalance(PDO $pdo, array $config, array $courier, bool $isA
   $cents    = (int) round($bal['balance'] * 100);
   $auto     = $isAuto ? 1 : 0;
 
+  // deterministic key so a retry of the SAME logical payout never double-transfers.
+  // The payout is defined by the courier's set of unpaid Delivered deliveries, so
+  // fingerprint those IDs + the balance. ($payoutId is freshly generated each call,
+  // so it can't be the idempotency key.)
+  $covered = $pdo->prepare(
+    "SELECT deliveryId FROM delivery
+      WHERE deliveryPersonnelId = :dp AND deliveryStatus = 'Delivered' AND courierPayoutId IS NULL
+      ORDER BY deliveryId"
+  );
+  $covered->execute(['dp' => $courierId]);
+  $deliveryIds = $covered->fetchAll(PDO::FETCH_COLUMN);
+  $idemKey = 'courpay_' . $courierId . '_' . substr(md5(
+    implode(',', $deliveryIds) . '|' . number_format($bal['balance'], 2, '.', '')
+  ), 0, 40);
+
   $transferId = null;
   try {
     $transfer = stripeApi($config['stripe_secret'], 'POST', '/v1/transfers', [
@@ -303,7 +318,7 @@ function payOutCourierBalance(PDO $pdo, array $config, array $courier, bool $isA
       'currency'       => 'myr',
       'destination'    => $courier['stripeAccountId'],
       'transfer_group' => $payoutId,
-    ]);
+    ], $idemKey);
     $transferId = $transfer['id'] ?? null;
   } catch (Throwable $e) {
     // record the failed attempt so it's auditable, then surface the error
