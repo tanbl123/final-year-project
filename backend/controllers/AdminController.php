@@ -308,7 +308,7 @@ function handleListUsers(PDO $pdo): void {
 // GET /admin/users/{userId} — one user with their role-specific profile.
 function handleGetUser(PDO $pdo, string $userId): void {
   $stmt = $pdo->prepare(
-    'SELECT userId, username, fullName, email, phoneNumber, role, status, created_at, updated_at,
+    'SELECT userId, username, fullName, email, phoneNumber, avatarUrl, role, status, created_at, updated_at,
             (setPasswordToken IS NOT NULL) AS pendingSetup
        FROM `user` WHERE userId = :id'
   );
@@ -321,11 +321,17 @@ function handleGetUser(PDO $pdo, string $userId): void {
 
   $profile = null;
   if ($u['role'] === 'Supplier') {
-    $p = $pdo->prepare('SELECT supplierId, companyName, displayName, companyAddress, operationalAddress FROM supplier WHERE userId = :id');
+    $p = $pdo->prepare('SELECT supplierId, companyName, displayName, companyAddress, operationalAddress,
+                               businessRegNo, businessLicenseUrl
+                          FROM supplier WHERE userId = :id');
   } elseif ($u['role'] === 'Customer') {
     $p = $pdo->prepare('SELECT customerId, shippingAddress FROM customer WHERE userId = :id');
   } elseif ($u['role'] === 'DeliveryPersonnel') {
-    $p = $pdo->prepare('SELECT deliveryPersonnelId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate FROM delivery_personnel WHERE userId = :id');
+    $p = $pdo->prepare('SELECT deliveryPersonnelId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate,
+                               licenseNumber, licensePhotoUrl, licensePhotoBackUrl, licenseIsDigital, eLicenseUrl,
+                               licenseClass, licenseExpiry,
+                               icNumber, icPhotoUrl, icPhotoBackUrl, dateOfBirth, coverageZones
+                          FROM delivery_personnel WHERE userId = :id');
   } elseif ($u['role'] === 'ArSpecialist') {
     $p = $pdo->prepare('SELECT arSpecialistId, icNumber FROM ar_specialist WHERE userId = :id');
   } else {

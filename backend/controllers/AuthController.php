@@ -1061,8 +1061,9 @@ function handleMe(PDO $pdo, array $auth): void {
                           FROM customer WHERE userId = :id');
   } elseif ($u['role'] === 'DeliveryPersonnel') {
     $p = $pdo->prepare('SELECT deliveryPersonnelId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate,
-                               licenseNumber, licensePhotoUrl, licenseClass, licenseExpiry,
-                               icNumber, icPhotoUrl, dateOfBirth, coverageZones, isAvailable
+                               licenseNumber, licensePhotoUrl, licensePhotoBackUrl, licenseIsDigital, eLicenseUrl,
+                               licenseClass, licenseExpiry,
+                               icNumber, icPhotoUrl, icPhotoBackUrl, dateOfBirth, coverageZones, isAvailable
                           FROM delivery_personnel WHERE userId = :id');
   } else {
     $p = null;

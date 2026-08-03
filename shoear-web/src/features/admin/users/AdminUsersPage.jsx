@@ -48,6 +48,33 @@ function validateStaff(form) {
   return errs;
 }
 
+// A document thumbnail (image) or a PDF link, for the detail modal.
+function UserDoc({ label, url }) {
+  const isPdf = !!url && /\.pdf(\?|$)/i.test(url);
+  return (
+    <div className="col-6 col-md-4">
+      <div className="text-muted small mb-1">{label}</div>
+      {url ? (
+        isPdf ? (
+          <a href={url} target="_blank" rel="noreferrer" title="Open PDF"
+            className="border rounded bg-light d-flex flex-column align-items-center justify-content-center text-decoration-none"
+            style={{ height: 110 }}>
+            <span style={{ fontSize: 24 }}>📄</span><span className="small">Open PDF</span>
+          </a>
+        ) : (
+          <a href={url} target="_blank" rel="noreferrer" title="Open full size">
+            <img src={url} alt={label} className="border rounded"
+              style={{ width: '100%', height: 110, objectFit: 'cover' }} />
+          </a>
+        )
+      ) : (
+        <div className="border rounded bg-light d-flex align-items-center justify-content-center text-muted small"
+          style={{ height: 110 }}>—</div>
+      )}
+    </div>
+  );
+}
+
 function AdminUsersPage() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -388,6 +415,7 @@ function AdminUsersPage() {
                 {detailLoading || !detail.userId ? (
                   <p className="text-muted mb-0">Loading…</p>
                 ) : (
+                  <>
                   <dl className="row mb-0">
                     <dt className="col-4">Name</dt><dd className="col-8">{detail.fullName}</dd>
                     <dt className="col-4">Username</dt><dd className="col-8">@{detail.username}</dd>
@@ -407,6 +435,9 @@ function AdminUsersPage() {
                         {detail.profile.displayName && detail.profile.displayName !== detail.profile.companyName && (
                           <><dt className="col-4">Store name</dt><dd className="col-8">{detail.profile.displayName}</dd></>
                         )}
+                        {detail.profile.businessRegNo && (
+                          <><dt className="col-4">Business reg. no.</dt><dd className="col-8">{detail.profile.businessRegNo}</dd></>
+                        )}
                         <dt className="col-4">Business address</dt><dd className="col-8">{detail.profile.companyAddress}</dd>
                         <dt className="col-4">Pickup address</dt><dd className="col-8">{detail.profile.operationalAddress || detail.profile.companyAddress}</dd>
                       </>
@@ -425,6 +456,16 @@ function AdminUsersPage() {
                             ? `${detail.profile.vehicleType} • ${detail.profile.vehicleBrand} ${detail.profile.vehicleModel} — ${detail.profile.vehiclePlate}`
                             : <span className="text-muted">—</span>}
                         </dd>
+                        <dt className="col-4">IC / NRIC</dt>
+                        <dd className="col-8">{detail.profile.icNumber || <span className="text-muted">—</span>}</dd>
+                        <dt className="col-4">Licence no.</dt>
+                        <dd className="col-8">{detail.profile.licenseNumber || <span className="text-muted">—</span>}</dd>
+                        <dt className="col-4">Licence class</dt>
+                        <dd className="col-8">{detail.profile.licenseClass || <span className="text-muted">—</span>}</dd>
+                        <dt className="col-4">Licence expiry</dt>
+                        <dd className="col-8">{detail.profile.licenseExpiry || <span className="text-muted">—</span>}</dd>
+                        <dt className="col-4">Coverage</dt>
+                        <dd className="col-8">{detail.profile.coverageZones || <span className="text-muted">—</span>}</dd>
                       </>
                     )}
                     {detail.role === 'ArSpecialist' && detail.profile && (
@@ -438,6 +479,34 @@ function AdminUsersPage() {
                     <dt className="col-4">Joined</dt>
                     <dd className="col-8">{new Date(detail.created_at).toLocaleString()}</dd>
                   </dl>
+
+                  {(detail.role === 'DeliveryPersonnel' || detail.role === 'Supplier') && detail.profile && (
+                    <>
+                      <hr />
+                      <div className="fw-semibold small mb-2">Documents</div>
+                      <div className="row g-2">
+                        <UserDoc label="Profile photo" url={detail.avatarUrl} />
+                        {detail.role === 'DeliveryPersonnel' && (
+                          <>
+                            <UserDoc label="IC (front)" url={detail.profile.icPhotoUrl} />
+                            <UserDoc label="IC (back)" url={detail.profile.icPhotoBackUrl} />
+                            {Number(detail.profile.licenseIsDigital) === 1 ? (
+                              <UserDoc label="Digital licence" url={detail.profile.eLicenseUrl} />
+                            ) : (
+                              <>
+                                <UserDoc label="Licence (front)" url={detail.profile.licensePhotoUrl} />
+                                <UserDoc label="Licence (back)" url={detail.profile.licensePhotoBackUrl} />
+                              </>
+                            )}
+                          </>
+                        )}
+                        {detail.role === 'Supplier' && (
+                          <UserDoc label="Business licence" url={detail.profile.businessLicenseUrl} />
+                        )}
+                      </div>
+                    </>
+                  )}
+                  </>
                 )}
               </div>
               <div className="modal-footer">
