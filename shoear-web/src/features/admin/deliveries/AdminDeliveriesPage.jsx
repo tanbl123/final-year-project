@@ -3,6 +3,7 @@ import { getDeliveries, getCouriers, assignDelivery, remindSupplierShip, refresh
 import Toast from '../../../components/Toast';
 import Pagination from '../../../components/Pagination';
 import SortableTh from '../../../components/SortableTh';
+import OrderDetailModal from '../orders/OrderDetailModal';
 import { usePagination } from '../../../hooks/usePagination';
 import { useTableSort } from '../../../hooks/useTableSort';
 
@@ -23,6 +24,7 @@ function AdminDeliveriesPage() {
   const [toast, setToast] = useState('');
 
   const [filters, setFilters] = useState({ status: '', unassigned: false });
+  const [viewOrderId, setViewOrderId] = useState(null);   // order shown in the in-place detail popup
 
   // assign modal state
   const [assignTarget, setAssignTarget] = useState(null);   // the delivery row
@@ -184,7 +186,10 @@ function AdminDeliveriesPage() {
               {pageItems.map((d) => (
                 <tr key={d.deliveryId} className={(!d.deliveryPersonnelId && d.deliveryMethod === 'InHouse') ? 'table-warning' : undefined}>
                   <td>
-                    <div className="fw-semibold">{d.orderId}</div>
+                    <button type="button" className="btn btn-link p-0 fw-semibold text-decoration-none"
+                      onClick={() => setViewOrderId(d.orderId)} title="View full order">
+                      {d.orderId}
+                    </button>
                     <div className="text-muted small">{new Date(d.orderDate).toLocaleDateString()}</div>
                   </td>
                   <td>{d.customerName}</td>
@@ -338,6 +343,9 @@ function AdminDeliveriesPage() {
           </div>
         </div>
       )}
+
+      {/* full order in a popup — inspect without leaving the dispatch queue */}
+      <OrderDetailModal orderId={viewOrderId} onClose={() => setViewOrderId(null)} />
 
       <Toast message={toast} onClose={() => setToast('')} />
     </div>
