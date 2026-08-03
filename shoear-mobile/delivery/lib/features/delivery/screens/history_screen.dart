@@ -59,16 +59,43 @@ class _HistoryScreenState extends State<HistoryScreen> {
             return ListView.separated(
               padding: const EdgeInsets.all(12),
               itemCount: items.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
               itemBuilder: (_, i) {
                 final d = items[i];
-                return ListTile(
-                  title: Text('Order ${d.orderId}'),
-                  subtitle: Text('${d.customerName ?? '—'} · ${d.deliveryAddress ?? '—'}',
-                      maxLines: 2, overflow: TextOverflow.ellipsis),
-                  trailing: StatusChip(status: d.status),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => DeliveryDetailScreen(deliveryId: d.deliveryId)),
+                return Card(
+                  margin: EdgeInsets.zero,
+                  clipBehavior: Clip.antiAlias,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  child: InkWell(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => DeliveryDetailScreen(deliveryId: d.deliveryId)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Order ${d.orderId}',
+                                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 2),
+                                Text('${d.customerName ?? '—'} · ${d.deliveryAddress ?? '—'}',
+                                    maxLines: 2, overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          StatusChip(status: d.status),
+                          Icon(Icons.chevron_right, size: 20, color: Colors.grey.shade400),
+                        ],
+                      ),
+                    ),
                   ),
                 );
               },
