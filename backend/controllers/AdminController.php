@@ -813,14 +813,17 @@ function handleReviewCompanyPhoto(PDO $pdo, array $auth, string $supplierId): vo
 function handleListFlags(PDO $pdo): void {
   $stmt = $pdo->query(
     "SELECT f.flagId, f.reason, f.created_at, f.reviewId,
-            rep.fullName  AS reporterName,
-            tgt.userId    AS targetUserId, tgt.fullName AS targetName,
-            tgt.avatarUrl AS targetAvatar, tgt.status AS targetStatus,
-            r.reviewComment
+            rep.userId    AS reporterUserId, rep.fullName AS reporterName,
+            rep.email     AS reporterEmail,  rep.role     AS reporterRole,
+            tgt.userId    AS targetUserId,   tgt.fullName AS targetName,
+            tgt.email     AS targetEmail,    tgt.role     AS targetRole,
+            tgt.avatarUrl AS targetAvatar,   tgt.status   AS targetStatus,
+            r.reviewComment, r.ratingScore, r.reviewStatus, p.productName
        FROM content_flag f
        JOIN `user` rep ON rep.userId = f.reporterUserId
        JOIN `user` tgt ON tgt.userId = f.targetUserId
-       LEFT JOIN review r ON r.reviewId = f.reviewId
+       LEFT JOIN review  r ON r.reviewId = f.reviewId
+       LEFT JOIN product p ON p.productId = r.productId
       WHERE f.flagStatus = 'Open'
       ORDER BY f.created_at ASC"
   );

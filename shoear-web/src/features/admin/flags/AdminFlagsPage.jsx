@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Toast from '../../../components/Toast';
 import ConfirmDialog from '../../../components/ConfirmDialog';
+import StarRating from '../../../components/StarRating';
 import { getFlags, resolveFlag, refreshBadges } from '../adminService';
 
 // Reactive moderation queue: customer-reported reviews/avatars. The admin views
@@ -67,16 +68,40 @@ function AdminFlagsPage() {
                     : <div className="border rounded-circle bg-light d-flex align-items-center justify-content-center text-muted small"
                         style={{ width: 72, height: 72 }}>no avatar</div>}
                 </div>
-                <div className="flex-grow-1" style={{ minWidth: 240 }}>
+                <div className="flex-grow-1" style={{ minWidth: 260 }}>
+                  {/* reported user */}
+                  <div className="text-muted small text-uppercase" style={{ letterSpacing: '.03em' }}>Reported user</div>
                   <div className="fw-semibold">
                     {f.targetName}
+                    {f.targetRole && <span className="text-muted small ms-2">{f.targetRole}</span>}
                     <span className={`badge ms-2 text-bg-${f.targetStatus === 'Suspended' ? 'secondary' : 'success'}`}>{f.targetStatus}</span>
                   </div>
-                  <div className="small"><span className="text-muted">Reason:</span> {f.reason}</div>
-                  {f.reviewComment && (
-                    <div className="small text-muted fst-italic mt-1">“{f.reviewComment}”</div>
+                  {f.targetEmail && <div className="text-muted small">{f.targetEmail}</div>}
+
+                  {/* the flagged review, in context */}
+                  {(f.productName || f.reviewComment || f.ratingScore) && (
+                    <div className="mt-2 p-2 rounded bg-light">
+                      <div className="text-muted small text-uppercase" style={{ letterSpacing: '.03em' }}>Flagged review</div>
+                      {f.productName && <div className="small">on <strong>{f.productName}</strong></div>}
+                      <div className="d-flex align-items-center gap-2">
+                        {f.ratingScore != null && <StarRating score={Number(f.ratingScore)} />}
+                        {f.reviewStatus && (
+                          <span className={`badge text-bg-${f.reviewStatus === 'Published' ? 'success' : 'secondary'}`}>{f.reviewStatus}</span>
+                        )}
+                      </div>
+                      {f.reviewComment && <div className="small fst-italic mt-1">“{f.reviewComment}”</div>}
+                    </div>
                   )}
-                  <div className="text-muted small mt-1">Reported by {f.reporterName} · {new Date(f.created_at).toLocaleDateString()}</div>
+
+                  <div className="small mt-2"><span className="text-muted">Reason:</span> {f.reason}</div>
+
+                  {/* reporter */}
+                  <div className="text-muted small mt-2">
+                    Reported by <strong>{f.reporterName}</strong>
+                    {f.reporterEmail && <> · {f.reporterEmail}</>}
+                    {f.reporterRole && <> · {f.reporterRole}</>}
+                    {' · '}{new Date(f.created_at).toLocaleDateString()}
+                  </div>
                 </div>
                 <div className="text-nowrap">
                   <button className="btn btn-outline-danger btn-sm me-2" disabled={busyId === f.flagId}
