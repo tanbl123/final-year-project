@@ -35,6 +35,7 @@ import AdminCourierChangesPage from './features/admin/couriers/AdminCourierChang
 import AdminCommissionPage from './features/admin/commission/AdminCommissionPage';
 import AdminReportsPage from './features/admin/reports/AdminReportsPage';
 import AdminCourierPayoutsPage from './features/admin/payouts/AdminCourierPayoutsPage';
+import AdminSupplierPayoutsPage from './features/admin/payouts/AdminSupplierPayoutsPage';
 import AdminDeliveriesPage from './features/admin/deliveries/AdminDeliveriesPage';
 import AdminDeliveryIssuesPage from './features/admin/deliveries/AdminDeliveryIssuesPage';
 import AdminIntegrationsPage from './features/admin/integrations/AdminIntegrationsPage';
@@ -208,6 +209,9 @@ const router = createBrowserRouter(
       } />
       <Route path="/admin/reports" element={
         <ProtectedRoute role="Admin"><AdminReportsPage /></ProtectedRoute>
+      } />
+      <Route path="/admin/supplier-payouts" element={
+        <ProtectedRoute role="Admin"><AdminSupplierPayoutsPage /></ProtectedRoute>
       } />
       <Route path="/admin/courier-payouts" element={
         <ProtectedRoute role="Admin"><AdminCourierPayoutsPage /></ProtectedRoute>

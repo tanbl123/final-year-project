@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { getPayoutStatus, startStripeOnboarding, openStripeDashboard } from '../supplier/payouts/payoutService';
+import { getPayoutStatus, startStripeOnboarding, openStripeDashboard, getEarnings } from '../supplier/payouts/payoutService';
+
+const rm = (n) => 'RM ' + Number(n || 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 // Supplier payouts, shown as a card in the profile. A supplier connects a Stripe
 // Connect account (Stripe collects + verifies their bank account and identity —
@@ -9,6 +11,7 @@ import { getPayoutStatus, startStripeOnboarding, openStripeDashboard } from '../
 // /profile?done=1, which this card picks up to refresh the status.
 function PayoutsCard() {
   const [status, setStatus] = useState(null);
+  const [earnings, setEarnings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -18,10 +21,11 @@ function PayoutsCard() {
   useEffect(() => {
     let active = true;
     const cameBack = !!(params.get('done') || params.get('refresh'));
-    getPayoutStatus()
-      .then((data) => {
+    Promise.all([getPayoutStatus(), getEarnings().catch(() => null)])
+      .then(([data, earn]) => {
         if (!active) return;
         setStatus(data);
+        setEarnings(earn);
         if (cameBack && data.configured && !data.payoutsEnabled) {
           setNotice('Payout setup not detected yet — finish the Stripe steps first.');
         }
@@ -95,6 +99,43 @@ function PayoutsCard() {
       <div className="card-body">
         <h5 className="mb-0">Payouts</h5>
         <small className="text-muted">Connect a Stripe account to receive your sales income.</small>
+
+        {earnings && (
+          <div className="row g-3 mt-1">
+            <div className="col-sm-4">
+              <div className="border rounded p-2 h-100">
+                <div className="text-muted small text-uppercase">Payable now</div>
+                <div className="fs-4 fw-semibold text-success">{rm(earnings.balance)}</div>
+                <div className="text-muted small">
+                  {earnings.payableOrders} order{earnings.payableOrders === 1 ? '' : 's'} · past refund window
+                </div>
+              </div>
+            </div>
+            <div className="col-sm-4">
+              <div className="border rounded p-2 h-100">
+                <div className="text-muted small text-uppercase">In hold</div>
+                <div className="fs-4 fw-semibold">{earnings.inHoldOrders}</div>
+                <div className="text-muted small">
+                  delivered · releases after the {earnings.refundWindowDays}-day refund window
+                </div>
+              </div>
+            </div>
+            <div className="col-sm-4">
+              <div className="border rounded p-2 h-100">
+                <div className="text-muted small text-uppercase">Lifetime paid</div>
+                <div className="fs-4 fw-semibold">{rm(earnings.lifetimePaid)}</div>
+                <div className="text-muted small">transferred to your account</div>
+              </div>
+            </div>
+            <div className="col-12">
+              <p className="text-muted small mb-0">
+                Your net earnings (after commission, SST and delivery) become payable once an order is
+                delivered and its refund window closes. The platform then transfers your payable balance
+                to your connected Stripe account.
+              </p>
+            </div>
+          </div>
+        )}
 
         {error && (
           <div className="alert alert-danger py-2 mt-3 d-flex justify-content-between align-items-center">

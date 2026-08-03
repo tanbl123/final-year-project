@@ -39,6 +39,7 @@ const ADMIN_NAV = [
   { group: 'Finance', items: [
     { to: '/admin/reports', label: 'Reports', icon: '📈' },
     { to: '/admin/commission', label: 'Commission', icon: '💰' },
+    { to: '/admin/supplier-payouts', label: 'Supplier Pay', icon: '🏦' },
     { to: '/admin/courier-payouts', label: 'Courier Pay', icon: '💸', badge: 'courierPayouts' },
   ] },
   { group: 'System', items: [

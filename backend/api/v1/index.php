@@ -31,6 +31,7 @@ require __DIR__ . '/../../controllers/ReviewController.php';
 require __DIR__ . '/../../controllers/RefundController.php';
 require __DIR__ . '/../../controllers/CommissionController.php';
 require __DIR__ . '/../../controllers/CourierFeeController.php';
+require __DIR__ . '/../../controllers/SupplierPayoutController.php';
 require __DIR__ . '/../../controllers/CatalogController.php';
 require __DIR__ . '/../../controllers/CartController.php';
 require __DIR__ . '/../../controllers/WishlistController.php';
@@ -556,6 +557,13 @@ if ($method === 'GET' && $path === '/supplier/stripe/status') {
   handleStripeStatus($pdo, $config, $auth);
 }
 
+// the signed-in supplier's earnings: payable balance, in-hold orders, history
+if ($method === 'GET' && $path === '/supplier/earnings') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleSupplierEarnings($pdo, $config, $auth);
+}
+
 // ── supplier registration application (fix & resubmit after rejection) ──
 if ($method === 'GET' && $path === '/supplier/application') {
   $auth = requireAuth($secret);
@@ -1025,6 +1033,26 @@ if ($method === 'POST' && preg_match('#^/admin/couriers/([^/]+)/payout$#', $path
   requireAdmin($auth);
   $pdo  = getPDO();
   handlePayCourier($pdo, $config, $m[1]);
+}
+
+// ── admin supplier payouts (settle supplier revenue via Stripe Connect) ──
+if ($method === 'GET' && $path === '/admin/supplier-payouts') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleListSupplierBalances($pdo);
+}
+if ($method === 'GET' && preg_match('#^/admin/suppliers/([^/]+)/payouts$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleSupplierPayoutHistory($pdo, $m[1]);
+}
+if ($method === 'POST' && preg_match('#^/admin/suppliers/([^/]+)/payout$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handlePaySupplier($pdo, $config, $m[1]);
 }
 
 if ($method === 'POST' && preg_match('#^/admin/deliveries/([^/]+)/assign$#', $path, $m)) {

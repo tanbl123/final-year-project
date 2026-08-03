@@ -550,9 +550,11 @@ CREATE TABLE supplier_payout (
     grossAmount      DECIMAL(10,2) NOT NULL,             -- supplier's share of the order
     commissionAmount DECIMAL(10,2) NOT NULL,             -- platform commission on that share
     serviceTaxAmount DECIMAL(10,2) NOT NULL DEFAULT 0.00,-- SST 8% on the commission (supplier bears, platform remits)
-    netAmount        DECIMAL(10,2) NOT NULL,             -- amount transferred to the supplier (gross - commission - SST)
+    netAmount        DECIMAL(10,2) NOT NULL,             -- amount transferred to the supplier (gross - commission - SST - delivery); may be negative if an already-shipped order is mostly refunded
     currency         CHAR(3)       NOT NULL DEFAULT 'myr',
     payoutStatus     ENUM('Pending','Paid','Failed') NOT NULL DEFAULT 'Pending',
+    isAuto           TINYINT(1)    NOT NULL DEFAULT 0,    -- 1 = automatic sweep, 0 = admin "Pay now"
+    paidAt           DATETIME      NULL,                  -- when the transfer succeeded
     created_at       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (payoutId),
     KEY idx_payout_supplier (supplierId),
@@ -561,7 +563,7 @@ CREATE TABLE supplier_payout (
         ON UPDATE CASCADE ON DELETE CASCADE,
     CONSTRAINT fk_payout_order FOREIGN KEY (orderId) REFERENCES `order`(orderId)
         ON UPDATE CASCADE ON DELETE CASCADE,
-    CONSTRAINT chk_payout_amounts CHECK (grossAmount >= 0 AND commissionAmount >= 0 AND netAmount >= 0)
+    CONSTRAINT chk_payout_amounts CHECK (grossAmount >= 0 AND commissionAmount >= 0)
 ) ENGINE=InnoDB;
 
 -- Courier earnings payout: the admin pays a courier the accrued per-delivery

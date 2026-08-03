@@ -83,6 +83,21 @@ export function remindCourierPayout(deliveryPersonnelId) {
   return apiPost(`/admin/couriers/${deliveryPersonnelId}/remind-payout`, {}, getToken());
 }
 
+// Every active supplier with their payable balance + Stripe connection status.
+export function getSupplierPayouts() {
+  return apiGet('/admin/supplier-payouts', getToken());
+}
+
+// Pay a supplier their whole payable balance via Stripe. Returns the payout.
+export function paySupplier(supplierId) {
+  return apiPost(`/admin/suppliers/${supplierId}/payout`, {}, getToken());
+}
+
+// A single supplier's payout history.
+export function getSupplierPayoutHistory(supplierId) {
+  return apiGet(`/admin/suppliers/${supplierId}/payouts`, getToken());
+}
+
 // Products awaiting approval.
 export function getPendingProducts() {
   return apiGet('/admin/products/pending', getToken());

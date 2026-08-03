@@ -16,3 +16,9 @@ export function startStripeOnboarding() {
 export function openStripeDashboard() {
   return apiPost('/supplier/stripe/dashboard', {}, getToken());
 }
+
+// The supplier's earnings: payable balance, orders still in the refund-hold
+// window, lifetime paid, and payout history.
+export function getEarnings() {
+  return apiGet('/supplier/earnings', getToken());
+}
