@@ -1,33 +1,47 @@
 import { useRef, useState } from 'react';
 import { uploadImage, submitCompanyLogo } from '../auth/authService';
+import LogoCropperModal from './LogoCropperModal';
 
-// Customer-facing company logo (square). The supplier uploads it, but an admin
-// must approve it before it goes live. A new upload sits as "Pending review"
-// (previewed here) while the current approved logo, if any, stays live.
+// Customer-facing company logo (circular). The supplier uploads an image, adjusts
+// it to fit a circle (like Lens Studio's icon editor), and an admin must approve
+// it before it goes live. A new upload sits as "Pending review" (previewed here)
+// while the current approved logo, if any, stays live.
 function CompanyLogoCard({ profile, onSaved, onToast }) {
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [cropSrc, setCropSrc] = useState(null);   // object URL of the picked image (opens the cropper)
 
   const liveUrl    = profile?.companyPhotoUrl || null;
   const pendingUrl = profile?.companyPhotoPendingUrl || null;
   const status     = profile?.companyPhotoStatus || 'None';
   const pending    = status === 'Pending';
   const rejected   = status === 'Rejected';
-  // preview the image under review while pending, otherwise the live logo
   const previewUrl = pending ? (pendingUrl || liveUrl) : liveUrl;
 
-  async function onPick(e) {
+  function onPick(e) {
     const file = e.target.files?.[0];
     e.target.value = '';           // allow re-picking the same file later
     if (!file) return;
     if (!/^image\/(jpeg|png|webp)$/.test(file.type)) { setError('Please choose a JPG, PNG or WebP image.'); return; }
     if (file.size > 5 * 1024 * 1024) { setError('Image must be 5 MB or smaller.'); return; }
+    setError('');
+    setCropSrc(URL.createObjectURL(file));   // open the crop/adjust step
+  }
+
+  function closeCropper() {
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
+  }
+
+  // called by the cropper with the final square PNG File
+  async function handleCropped(croppedFile) {
     setBusy(true); setError('');
     try {
-      const { url } = await uploadImage(file);
+      const { url } = await uploadImage(croppedFile);
       await submitCompanyLogo(url);
       onToast?.('Company logo submitted for review.');
+      closeCropper();
       onSaved?.();                 // reload profile so the status reflects Pending
     } catch (err) {
       setError(err.message || 'Could not upload the logo.');
@@ -41,15 +55,16 @@ function CompanyLogoCard({ profile, onSaved, onToast }) {
       <div className="card-body">
         <h5 className="card-title mb-1">Company logo</h5>
         <p className="text-muted small mb-3">
-          A square logo customers will see for your store. New logos are reviewed by
-          an admin before they go live.
+          A circular logo customers will see for your store. You can adjust it to fit
+          the circle after choosing an image. New logos are reviewed by an admin
+          before they go live.
         </p>
 
         <div className="d-flex align-items-start gap-3 flex-wrap">
-          {/* clickable preview / dropzone */}
+          {/* clickable circular preview / dropzone */}
           <button type="button" title="Upload a new logo" disabled={busy}
             onClick={() => fileRef.current?.click()}
-            className="p-0 border rounded bg-light overflow-hidden position-relative flex-shrink-0"
+            className="p-0 border bg-light overflow-hidden position-relative flex-shrink-0 rounded-circle"
             style={{ width: 112, height: 112 }}>
             {previewUrl ? (
               <img src={previewUrl} alt="Company logo"
@@ -93,6 +108,10 @@ function CompanyLogoCard({ profile, onSaved, onToast }) {
           </div>
         </div>
       </div>
+
+      {cropSrc && (
+        <LogoCropperModal src={cropSrc} onCancel={closeCropper} onCropped={handleCropped} />
+      )}
     </div>
   );
 }

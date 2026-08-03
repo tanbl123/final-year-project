@@ -142,7 +142,7 @@ function AdminBusinessChangesPage() {
                   <div className="text-center">
                     <div className="text-muted small mb-1">New</div>
                     <a href={p.pendingUrl} target="_blank" rel="noreferrer">
-                      <img src={p.pendingUrl} alt="Proposed logo" className="border rounded"
+                      <img src={p.pendingUrl} alt="Proposed logo" className="border rounded-circle"
                         style={{ width: 80, height: 80, objectFit: 'cover' }} />
                     </a>
                   </div>
@@ -150,9 +150,9 @@ function AdminBusinessChangesPage() {
                     <div className="text-muted small mb-1">Current</div>
                     {p.currentUrl
                       ? <a href={p.currentUrl} target="_blank" rel="noreferrer">
-                          <img src={p.currentUrl} alt="Current logo" className="border rounded"
+                          <img src={p.currentUrl} alt="Current logo" className="border rounded-circle"
                             style={{ width: 80, height: 80, objectFit: 'cover' }} /></a>
-                      : <div className="border rounded bg-light d-flex align-items-center justify-content-center text-muted small"
+                      : <div className="border rounded-circle bg-light d-flex align-items-center justify-content-center text-muted small"
                           style={{ width: 80, height: 80 }}>none</div>}
                   </div>
                   <div className="flex-grow-1">
