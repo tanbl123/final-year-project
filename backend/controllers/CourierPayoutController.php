@@ -329,21 +329,45 @@ function payOutCourierBalance(PDO $pdo, array $config, array $courier, bool $isA
     throw new RuntimeException($e->getMessage());
   }
 
+  $alreadyClaimed = false;
   try {
     $pdo->beginTransaction();
-    $pdo->prepare(
-      "INSERT INTO courier_payout (payoutId, deliveryPersonnelId, stripeTransferId, amount, deliveryCount, currency, payoutStatus, isAuto)
-       VALUES (:id, :dp, :tr, :amt, :cnt, 'myr', 'Paid', :au)"
-    )->execute(['id' => $payoutId, 'dp' => $courierId, 'tr' => $transferId,
-                'amt' => $bal['balance'], 'cnt' => $bal['deliveries'], 'au' => $auto]);
-    $pdo->prepare(
+    // serialise concurrent payouts for this courier: the row lock makes a second
+    // (racing) run wait here, then find the deliveries already stamped (0 rows
+    // updated) and record nothing — while the Stripe idempotency key means it
+    // never sent a second transfer either.
+    $lock = $pdo->prepare('SELECT deliveryPersonnelId FROM delivery_personnel WHERE deliveryPersonnelId = :dp FOR UPDATE');
+    $lock->execute(['dp' => $courierId]);
+
+    // stamp the deliveries first; only record the payout if this run actually
+    // claimed some (no FK from delivery.courierPayoutId, so ordering is free).
+    $upd = $pdo->prepare(
       "UPDATE delivery SET courierPayoutId = :pid
         WHERE deliveryPersonnelId = :dp AND deliveryStatus = 'Delivered' AND courierPayoutId IS NULL"
-    )->execute(['pid' => $payoutId, 'dp' => $courierId]);
-    $pdo->commit();
+    );
+    $upd->execute(['pid' => $payoutId, 'dp' => $courierId]);
+
+    if ($upd->rowCount() === 0) {
+      $alreadyClaimed = true;   // a concurrent run already paid this balance
+      $pdo->rollBack();
+    } else {
+      $pdo->prepare(
+        "INSERT INTO courier_payout (payoutId, deliveryPersonnelId, stripeTransferId, amount, deliveryCount, currency, payoutStatus, isAuto)
+         VALUES (:id, :dp, :tr, :amt, :cnt, 'myr', 'Paid', :au)"
+      )->execute(['id' => $payoutId, 'dp' => $courierId, 'tr' => $transferId,
+                  'amt' => $bal['balance'], 'cnt' => $bal['deliveries'], 'au' => $auto]);
+      $pdo->commit();
+    }
   } catch (Throwable $e) {
     if ($pdo->inTransaction()) { $pdo->rollBack(); }
     throw new RuntimeException('Transfer ' . $transferId . ' succeeded but recording it failed.');
+  }
+
+  // Lost a race with a concurrent payout: the other run stamped the deliveries and
+  // recorded the (idempotency-deduped, so identical) transfer. Nothing was paid or
+  // recorded twice — report it like an empty balance rather than a phantom success.
+  if ($alreadyClaimed) {
+    throw new RuntimeException('This courier has no pending balance.');
   }
 
   return [
