@@ -45,6 +45,7 @@ function AdminBusinessChangesPage() {
   const [photoRejecting, setPhotoRejecting] = useState(null);
   const [photoReason, setPhotoReason] = useState('');
   const [photoReasonError, setPhotoReasonError] = useState('');
+  const [tab, setTab] = useState('details');   // 'details' | 'logos'
 
   useEffect(() => {
     let active = true;
@@ -131,11 +132,26 @@ function AdminBusinessChangesPage() {
       <Toast message={notice} onClose={() => setNotice('')} />
       {error && <div className="alert alert-danger py-2">{error}</div>}
 
+      <ul className="nav nav-tabs mb-3">
+        <li className="nav-item">
+          <button className={`nav-link ${tab === 'details' ? 'active' : ''}`} onClick={() => setTab('details')}>
+            Business details {requests.length > 0 && <span className="badge text-bg-secondary ms-1">{requests.length}</span>}
+          </button>
+        </li>
+        <li className="nav-item">
+          <button className={`nav-link ${tab === 'logos' ? 'active' : ''}`} onClick={() => setTab('logos')}>
+            Company logos {photos.length > 0 && <span className="badge text-bg-secondary ms-1">{photos.length}</span>}
+          </button>
+        </li>
+      </ul>
+
       {/* company logos awaiting moderation */}
-      {!loading && photos.length > 0 && (
-        <div className="mb-4">
-          <h5 className="mb-2">🖼️ Company logos awaiting review</h5>
-          <div className="d-flex flex-column gap-3">
+      {tab === 'logos' && (loading ? (
+        <p className="text-muted">Loading…</p>
+      ) : photos.length === 0 ? (
+        <div className="card card-body text-center text-muted">🎉 No company logos awaiting review.</div>
+      ) : (
+        <div className="d-flex flex-column gap-3">
             {photos.map((p) => (
               <div key={p.supplierId} className="card">
                 <div className="card-body d-flex align-items-center gap-3 flex-wrap">
@@ -168,11 +184,10 @@ function AdminBusinessChangesPage() {
                 </div>
               </div>
             ))}
-          </div>
         </div>
-      )}
+      ))}
 
-      {loading ? (
+      {tab === 'details' && (loading ? (
         <p className="text-muted">Loading…</p>
       ) : requests.length === 0 ? (
         <div className="card card-body text-center text-muted">
@@ -224,7 +239,7 @@ function AdminBusinessChangesPage() {
           <Pagination page={page} totalPages={totalPages} onChange={setPage}
             summary={`Page ${page} of ${totalPages} · ${requests.length} requests`} />
         </div>
-      )}
+      ))}
 
       {rejecting && (
         <>
