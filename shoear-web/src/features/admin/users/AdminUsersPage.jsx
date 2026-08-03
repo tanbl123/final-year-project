@@ -48,9 +48,11 @@ function validateStaff(form) {
   return errs;
 }
 
-// A document thumbnail (image) or a PDF link, for the detail modal.
-function UserDoc({ label, url }) {
+// A document thumbnail (image) or a PDF link, for the detail modal. `round`
+// renders a circular thumbnail (used for the company logo).
+function UserDoc({ label, url, round }) {
   const isPdf = !!url && /\.pdf(\?|$)/i.test(url);
+  const shape = round ? 'rounded-circle' : 'rounded';
   return (
     <div className="col-6 col-md-4">
       <div className="text-muted small mb-1">{label}</div>
@@ -63,8 +65,10 @@ function UserDoc({ label, url }) {
           </a>
         ) : (
           <a href={url} target="_blank" rel="noreferrer" title="Open full size">
-            <img src={url} alt={label} className="border rounded"
-              style={{ width: '100%', height: 110, objectFit: 'cover' }} />
+            <img src={url} alt={label} className={`border ${shape}`}
+              style={round
+                ? { width: 110, height: 110, objectFit: 'cover' }
+                : { width: '100%', height: 110, objectFit: 'cover' }} />
           </a>
         )
       ) : (
@@ -505,7 +509,10 @@ function AdminUsersPage() {
                         )}
                         {detail.role === 'Supplier' && (
                           <>
-                            <UserDoc label="Company logo" url={detail.profile.companyPhotoUrl} />
+                            {/* logo is optional — only show the tile once one is approved */}
+                            {detail.profile.companyPhotoUrl && (
+                              <UserDoc label="Company logo" url={detail.profile.companyPhotoUrl} round />
+                            )}
                             <UserDoc label="Business licence" url={detail.profile.businessLicenseUrl} />
                           </>
                         )}
