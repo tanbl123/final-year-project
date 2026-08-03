@@ -146,8 +146,11 @@ class OrderItem {
   final double subtotal;
   final String? imageUrl;
   final bool reviewed; // has this customer already reviewed this product?
+  final String? reviewId;     // this customer's own review id (when reviewed)
+  final int? rating;          // the stars they gave (1–5)
+  final String? reviewComment; // the comment they left (may be empty/null)
 
-  OrderItem({required this.productId, required this.productName, required this.brand, required this.size, required this.qty, required this.unitPrice, required this.subtotal, this.imageUrl, this.reviewed = false});
+  OrderItem({required this.productId, required this.productName, required this.brand, required this.size, required this.qty, required this.unitPrice, required this.subtotal, this.imageUrl, this.reviewed = false, this.reviewId, this.rating, this.reviewComment});
 
   factory OrderItem.fromJson(Map<String, dynamic> j) => OrderItem(
         productId: j['productId'] as String? ?? '',
@@ -159,6 +162,9 @@ class OrderItem {
         subtotal: (j['subtotal'] as num?)?.toDouble() ?? 0,
         imageUrl: (j['imageUrl'] as String?)?.isNotEmpty == true ? j['imageUrl'] as String : null,
         reviewed: j['reviewed'] == true,
+        reviewId: (j['reviewId'] as String?)?.isNotEmpty == true ? j['reviewId'] as String : null,
+        rating: (j['rating'] as num?)?.toInt(),
+        reviewComment: (j['reviewComment'] as String?)?.isNotEmpty == true ? j['reviewComment'] as String : null,
       );
 }
 

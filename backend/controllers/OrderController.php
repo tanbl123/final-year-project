@@ -599,11 +599,11 @@ function handleGetCustomerOrder(PDO $pdo, array $auth, string $orderId): void {
             oi.orderUnitPrice AS unitPrice, oi.orderSubtotal AS subtotal,
             (SELECT pi.productImageUrl FROM product_image pi
               WHERE pi.productId = p.productId ORDER BY pi.productImageId LIMIT 1) AS imageUrl,
-            EXISTS (SELECT 1 FROM review r
-                     WHERE r.productId = p.productId AND r.customerId = :cid) AS reviewed
+            r.reviewId AS reviewId, r.ratingScore AS rating, r.reviewComment AS reviewComment
        FROM order_item oi
        JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
        JOIN product p          ON p.productId = pv.productId
+       LEFT JOIN review r       ON r.productId = p.productId AND r.customerId = :cid
       WHERE oi.orderId = :oid
       ORDER BY oi.orderItemId"
   );
@@ -613,7 +613,9 @@ function handleGetCustomerOrder(PDO $pdo, array $auth, string $orderId): void {
     $x['qty']       = (int) $x['qty'];
     $x['unitPrice'] = (float) $x['unitPrice'];
     $x['subtotal']  = (float) $x['subtotal'];
-    $x['reviewed']  = (bool) $x['reviewed'];
+    // The customer's own review of this product (null if they haven't reviewed).
+    $x['reviewed']  = $x['reviewId'] !== null;
+    $x['rating']    = $x['rating'] !== null ? (int) $x['rating'] : null;
   }
   unset($x);
   $order['items'] = $items;

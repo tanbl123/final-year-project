@@ -196,6 +196,32 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  // Edit the review this customer already left for an item, pre-filled with
+  // their current stars + comment.
+  Future<void> _editItem(OrderItem item) async {
+    if (item.reviewId == null) return;
+    final result = await showModalBottomSheet<ReviewResult>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => ReviewSheet(
+        productName: item.productName,
+        editing: true,
+        initialRating: item.rating ?? 0,
+        initialComment: item.reviewComment ?? '',
+      ),
+    );
+    if (result == null) return; // dismissed
+    try {
+      await context.read<ReviewService>().update(item.reviewId!, result.rating, result.comment);
+      if (!mounted) return;
+      context.showSnack('Your review has been updated.');
+      bumpRefresh();    // product rating changed elsewhere (catalog/product page)
+      await _refresh(); // reflect the new stars/comment on this order
+    } catch (e) {
+      if (mounted) context.showSnack(e.toString());
+    }
+  }
+
   Future<void> _requestRefund() async {
     // The dialog owns its controller/image and validates inline; it returns the
     // reason + an optional proof photo only once valid.
@@ -387,6 +413,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   primary: primary,
                   canReview: o.canReview,
                   onRate: () => _rateItem(o.items[i]),
+                  onEdit: () => _editItem(o.items[i]),
                 ),
               ],
               const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider(height: 1)),
@@ -621,7 +648,8 @@ class _ItemRow extends StatelessWidget {
   final Color primary;
   final bool canReview;       // order is purchased → items can be rated
   final VoidCallback? onRate;
-  const _ItemRow({required this.item, required this.primary, this.canReview = false, this.onRate});
+  final VoidCallback? onEdit; // edit the customer's own existing review
+  const _ItemRow({required this.item, required this.primary, this.canReview = false, this.onRate, this.onEdit});
 
   @override
   Widget build(BuildContext context) {
@@ -654,32 +682,79 @@ class _ItemRow extends StatelessWidget {
         // Rate this item (Shopee-style) once the order is purchased.
         if (canReview) ...[
           const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: item.reviewed
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.check_circle, size: 16, color: Colors.green.shade600),
-                      const SizedBox(width: 4),
-                      Text('Rated',
-                          style: TextStyle(fontSize: 12, color: Colors.green.shade700, fontWeight: FontWeight.w600)),
-                    ],
-                  )
-                : OutlinedButton.icon(
-                    onPressed: onRate,
-                    icon: const Icon(Icons.star_outline_rounded, size: 18),
-                    label: const Text('Rate'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: primary,
-                      side: BorderSide(color: primary),
-                      visualDensity: VisualDensity.compact,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-          ),
+          if (item.reviewed)
+            _MyReview(item: item, onEdit: onEdit)
+          else
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton.icon(
+                onPressed: onRate,
+                icon: const Icon(Icons.star_outline_rounded, size: 18),
+                label: const Text('Rate'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: primary,
+                  side: BorderSide(color: primary),
+                  visualDensity: VisualDensity.compact,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+            ),
         ],
       ],
+    );
+  }
+}
+
+// The customer's OWN review of an item, shown inline once they've rated it:
+// their stars + comment, with an Edit shortcut. Only they see this here.
+class _MyReview extends StatelessWidget {
+  final OrderItem item;
+  final VoidCallback? onEdit;
+  const _MyReview({required this.item, this.onEdit});
+
+  @override
+  Widget build(BuildContext context) {
+    final stars = item.rating ?? 0;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.check_circle, size: 15, color: Colors.green.shade600),
+              const SizedBox(width: 4),
+              Text('Your review',
+                  style: TextStyle(fontSize: 12, color: Colors.green.shade700, fontWeight: FontWeight.w600)),
+              const Spacer(),
+              if (onEdit != null)
+                TextButton.icon(
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined, size: 15),
+                  label: const Text('Edit'),
+                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact, padding: const EdgeInsets.symmetric(horizontal: 6)),
+                ),
+            ],
+          ),
+          Row(
+            children: [
+              for (int i = 1; i <= 5; i++)
+                Icon(i <= stars ? Icons.star_rounded : Icons.star_outline_rounded,
+                    size: 18, color: Colors.amber.shade700),
+            ],
+          ),
+          if ((item.reviewComment ?? '').isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(item.reviewComment!, style: TextStyle(fontSize: 13, color: Colors.grey.shade800, height: 1.35)),
+          ],
+        ],
+      ),
     );
   }
 }
