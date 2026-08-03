@@ -3,6 +3,39 @@
 // app; the admin reviews them here. Suppliers see refunds on their own orders
 // via the order detail (OrderController), not here.
 
+// Email every supplier with item(s) in an order about a refund event on it.
+// Suppliers work on the web (which has no in-app notification bell), so email is
+// their channel — matching the existing ship-reminder / decision emails. Gated
+// on SMTP and fully best-effort: a refund must never fail because email did.
+// $event is 'requested' or 'completed'; $amount is used for 'completed'.
+function emailOrderSuppliersRefund(PDO $pdo, array $config, string $orderId, string $event, float $amount = 0.0): void {
+  if (!function_exists('mailConfigured') || !mailConfigured($config)) { return; }
+  try {
+    $stmt = $pdo->prepare(
+      "SELECT DISTINCT u.email, s.companyName
+         FROM order_item oi
+         JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+         JOIN product p          ON p.productId = pv.productId
+         JOIN supplier s         ON s.supplierId = p.supplierId
+         JOIN `user` u           ON u.userId = s.userId
+        WHERE oi.orderId = :oid AND u.email IS NOT NULL AND u.email <> ''"
+    );
+    $stmt->execute(['oid' => $orderId]);
+    $rows = $stmt->fetchAll();
+  } catch (Throwable $e) {
+    return;
+  }
+  foreach ($rows as $r) {
+    try {
+      if ($event === 'completed' && function_exists('sendSupplierRefundCompletedEmail')) {
+        sendSupplierRefundCompletedEmail($config, (string) $r['email'], (string) $r['companyName'], $orderId, $amount);
+      } elseif ($event === 'requested' && function_exists('sendSupplierRefundRequestedEmail')) {
+        sendSupplierRefundRequestedEmail($config, (string) $r['email'], (string) $r['companyName'], $orderId);
+      }
+    } catch (Throwable $e) { /* best-effort per supplier */ }
+  }
+}
+
 // GET /admin/refunds — all refund requests. Optional ?status= filter.
 // Pending first so the work queue is front-and-centre.
 function handleListRefunds(PDO $pdo): void {
@@ -126,6 +159,11 @@ function handleSetRefundStatus(PDO $pdo, string $refundId, array $config = []): 
   if (function_exists('notifyRefundStatusChange')) {
     notifyRefundStatusChange($pdo, $refund['customerId'], $refund['orderId'], $status);
   }
+  // once the refund COMPLETES the money is netted against the supplier's payout,
+  // so email the affected supplier(s) — their channel is the web, not push.
+  if ($status === 'Completed') {
+    emailOrderSuppliersRefund($pdo, $config, (string) $refund['orderId'], 'completed', $refundAmount);
+  }
 
   sendJson(200, true, ['refundId' => $refundId, 'status' => $status]);
 }
@@ -169,7 +207,7 @@ function handleListSupplierRefunds(PDO $pdo, array $auth): void {
 // POST /orders/{orderId}/refund — request a refund on a PAID order. Body:
 // { refundReason, refundAmount?, refundProof? }. Creates a Pending refund that
 // then flows to the admin processing queue + the supplier's refund views.
-function handleCreateRefund(PDO $pdo, array $auth, string $orderId): void {
+function handleCreateRefund(PDO $pdo, array $auth, string $orderId, array $config = []): void {
   $customerId = requireCustomerId($pdo, $auth);
   $body   = getJsonBody();
   $reason = trim($body['refundReason'] ?? '');
@@ -256,6 +294,8 @@ function handleCreateRefund(PDO $pdo, array $auth, string $orderId): void {
   if (function_exists('notifyRefundRequested')) {
     notifyRefundRequested($pdo, $customerId, $orderId);
   }
+  // let the affected supplier(s) know a refund was requested on their order
+  emailOrderSuppliersRefund($pdo, $config, $orderId, 'requested');
 
   sendJson(201, true, ['refundId' => $id, 'orderId' => $orderId, 'refundAmount' => $amount, 'refundStatus' => 'Pending']);
 }

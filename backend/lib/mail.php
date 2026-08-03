@@ -247,6 +247,43 @@ function sendShipReminderEmail(array $config, string $toEmail, string $companyNa
   sendMail($config, $toEmail, $companyName, $subject, $text, $html);
 }
 
+// Let a supplier know a customer has REQUESTED a refund on one of their orders.
+// The admin processes it — this is an awareness notice so the supplier isn't
+// surprised if it's later completed and netted against their payout.
+function sendSupplierRefundRequestedEmail(array $config, string $toEmail, string $companyName, string $orderId): void {
+  $name  = $companyName !== '' ? $companyName : 'Supplier';
+  $order = $orderId !== '' ? $orderId : 'your order';
+
+  $subject  = 'ShoeAR — Refund requested on your order';
+  $textBody = "A customer has requested a refund on order $order, which contains your product(s).\n\n"
+            . "Our team is reviewing the request. No action is needed from you — you can monitor its status in the ShoeAR Supplier Portal under Refunds. If the refund is completed, the refunded amount is deducted from your payout.";
+  $bodyHtml = '<p>A customer has requested a refund on order <strong>' . htmlspecialchars($order, ENT_QUOTES) . '</strong>, which contains your product(s).</p>'
+            . '<p>Our team is reviewing the request. No action is needed from you — you can monitor its status in the ShoeAR Supplier Portal under <strong>Refunds</strong>. If the refund is completed, the refunded amount is deducted from your payout.</p>';
+
+  $text = "Dear $name,\n\n$textBody\n\nYours sincerely,\nThe ShoeAR Team";
+  $html = formalLetterHtml($name, $bodyHtml, '👟 ShoeAR');
+  sendMail($config, $toEmail, $companyName, $subject, $text, $html);
+}
+
+// Tell a supplier a refund on their order has been COMPLETED — money has been
+// returned to the customer and the refunded amount is netted against the
+// supplier's payout.
+function sendSupplierRefundCompletedEmail(array $config, string $toEmail, string $companyName, string $orderId, float $amount): void {
+  $name  = $companyName !== '' ? $companyName : 'Supplier';
+  $order = $orderId !== '' ? $orderId : 'your order';
+  $amt   = 'RM ' . number_format($amount, 2);
+
+  $subject  = 'ShoeAR — Refund completed on your order';
+  $textBody = "A refund of $amt on order $order has been completed and returned to the customer.\n\n"
+            . "The refunded amount for your item(s) is deducted from your payable balance and will be reflected in the ShoeAR Supplier Portal under Refunds and Payouts.";
+  $bodyHtml = '<p>A refund of <strong>' . htmlspecialchars($amt, ENT_QUOTES) . '</strong> on order <strong>' . htmlspecialchars($order, ENT_QUOTES) . '</strong> has been completed and returned to the customer.</p>'
+            . '<p>The refunded amount for your item(s) is deducted from your payable balance and will be reflected in the ShoeAR Supplier Portal under <strong>Refunds</strong> and <strong>Payouts</strong>.</p>';
+
+  $text = "Dear $name,\n\n$textBody\n\nYours sincerely,\nThe ShoeAR Team";
+  $html = formalLetterHtml($name, $bodyHtml, '👟 ShoeAR');
+  sendMail($config, $toEmail, $companyName, $subject, $text, $html);
+}
+
 // Nudge an approved supplier who has a payable balance but hasn't finished
 // connecting a Stripe payout account, so the platform can transfer their earnings.
 function sendSupplierPayoutSetupReminderEmail(array $config, string $toEmail, string $companyName): void {

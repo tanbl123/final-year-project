@@ -229,7 +229,7 @@ if ($method === 'POST' && preg_match('#^/reviews/([^/]+)/flag$#', $path, $m)) {
 if ($method === 'POST' && preg_match('#^/orders/([^/]+)/refund$#', $path, $m)) {
   $auth = requireAuth($secret);
   $pdo  = getPDO();
-  handleCreateRefund($pdo, $auth, $m[1]);
+  handleCreateRefund($pdo, $auth, $m[1], $config);
 }
 
 if ($method === 'POST' && preg_match('#^/orders/([^/]+)/cancel$#', $path, $m)) {
