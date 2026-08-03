@@ -46,7 +46,9 @@ function AppealPage() {
 
   async function onSubmit(e) {
     e.preventDefault();
-    if (message.trim() === '') { setSubmitError('Please explain your appeal.'); return; }
+    const trimmed = message.trim();
+    if (trimmed === '') { setSubmitError('Please explain your appeal.'); return; }
+    if (trimmed.length < 10) { setSubmitError('Please give a bit more detail (at least 10 characters).'); return; }
     setSubmitting(true); setSubmitError('');
     try {
       await submitAppeal(uid, token, message.trim());
@@ -92,6 +94,7 @@ function AppealPage() {
           value={message}
           placeholder="Explain why your account should be reinstated…"
           onChange={(e) => { setMessage(e.target.value); if (submitError) setSubmitError(''); }} />
+        <div className="text-muted small mt-1 text-end">{message.length}/1000</div>
         <button type="submit" className="btn btn-primary w-100 mt-3" disabled={submitting}>
           {submitting ? 'Submitting…' : 'Submit appeal'}
         </button>

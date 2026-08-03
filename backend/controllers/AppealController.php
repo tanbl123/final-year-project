@@ -60,6 +60,9 @@ function handleSubmitAppeal(PDO $pdo): void {
   if ($message === '') {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please explain your appeal.']);
   }
+  if (mb_strlen($message) < 10) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please give a bit more detail (at least 10 characters).']);
+  }
   if (mb_strlen($message) > 1000) { $message = mb_substr($message, 0, 1000); }
 
   $open = $pdo->prepare("SELECT 1 FROM account_appeal WHERE userId = :id AND appealStatus = 'Open' LIMIT 1");
