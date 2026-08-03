@@ -4,4 +4,4 @@
 -- flip to 'Refunded' (a full refund). Reports use this to reverse commission/SST
 -- on the refunded portion of an otherwise-successful sale.
 ALTER TABLE payment
-  ADD COLUMN refundedAmount DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER paymentStatus;
+  ADD COLUMN IF NOT EXISTS refundedAmount DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER paymentStatus;

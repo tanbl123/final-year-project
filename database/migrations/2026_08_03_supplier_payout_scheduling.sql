@@ -7,23 +7,16 @@
 --    order can net negative for the supplier (delivery + refund exceed the sale).
 --    We still record it truthfully; it nets against the supplier's other orders.
 --
--- Apply to an existing database:
---   phpMyAdmin → shoear database → SQL → paste → Go
+-- Written for MariaDB (XAMPP). IF [NOT] EXISTS makes it safe to re-run.
+-- Apply: phpMyAdmin → shoear database → SQL → paste → Go
 
 ALTER TABLE supplier_payout
-  ADD COLUMN isAuto TINYINT(1) NOT NULL DEFAULT 0 AFTER payoutStatus,
-  ADD COLUMN paidAt DATETIME NULL AFTER isAuto;
+  ADD COLUMN IF NOT EXISTS isAuto TINYINT(1) NOT NULL DEFAULT 0 AFTER payoutStatus,
+  ADD COLUMN IF NOT EXISTS paidAt DATETIME NULL AFTER isAuto;
 
--- MySQL 8.0 enforces CHECKs (5.7 ignores them). Drop the old amounts check and
--- re-add it without the netAmount >= 0 clause. The DROP is wrapped so it doesn't
--- fail on installs where the constraint was never created.
-SET @drop := IF(
-  EXISTS(SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
-           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'supplier_payout'
-             AND CONSTRAINT_NAME = 'chk_payout_amounts'),
-  'ALTER TABLE supplier_payout DROP CHECK chk_payout_amounts',
-  'DO 0');
-PREPARE s FROM @drop; EXECUTE s; DEALLOCATE PREPARE s;
+-- MariaDB enforces named CHECK constraints. Drop the old amounts check (which
+-- forbade a negative netAmount) and re-add it without that clause.
+ALTER TABLE supplier_payout DROP CONSTRAINT IF EXISTS chk_payout_amounts;
 
 ALTER TABLE supplier_payout
   ADD CONSTRAINT chk_payout_amounts CHECK (grossAmount >= 0 AND commissionAmount >= 0);
