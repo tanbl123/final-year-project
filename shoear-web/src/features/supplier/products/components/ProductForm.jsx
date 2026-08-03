@@ -141,7 +141,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
   // Returns an error string ('' when valid). `over` lets callers validate a
   // not-yet-committed value (so onChange can re-check the field live).
   function validateField(field, over = {}) {
-    const v = { name, brand, price, categoryId, ...over };
+    const v = { name, brand, price, categoryId, description, ...over };
     switch (field) {
       case 'name': {
         const s = v.name.trim();
@@ -167,6 +167,12 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
       }
       case 'categoryId':
         return v.categoryId ? '' : 'Please choose a category.';
+      case 'description': {
+        const s = (v.description || '').trim();
+        if (!s) return 'Description is required.';
+        if (s.length > 2000) return 'Keep it under 2000 characters.';
+        return '';
+      }
       default:
         return '';
     }
@@ -397,11 +403,11 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
     setSubmitAttempted(true);
 
     // validate the base fields and mark them all touched
-    const base = ['name', 'brand', 'price', 'categoryId'];
+    const base = ['name', 'brand', 'price', 'categoryId', 'description'];
     const baseErrors = {};
     base.forEach((f) => { baseErrors[f] = validateField(f); });
     setFieldErrors((e) => ({ ...e, ...baseErrors }));
-    setTouched((t) => ({ ...t, name: true, brand: true, price: true, categoryId: true }));
+    setTouched((t) => ({ ...t, name: true, brand: true, price: true, categoryId: true, description: true }));
     const hasBaseError = base.some((f) => baseErrors[f]);
 
     // validate size rows; collect the non-blank, valid ones
@@ -518,9 +524,12 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
         </div>
         <div className="col-12">
           <label className="form-label">Description</label>
-          <textarea className="form-control" rows="3" maxLength="2000"
+          <textarea className={'form-control' + (showError('description') ? ' is-invalid' : '')} rows="3" maxLength="2000"
             placeholder="Materials, fit, technology, what makes this shoe special…"
-            value={description} onChange={(e) => setDescription(e.target.value)} />
+            value={description}
+            onChange={(e) => changeField('description', setDescription, e.target.value)}
+            onBlur={() => blurField('description')} />
+          {showError('description') && <div className="invalid-feedback d-block">{fieldErrors.description}</div>}
         </div>
       </div>
 

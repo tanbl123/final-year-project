@@ -117,6 +117,9 @@ function handleCreateProduct(PDO $pdo, array $auth, array $config = []): void {
   if ($name === '' || $brand === '') {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Name and brand are required.']);
   }
+  if ($description === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Description is required.']);
+  }
   if (!is_numeric($price) || (float) $price <= 0) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Price must be a number greater than 0.']);
   }
@@ -487,6 +490,9 @@ function handleUpdateProduct(PDO $pdo, array $auth, string $id): void {
 
   if ($name === '' || $brand === '') {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Name and brand are required.']);
+  }
+  if ($description === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Description is required.']);
   }
   if (!is_numeric($price) || (float) $price <= 0) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Price must be a number greater than 0.']);
