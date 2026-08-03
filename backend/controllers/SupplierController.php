@@ -361,8 +361,10 @@ function handleSubmitCompanyPhoto(PDO $pdo, array $auth): void {
   $body = getJsonBody();
   $url  = trim($body['url'] ?? '');
 
-  // Accept only a URL we issued (an uploads path), so this can't point elsewhere.
-  if ($url === '' || strpos($url, '/uploads/') === false) {
+  // The URL comes straight from our own upload step (POST /uploads), which stores
+  // to Firebase (a storage.googleapis.com link) or local disk (/shoear/uploads/…).
+  // Accept any http(s) URL so both storage backends work; just sanity-check it.
+  if ($url === '' || !preg_match('#^https?://#i', $url)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please upload a valid image first.']);
   }
   if (mb_strlen($url) > 255) {
