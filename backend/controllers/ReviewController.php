@@ -181,6 +181,55 @@ function handleCreateReview(PDO $pdo, array $auth, string $productId): void {
   sendJson(201, true, ['reviewId' => $id, 'productId' => $productId, 'ratingScore' => $rating, 'reviewComment' => $comment]);
 }
 
+// POST /reviews/{reviewId}/flag — a signed-in customer reports another customer's
+// public review/avatar as inappropriate. Creates an Open flag for admin
+// moderation. Body: { reason }.
+function handleFlagReview(PDO $pdo, array $auth, string $reviewId): void {
+  requireCustomerId($pdo, $auth);                 // any signed-in customer may report
+  $reporterUserId = $auth['userId'];
+  $body   = getJsonBody();
+  $reason = trim($body['reason'] ?? '');
+  if ($reason === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please choose a reason for reporting.']);
+  }
+  if (mb_strlen($reason) > 255) { $reason = mb_substr($reason, 0, 255); }
+
+  // resolve the reviewer being reported (target) from the review
+  $stmt = $pdo->prepare(
+    "SELECT u.userId AS targetUserId
+       FROM review r
+       JOIN customer c ON c.customerId = r.customerId
+       JOIN `user` u   ON u.userId = c.userId
+      WHERE r.reviewId = :rid"
+  );
+  $stmt->execute(['rid' => $reviewId]);
+  $row = $stmt->fetch();
+  if (!$row) {
+    sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Review not found.']);
+  }
+  if ($row['targetUserId'] === $reporterUserId) {
+    sendJson(400, false, null, ['code' => 'SELF', 'message' => 'You cannot report your own review.']);
+  }
+
+  // one open flag per reporter per review (avoids double taps / spam)
+  $dup = $pdo->prepare(
+    "SELECT 1 FROM content_flag
+      WHERE reporterUserId = :rep AND reviewId = :rid AND flagStatus = 'Open' LIMIT 1"
+  );
+  $dup->execute(['rep' => $reporterUserId, 'rid' => $reviewId]);
+  if ($dup->fetch()) {
+    sendJson(200, true, ['message' => 'You have already reported this. Thanks — our team will review it.']);
+  }
+
+  $flagId = nextId($pdo, 'content_flag', 'flagId', 'FLG');
+  $pdo->prepare(
+    "INSERT INTO content_flag (flagId, reporterUserId, targetUserId, reviewId, reason, flagStatus)
+     VALUES (:id, :rep, :tgt, :rid, :rsn, 'Open')"
+  )->execute(['id' => $flagId, 'rep' => $reporterUserId, 'tgt' => $row['targetUserId'], 'rid' => $reviewId, 'rsn' => $reason]);
+
+  sendJson(201, true, ['message' => 'Thanks — our team will review this shortly.']);
+}
+
 // GET /products/{productId}/reviews/mine — the caller's own review for this
 // product (or null), plus whether they're eligible to write one (have purchased
 // it). Lets the app show "Write a review" vs "Edit / delete your review".

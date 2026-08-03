@@ -397,6 +397,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 isMine: r.reviewId.isNotEmpty && r.reviewId == _myStatus?.myReview?.reviewId,
                                 onEdit: () => _openReviewEditor(existing: _myStatus!.myReview),
                                 onDelete: () => _deleteReview(r.reviewId),
+                                onReport: context.read<AuthProvider>().isLoggedIn ? () => _reportReview(r.reviewId) : null,
                               ),
                         ],
                       ),
@@ -537,6 +538,41 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
   }
 
+  // Report another customer's review/avatar → pick a reason → send to moderation.
+  Future<void> _reportReview(String reviewId) async {
+    const reasons = [
+      'Inappropriate profile photo',
+      'Offensive or abusive content',
+      'Spam or scam',
+      'Other',
+    ];
+    final reason = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Report this review', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ),
+            for (final r in reasons)
+              ListTile(title: Text(r), onTap: () => Navigator.of(ctx).pop(r)),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (reason == null) return;
+    try {
+      await context.read<ReviewService>().flag(reviewId, reason);
+      if (!mounted) return;
+      context.showSnack('Thanks — our team will review this.');
+    } catch (e) {
+      if (mounted) context.showSnack(e.toString());
+    }
+  }
+
   Widget _addToCartBar(BuildContext context, ProductDetail p, bool hasStock) {
     final theme = Theme.of(context);
     return SafeArea(
@@ -659,7 +695,8 @@ class _ReviewTile extends StatelessWidget {
   final bool isMine;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
-  const _ReviewTile({required this.review, this.isMine = false, this.onEdit, this.onDelete});
+  final VoidCallback? onReport;   // report someone else's review (null = hidden)
+  const _ReviewTile({required this.review, this.isMine = false, this.onEdit, this.onDelete, this.onReport});
 
   @override
   Widget build(BuildContext context) {
@@ -764,6 +801,17 @@ class _ReviewTile extends StatelessWidget {
                   style: TextButton.styleFrom(foregroundColor: Colors.red, visualDensity: VisualDensity.compact),
                 ),
               ],
+            ),
+          ] else if (onReport != null) ...[
+            const SizedBox(height: 2),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: onReport,
+                icon: const Icon(Icons.flag_outlined, size: 15),
+                label: const Text('Report'),
+                style: TextButton.styleFrom(foregroundColor: Colors.grey, visualDensity: VisualDensity.compact),
+              ),
             ),
           ],
           const SizedBox(height: 4),

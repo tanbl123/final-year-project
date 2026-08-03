@@ -491,6 +491,29 @@ CREATE TABLE review (
     CONSTRAINT chk_review_rating CHECK (ratingScore BETWEEN 1 AND 5)
 ) ENGINE=InnoDB;
 
+-- Customer-submitted flags on another customer's public review/avatar. Drives
+-- reactive moderation: an admin reviews Open flags and can remove the offending
+-- avatar or suspend the user. (Named "flag" to avoid clashing with sales Reports.)
+CREATE TABLE content_flag (
+    flagId          VARCHAR(12) NOT NULL,                   -- FLG00000001
+    reporterUserId  VARCHAR(10) NOT NULL,                   -- who raised the flag
+    targetUserId    VARCHAR(10) NOT NULL,                   -- the reviewer being flagged
+    reviewId        VARCHAR(10) NULL,                       -- the review it was flagged from (context)
+    reason          VARCHAR(255) NOT NULL,
+    flagStatus      ENUM('Open','Resolved','Dismissed') NOT NULL DEFAULT 'Open',
+    resolutionNote  VARCHAR(255) NULL,                      -- action taken / admin note
+    reviewedBy      VARCHAR(10)  NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at     DATETIME NULL,
+    PRIMARY KEY (flagId),
+    KEY idx_flag_status (flagStatus),
+    KEY idx_flag_target (targetUserId),
+    CONSTRAINT fk_flag_reporter FOREIGN KEY (reporterUserId) REFERENCES `user`(userId)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    CONSTRAINT fk_flag_target FOREIGN KEY (targetUserId) REFERENCES `user`(userId)
+        ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- =====================================================================
 --  7. REFUND TABLE
 -- =====================================================================

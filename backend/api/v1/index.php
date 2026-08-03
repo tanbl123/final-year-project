@@ -219,6 +219,12 @@ if ($method === 'DELETE' && preg_match('#^/reviews/([^/]+)$#', $path, $m)) {
   handleDeleteReview($pdo, $auth, $m[1]);
 }
 
+if ($method === 'POST' && preg_match('#^/reviews/([^/]+)/flag$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleFlagReview($pdo, $auth, $m[1]);
+}
+
 // ── customer refund requests (require a Customer token) ──
 if ($method === 'POST' && preg_match('#^/orders/([^/]+)/refund$#', $path, $m)) {
   $auth = requireAuth($secret);
@@ -1238,6 +1244,19 @@ if ($method === 'GET' && $path === '/admin/reviews') {
   requireAdmin($auth);
   $pdo  = getPDO();
   handleListAdminReviews($pdo);
+}
+
+if ($method === 'GET' && $path === '/admin/flags') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleListFlags($pdo);
+}
+if ($method === 'POST' && preg_match('#^/admin/flags/([^/]+)/resolve$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleResolveFlag($pdo, $auth, $m[1]);
 }
 
 if ($method === 'PATCH' && preg_match('#^/admin/reviews/([^/]+)/status$#', $path, $m)) {

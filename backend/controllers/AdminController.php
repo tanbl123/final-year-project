@@ -807,6 +807,77 @@ function handleReviewCompanyPhoto(PDO $pdo, array $auth, string $supplierId): vo
   }
 }
 
+// ── content flags (reactive moderation of public review avatars) ─────
+// GET /admin/flags — open flags with reporter, target (name + avatar + status)
+// and the reported review's text for context.
+function handleListFlags(PDO $pdo): void {
+  $stmt = $pdo->query(
+    "SELECT f.flagId, f.reason, f.created_at, f.reviewId,
+            rep.fullName  AS reporterName,
+            tgt.userId    AS targetUserId, tgt.fullName AS targetName,
+            tgt.avatarUrl AS targetAvatar, tgt.status AS targetStatus,
+            r.reviewComment
+       FROM content_flag f
+       JOIN `user` rep ON rep.userId = f.reporterUserId
+       JOIN `user` tgt ON tgt.userId = f.targetUserId
+       LEFT JOIN review r ON r.reviewId = f.reviewId
+      WHERE f.flagStatus = 'Open'
+      ORDER BY f.created_at ASC"
+  );
+  sendJson(200, true, ['flags' => $stmt->fetchAll()]);
+}
+
+// POST /admin/flags/{flagId}/resolve — body { action, note? }.
+// action: 'remove_avatar' (clear the target's avatar), 'suspend' (suspend the
+// target), or 'dismiss' (no action). remove_avatar/suspend also resolve every
+// other open flag for the same target so the queue clears.
+function handleResolveFlag(PDO $pdo, array $auth, string $flagId): void {
+  $body   = getJsonBody();
+  $action = trim($body['action'] ?? '');
+  $note   = trim($body['note'] ?? '');
+  if (mb_strlen($note) > 255) { $note = mb_substr($note, 0, 255); }
+
+  $stmt = $pdo->prepare('SELECT flagStatus, targetUserId FROM content_flag WHERE flagId = :id');
+  $stmt->execute(['id' => $flagId]);
+  $flag = $stmt->fetch();
+  if (!$flag) {
+    sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Flag not found.']);
+  }
+  if ($flag['flagStatus'] !== 'Open') {
+    sendJson(409, false, null, ['code' => 'CONFLICT', 'message' => 'This flag has already been handled.']);
+  }
+  $target = $flag['targetUserId'];
+
+  if ($action === 'dismiss') {
+    $pdo->prepare("UPDATE content_flag SET flagStatus='Dismissed', resolutionNote=:n, reviewedBy=:by, reviewed_at=NOW() WHERE flagId=:id")
+        ->execute(['n' => $note !== '' ? $note : null, 'by' => $auth['userId'], 'id' => $flagId]);
+    sendJson(200, true, ['flagId' => $flagId, 'flagStatus' => 'Dismissed']);
+  }
+
+  if ($action === 'remove_avatar' || $action === 'suspend') {
+    $pdo->beginTransaction();
+    try {
+      if ($action === 'remove_avatar') {
+        $pdo->prepare("UPDATE `user` SET avatarUrl = NULL WHERE userId = :id")->execute(['id' => $target]);
+      } else { // suspend — never an admin
+        $pdo->prepare("UPDATE `user` SET status = 'Suspended' WHERE userId = :id AND role <> 'Admin'")->execute(['id' => $target]);
+      }
+      // resolve this flag + any other open flags for the same target
+      $pdo->prepare(
+        "UPDATE content_flag SET flagStatus='Resolved', resolutionNote=:n, reviewedBy=:by, reviewed_at=NOW()
+          WHERE targetUserId = :tgt AND flagStatus = 'Open'"
+      )->execute(['n' => $note !== '' ? $note : $action, 'by' => $auth['userId'], 'tgt' => $target]);
+      $pdo->commit();
+    } catch (Throwable $e) {
+      $pdo->rollBack();
+      sendJson(500, false, null, ['code' => 'SERVER', 'message' => 'Could not resolve the flag.']);
+    }
+    sendJson(200, true, ['flagId' => $flagId, 'flagStatus' => 'Resolved', 'action' => $action]);
+  }
+
+  sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Unknown action.']);
+}
+
 // ── courier vehicle/licence change requests ──────────────────────────
 // GET /admin/courier-changes — pending plate/licence change requests with the
 // current (live) values alongside the proposed ones, so the admin sees the diff.
@@ -941,6 +1012,7 @@ function adminBadgeCounts(PDO $pdo): array {
     'deliveries' => "SELECT COUNT(*) FROM delivery WHERE deliveryPersonnelId IS NULL AND deliveryMethod = 'InHouse'",
     'issues'     => "SELECT COUNT(*) FROM delivery_issue WHERE issueStatus = 'Open'",
     'refunds'    => "SELECT COUNT(*) FROM refund WHERE refundStatus = 'Pending'",
+    'flags'      => "SELECT COUNT(*) FROM content_flag WHERE flagStatus = 'Open'",
     // Finance: approved couriers who still haven't set up a payout account
     'courierPayouts' => "SELECT COUNT(*) FROM delivery_personnel dp JOIN `user` u ON u.userId = dp.userId
                            WHERE u.role = 'DeliveryPersonnel' AND u.status = 'Active' AND dp.payoutsEnabled = 0",

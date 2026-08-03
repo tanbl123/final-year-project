@@ -32,4 +32,10 @@ class ReviewService {
   Future<void> delete(String reviewId) async {
     await api.delete('/reviews/$reviewId');
   }
+
+  /// POST /reviews/{id}/flag — report another customer's review/avatar as
+  /// inappropriate. Goes to the admin moderation queue.
+  Future<void> flag(String reviewId, String reason) async {
+    await api.post('/reviews/$reviewId/flag', {'reason': reason});
+  }
 }

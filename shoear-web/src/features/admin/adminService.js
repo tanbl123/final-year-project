@@ -216,6 +216,15 @@ export function rejectChangeRequest(requestId, reason) {
   return apiPost(`/admin/supplier-changes/${requestId}/reject`, { reason }, getToken());
 }
 
+// ── content flags (reactive avatar moderation) ───────────────────────
+export function getFlags() {
+  return apiGet('/admin/flags', getToken());
+}
+
+export function resolveFlag(flagId, action, note) {
+  return apiPost(`/admin/flags/${flagId}/resolve`, { action, note }, getToken());
+}
+
 // ── supplier company-logo moderation ─────────────────────────────────
 export function getPendingCompanyPhotos() {
   return apiGet('/admin/company-photos', getToken());

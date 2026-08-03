@@ -18,6 +18,7 @@ import SupplierInventoryPage from './features/supplier/products/SupplierInventor
 import SupplierOrdersPage from './features/supplier/orders/SupplierOrdersPage';
 import SupplierOrderDetailPage from './features/supplier/orders/SupplierOrderDetailPage';
 import AdminReviewsPage from './features/admin/reviews/AdminReviewsPage';
+import AdminFlagsPage from './features/admin/flags/AdminFlagsPage';
 import AdminRefundsPage from './features/admin/refunds/AdminRefundsPage';
 import SupplierRefundsPage from './features/supplier/refunds/SupplierRefundsPage';
 import AdminOrdersPage from './features/admin/orders/AdminOrdersPage';
@@ -197,6 +198,9 @@ const router = createBrowserRouter(
       } />
       <Route path="/admin/reviews" element={
         <ProtectedRoute role="Admin"><AdminReviewsPage /></ProtectedRoute>
+      } />
+      <Route path="/admin/flags" element={
+        <ProtectedRoute role="Admin"><AdminFlagsPage /></ProtectedRoute>
       } />
       <Route path="/admin/refunds" element={
         <ProtectedRoute role="Admin"><AdminRefundsPage /></ProtectedRoute>

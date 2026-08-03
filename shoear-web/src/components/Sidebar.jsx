@@ -34,6 +34,7 @@ const ADMIN_NAV = [
   ] },
   { group: 'Moderation', items: [
     { to: '/admin/reviews', label: 'Reviews', icon: '⭐' },
+    { to: '/admin/flags', label: 'Flagged', icon: '🚩', badge: 'flags' },
     { to: '/admin/refunds', label: 'Refunds', icon: '💸', badge: 'refunds' },
   ] },
   { group: 'Finance', items: [
