@@ -19,6 +19,7 @@ class RequirePayoutScreen extends StatefulWidget {
 
 class _RequirePayoutScreenState extends State<RequirePayoutScreen> {
   bool _connecting = false;
+  bool _checking = false;
 
   Future<void> _connect() async {
     setState(() => _connecting = true);
@@ -31,6 +32,31 @@ class _RequirePayoutScreenState extends State<RequirePayoutScreen> {
       if (mounted) context.showSnack(e.toString());
     } finally {
       if (mounted) setState(() => _connecting = false);
+    }
+  }
+
+  // Re-check Stripe when the courier says they've finished. Only proceed once
+  // Stripe reports payouts enabled; otherwise explain WHY it's not done yet
+  // (usually identity verification still pending) instead of silently bouncing
+  // back to the same blocked screen.
+  Future<void> _finish() async {
+    setState(() => _checking = true);
+    try {
+      final status = await context.read<EarningsService>().stripeStatus();
+      if (!mounted) return;
+      if (status['payoutsEnabled'] == true) {
+        widget.onDone();
+        return;
+      }
+      final submitted = status['detailsSubmitted'] == true;
+      context.showSnack(submitted
+          ? 'Stripe is still verifying your details. If it asked for a government ID, tap '
+              '"Set up bank account" to finish that step, then try again.'
+          : 'Payout setup isn\'t complete yet. Tap "Set up bank account" to finish it, then try again.');
+    } catch (e) {
+      if (mounted) context.showSnack(e.toString());
+    } finally {
+      if (mounted) setState(() => _checking = false);
     }
   }
 
@@ -79,8 +105,10 @@ class _RequirePayoutScreenState extends State<RequirePayoutScreen> {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton(
-                  onPressed: widget.onDone,
-                  child: const Text("I've finished — continue"),
+                  onPressed: (_connecting || _checking) ? null : _finish,
+                  child: _checking
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text("I've finished — continue"),
                 ),
               ),
             ],

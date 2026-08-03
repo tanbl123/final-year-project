@@ -25,6 +25,7 @@ class _AvailabilityToggleState extends State<AvailabilityToggle> {
   bool? _online;          // null = still loading
   bool _busy = false;
   bool _payoutBlocked = false;   // Stripe configured but this courier isn't payouts-enabled
+  bool _detailsSubmitted = false; // onboarding submitted but Stripe still verifying
 
   @override
   void initState() {
@@ -46,6 +47,7 @@ class _AvailabilityToggleState extends State<AvailabilityToggle> {
       setState(() {
         _online = online;
         _payoutBlocked = blocked;
+        _detailsSubmitted = status['detailsSubmitted'] == true;
       });
     } catch (_) {
       // if we can't load it, assume online + not blocked so the UI isn't stuck
@@ -94,15 +96,18 @@ class _AvailabilityToggleState extends State<AvailabilityToggle> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Connect your payout account',
+                  Text(_detailsSubmitted ? 'Finish payout verification' : 'Connect your payout account',
                       style: TextStyle(fontWeight: FontWeight.bold, color: color)),
-                  const Text('Set up how you get paid before you can go online for deliveries.',
-                      style: TextStyle(fontSize: 12)),
+                  Text(
+                      _detailsSubmitted
+                          ? 'Stripe still needs to verify your identity before you can go online. Tap to finish.'
+                          : 'Set up how you get paid before you can go online for deliveries.',
+                      style: const TextStyle(fontSize: 12)),
                 ],
               ),
             ),
             const SizedBox(width: 8),
-            FilledButton(onPressed: _openPayoutSetup, child: const Text('Set up')),
+            FilledButton(onPressed: _openPayoutSetup, child: Text(_detailsSubmitted ? 'Continue' : 'Set up')),
           ],
         ),
       );
