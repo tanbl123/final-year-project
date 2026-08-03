@@ -109,7 +109,8 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
   const [categories, setCategories] = useState([]);
   const [uploading, setUploading] = useState(false);  // an upload is in flight
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');             // server / upload errors
+  const [error, setError] = useState('');             // server / general errors
+  const [imageUploadError, setImageUploadError] = useState(''); // shown inline under the image picker
 
   // 3D preview: ref + a "reset view" that snaps the camera back to its default
   // framing after the supplier drags the model around (moves the CAMERA only).
@@ -240,16 +241,16 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
     event.target.value = '';              // let the same file be re-picked later
     if (files.length === 0) return;
 
-    setError('');
+    setImageUploadError('');
     // enforce the image cap: only upload as many as still fit under MAX_IMAGES
     const room = MAX_IMAGES - images.length;
     if (room <= 0) {
-      setError(`You can upload up to ${MAX_IMAGES} images.`);
+      setImageUploadError(`You can upload up to ${MAX_IMAGES} images.`);
       return;
     }
     const toUpload = files.slice(0, room);
     if (files.length > room) {
-      setError(`Only ${room} more image${room === 1 ? '' : 's'} allowed (max ${MAX_IMAGES}). Extra files were skipped.`);
+      setImageUploadError(`Only ${room} more image${room === 1 ? '' : 's'} allowed (max ${MAX_IMAGES}). Extra files were skipped.`);
     }
 
     setUploading(true);
@@ -259,7 +260,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
         setImages((prev) => [...prev, { url }]);
       }
     } catch (err) {
-      setError(err.message);
+      setImageUploadError(err.message);
     } finally {
       setUploading(false);
     }
@@ -361,7 +362,7 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
     setDescription(''); setVariants([emptyVariant()]); setImages([]);
     setModelUrl(''); setModelName(''); setTryOn(false);
     setModelShoeCount(''); setModelSide(''); setModelLengthCm(''); setModelUkSize('');
-    setError(''); setTouched({}); setFieldErrors({}); setVariantTouched({});
+    setError(''); setImageUploadError(''); setTouched({}); setFieldErrors({}); setVariantTouched({});
     setSubmitAttempted(false);
   }
 
@@ -577,9 +578,10 @@ function ProductForm({ onAdd, onCancel, initialValues = null, mode = 'create', o
         JPG, PNG or WebP, up to 5&nbsp;MB each. Up to {MAX_IMAGES} images ({images.length}/{MAX_IMAGES} added).
       </p>
       <input type="file" multiple accept="image/png,image/jpeg,image/webp"
-        className={'form-control' + (imagesError ? ' is-invalid' : '')}
+        className={'form-control' + ((imagesError || imageUploadError) ? ' is-invalid' : '')}
         onChange={handleImageFiles} disabled={uploading || images.length >= MAX_IMAGES} />
       {imagesError && <div className="invalid-feedback">{imagesError}</div>}
+      {imageUploadError && <div className="invalid-feedback d-block">{imageUploadError}</div>}
       {images.length >= MAX_IMAGES && (
         <div className="form-text text-warning">Maximum of {MAX_IMAGES} images reached.</div>
       )}
