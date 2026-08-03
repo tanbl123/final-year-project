@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { getRefunds, setRefundStatus, refundProofUrls } from '../../supplier/refunds/refundService';
 import { refreshBadges } from '../adminService';
 import ConfirmDialog from '../../../components/ConfirmDialog';
+import OrderDetailModal from '../orders/OrderDetailModal';
 import Toast from '../../../components/Toast';
 import Pagination from '../../../components/Pagination';
 import SortableTh from '../../../components/SortableTh';
@@ -23,6 +24,7 @@ function AdminRefundsPage() {
   const [decision, setDecision] = useState(null); // { refund, status, requireReason } — Approve / Reject
   const [note, setNote] = useState('');
   const [noteError, setNoteError] = useState('');
+  const [orderModal, setOrderModal] = useState(null); // orderId of the order detail popup
 
   const [status, setStatus] = useState('');
 
@@ -159,7 +161,10 @@ function AdminRefundsPage() {
               {pageItems.map((r) => (
                 <tr key={r.refundId}>
                   <td>
-                    <div className="fw-semibold">{r.orderId}</div>
+                    <button type="button" className="btn btn-link p-0 fw-semibold text-decoration-none"
+                      onClick={() => setOrderModal(r.orderId)} title="View order & products">
+                      {r.orderId}
+                    </button>
                     <div className="text-muted small">{new Date(r.requestDate).toLocaleDateString()} · order {money(r.orderTotalAmount)}</div>
                   </td>
                   <td>{r.customerName}</td>
@@ -255,6 +260,8 @@ function AdminRefundsPage() {
           </div>
         </div>
       )}
+
+      <OrderDetailModal orderId={orderModal} onClose={() => setOrderModal(null)} />
 
       <Toast message={toast} onClose={() => setToast('')} />
     </div>
