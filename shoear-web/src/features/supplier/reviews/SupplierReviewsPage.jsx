@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import Toast from '../../../components/Toast';
 import ConfirmDialog from '../../../components/ConfirmDialog';
+import ProductPeekModal from '../products/ProductPeekModal';
 import { getSupplierReviews, replyToReview, deleteReviewReply } from '../../admin/reviewService';
 
 function Stars({ n }) {
@@ -24,6 +24,7 @@ function SupplierReviewsPage() {
   const [replyText, setReplyText] = useState('');
   const [busyId, setBusyId] = useState('');
   const [removing, setRemoving] = useState(null);   // review pending reply-delete
+  const [viewProductId, setViewProductId] = useState(''); // product shown in the peek popup
 
   function load() {
     setLoading(true);
@@ -108,8 +109,8 @@ function SupplierReviewsPage() {
                   </div>
                 </div>
                 <div className="text-muted small mt-1">
-                  on <Link to={`/products/${r.productId}`} className="fw-semibold">{r.productName}</Link>
-                  <span className="text-muted"> ↗</span>
+                  on <button type="button" className="btn btn-link p-0 fw-semibold align-baseline text-decoration-none"
+                    onClick={() => setViewProductId(r.productId)} title="View product">{r.productName}</button>
                 </div>
                 {r.reviewComment && <p className="mb-2 mt-2">{r.reviewComment}</p>}
 
@@ -152,6 +153,9 @@ function SupplierReviewsPage() {
         onCancel={() => setRemoving(null)}
         onConfirm={() => { const r = removing; setRemoving(null); if (r) removeReply(r); }}
       />
+
+      {/* peek at the product without leaving the reviews page */}
+      <ProductPeekModal productId={viewProductId} onClose={() => setViewProductId('')} />
     </div>
   );
 }
