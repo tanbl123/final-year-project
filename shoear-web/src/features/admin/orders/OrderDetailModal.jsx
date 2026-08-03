@@ -75,6 +75,17 @@ export function OrderDetailBody({ order }) {
                       <dt className="col-4">Status</dt>
                       <dd className="col-8"><span className={`badge text-bg-${DELIV_COLORS[d.deliveryStatus] || 'secondary'}`}>{label(d.deliveryStatus)}</span></dd>
                       <dt className="col-4">Courier</dt><dd className="col-8">{d.courierName || <span className="text-muted">Unassigned</span>}</dd>
+                      {d.proofOfDelivery && (
+                        <>
+                          <dt className="col-4">Proof</dt>
+                          <dd className="col-8">
+                            <a href={d.proofOfDelivery} target="_blank" rel="noreferrer" title="Open full size">
+                              <img src={d.proofOfDelivery} alt="Proof of delivery"
+                                style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 8, border: '1px solid #dee2e6' }} />
+                            </a>
+                          </dd>
+                        </>
+                      )}
                     </dl>
                   </div>
                 ))
