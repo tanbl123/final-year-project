@@ -15,6 +15,11 @@ export function getSupplierReviews() {
   return apiGet('/supplier/reviews', getToken());
 }
 
+// Admin moderation: remove an inappropriate supplier reply (review text kept).
+export function removeReviewReply(reviewId) {
+  return apiPatch(`/admin/reviews/${reviewId}/remove-reply`, {}, getToken());
+}
+
 // Admin: all reviews. filters: { status, rating, search }.
 export function getAdminReviews(filters = {}) {
   const qs = new URLSearchParams();

@@ -28,6 +28,7 @@ function handleListAdminReviews(PDO $pdo): void {
   $sql =
     "SELECT r.reviewId, r.productId, p.productName, s.companyName AS supplierName,
             r.ratingScore, r.reviewComment, r.reviewDate, r.reviewStatus,
+            r.supplierReply, r.supplierReplyDate,
             buyer.fullName AS customerName
        FROM review r
        JOIN product p    ON p.productId = r.productId
@@ -63,6 +64,20 @@ function handleSetReviewStatus(PDO $pdo, string $reviewId): void {
   $pdo->prepare('UPDATE review SET reviewStatus = :s WHERE reviewId = :id')
       ->execute(['s' => $status, 'id' => $reviewId]);
   sendJson(200, true, ['reviewId' => $reviewId, 'status' => $status]);
+}
+
+// POST /admin/reviews/{reviewId}/remove-reply — admin moderation: clear an
+// inappropriate supplier reply (the customer's review itself is untouched).
+function handleAdminRemoveReviewReply(PDO $pdo, string $reviewId): void {
+  $stmt = $pdo->prepare('SELECT supplierReply FROM review WHERE reviewId = :id');
+  $stmt->execute(['id' => $reviewId]);
+  $row = $stmt->fetch();
+  if (!$row) {
+    sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Review not found.']);
+  }
+  $pdo->prepare('UPDATE review SET supplierReply = NULL, supplierReplyDate = NULL WHERE reviewId = :id')
+      ->execute(['id' => $reviewId]);
+  sendJson(200, true, ['reviewId' => $reviewId, 'replyRemoved' => true]);
 }
 
 // Shared: confirm a review is on one of this supplier's products (or 404).

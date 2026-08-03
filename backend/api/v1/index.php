@@ -1265,6 +1265,12 @@ if ($method === 'PATCH' && preg_match('#^/admin/reviews/([^/]+)/status$#', $path
   $pdo  = getPDO();
   handleSetReviewStatus($pdo, $m[1]);
 }
+if ($method === 'PATCH' && preg_match('#^/admin/reviews/([^/]+)/remove-reply$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleAdminRemoveReviewReply($pdo, $m[1]);
+}
 
 // supplier: list all reviews across their products (reply queue)
 if ($method === 'GET' && $path === '/supplier/reviews') {

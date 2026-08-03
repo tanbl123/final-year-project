@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getAdminReviews, setReviewStatus } from '../reviewService';
+import { getAdminReviews, setReviewStatus, removeReviewReply } from '../reviewService';
 import ProductReviewModal from '../products/ProductReviewModal';
 import StarRating from '../../../components/StarRating';
 import ConfirmDialog from '../../../components/ConfirmDialog';
@@ -19,7 +19,9 @@ function AdminReviewsPage() {
   const [toast, setToast] = useState('');
   const [busyId, setBusyId] = useState('');
   const [removing, setRemoving] = useState(null);     // review pending remove confirm
+  const [removingReply, setRemovingReply] = useState(null); // reply pending remove confirm
   const [viewProductId, setViewProductId] = useState(''); // product whose details modal is open
+  const [tab, setTab] = useState('customer');         // 'customer' | 'supplier'
 
   const [filters, setFilters] = useState({ status: '', rating: '', search: '' });
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -34,7 +36,11 @@ function AdminReviewsPage() {
     },
   });
 
-  const { page, setPage, totalPages, pageItems } = usePagination(sort.sorted, PAGE_SIZE);
+  // customer tab = all reviews; supplier tab = only those with a supplier reply.
+  const hasReply = (r) => !!(r.supplierReply && String(r.supplierReply).trim());
+  const replyRows = sort.sorted.filter(hasReply);
+  const activeRows = tab === 'supplier' ? replyRows : sort.sorted;
+  const { page, setPage, totalPages, pageItems } = usePagination(activeRows, PAGE_SIZE);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(filters.search), 300);
@@ -69,10 +75,39 @@ function AdminReviewsPage() {
     }
   }
 
+  async function removeReply(review) {
+    setBusyId(review.reviewId);
+    setError('');
+    try {
+      await removeReviewReply(review.reviewId);
+      setToast('Supplier reply removed.');
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId('');
+    }
+  }
+
   return (
     <div className="container py-4 text-start">
       <h1 className="mb-1">⭐ Review Moderation</h1>
-      <p className="text-muted">View product reviews and remove inappropriate ones.</p>
+      <p className="text-muted">View reviews and remove inappropriate ones — customer reviews and the suppliers' replies.</p>
+
+      <ul className="nav nav-tabs mb-3">
+        <li className="nav-item">
+          <button className={`nav-link ${tab === 'customer' ? 'active' : ''}`}
+            onClick={() => { setTab('customer'); setPage(1); }}>
+            Customer reviews {reviews.length > 0 && <span className="badge text-bg-secondary ms-1">{reviews.length}</span>}
+          </button>
+        </li>
+        <li className="nav-item">
+          <button className={`nav-link ${tab === 'supplier' ? 'active' : ''}`}
+            onClick={() => { setTab('supplier'); setPage(1); }}>
+            Supplier replies {replyRows.length > 0 && <span className="badge text-bg-secondary ms-1">{replyRows.length}</span>}
+          </button>
+        </li>
+      </ul>
 
       {error && (
         <div className="alert alert-danger py-2 d-flex justify-content-between align-items-center">
@@ -113,9 +148,11 @@ function AdminReviewsPage() {
 
       {loading ? (
         <p className="text-muted">Loading…</p>
-      ) : reviews.length === 0 ? (
-        <div className="card card-body text-center text-muted">No reviews match these filters.</div>
-      ) : (
+      ) : activeRows.length === 0 ? (
+        <div className="card card-body text-center text-muted">
+          {tab === 'supplier' ? 'No supplier replies match these filters.' : 'No reviews match these filters.'}
+        </div>
+      ) : tab === 'customer' ? (
         <div className="table-responsive">
           <table className="table align-middle">
             <thead>
@@ -172,7 +209,54 @@ function AdminReviewsPage() {
           </table>
 
           <Pagination page={page} totalPages={totalPages} onChange={setPage}
-            summary={`Page ${page} of ${totalPages} · ${reviews.length} reviews`} />
+            summary={`Page ${page} of ${totalPages} · ${activeRows.length} reviews`} />
+        </div>
+      ) : (
+        <div className="table-responsive">
+          <table className="table align-middle">
+            <thead>
+              <tr>
+                <th>Product / Supplier</th>
+                <th>Supplier's reply</th>
+                <th style={{ width: 200 }}>In response to</th>
+                <th className="text-center" style={{ width: 130 }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageItems.map((r) => (
+                <tr key={r.reviewId}>
+                  <td>
+                    <button type="button"
+                      className="btn btn-link p-0 fw-semibold text-start text-decoration-none"
+                      onClick={() => setViewProductId(r.productId)}
+                      title="View product & supplier details">
+                      {r.productName}
+                    </button>
+                    <div className="text-muted small">{r.supplierName}</div>
+                  </td>
+                  <td style={{ overflowWrap: 'anywhere' }}>
+                    {r.supplierReply}
+                    {r.supplierReplyDate && (
+                      <div className="text-muted small">{new Date(r.supplierReplyDate).toLocaleDateString()}</div>
+                    )}
+                  </td>
+                  <td className="small text-muted" style={{ overflowWrap: 'anywhere' }}>
+                    <StarRating score={r.ratingScore} /> by {r.customerName}
+                    {r.reviewComment && <div className="fst-italic">“{r.reviewComment}”</div>}
+                  </td>
+                  <td className="text-center">
+                    <button className="btn btn-outline-danger btn-sm" disabled={busyId === r.reviewId}
+                      onClick={() => setRemovingReply(r)}>
+                      Remove reply
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <Pagination page={page} totalPages={totalPages} onChange={setPage}
+            summary={`Page ${page} of ${totalPages} · ${activeRows.length} replies`} />
         </div>
       )}
 
@@ -184,6 +268,16 @@ function AdminReviewsPage() {
         confirmColor="danger"
         onCancel={() => setRemoving(null)}
         onConfirm={() => { const r = removing; setRemoving(null); moderate(r, 'Removed'); }}
+      />
+
+      <ConfirmDialog
+        isOpen={!!removingReply}
+        title="Remove supplier reply?"
+        message={removingReply ? `Remove ${removingReply.supplierName}'s reply on “${removingReply.productName}”? The customer's review stays.` : ''}
+        confirmText="Remove reply"
+        confirmColor="danger"
+        onCancel={() => setRemovingReply(null)}
+        onConfirm={() => { const r = removingReply; setRemovingReply(null); removeReply(r); }}
       />
 
       {/* read-only product + supplier detail (which product this review is under) */}
