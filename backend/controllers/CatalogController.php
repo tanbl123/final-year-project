@@ -116,7 +116,8 @@ function handleGetCatalogProduct(PDO $pdo, string $id): void {
 
   $rev = $pdo->prepare(
     "SELECT r.reviewId, r.ratingScore, r.reviewComment, r.reviewDate,
-            r.supplierReply, r.supplierReplyDate, buyer.fullName AS customerName
+            r.supplierReply, r.supplierReplyDate,
+            buyer.fullName AS customerName, buyer.avatarUrl AS customerAvatar
        FROM review r
        JOIN customer c   ON c.customerId = r.customerId
        JOIN `user` buyer ON buyer.userId = c.userId

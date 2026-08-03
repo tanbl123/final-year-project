@@ -672,10 +672,13 @@ class _ReviewTile extends StatelessWidget {
               CircleAvatar(
                 radius: 16,
                 backgroundColor: Colors.grey.shade200,
-                child: Text(
-                  review.customerName.isNotEmpty ? review.customerName[0].toUpperCase() : '?',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                ),
+                backgroundImage: review.customerAvatar != null ? NetworkImage(review.customerAvatar!) : null,
+                child: review.customerAvatar == null
+                    ? Text(
+                        review.customerName.isNotEmpty ? review.customerName[0].toUpperCase() : '?',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                      )
+                    : null,
               ),
               const SizedBox(width: 10),
               Expanded(
