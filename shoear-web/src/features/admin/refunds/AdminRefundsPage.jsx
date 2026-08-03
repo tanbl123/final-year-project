@@ -25,6 +25,7 @@ function AdminRefundsPage() {
   const [note, setNote] = useState('');
   const [noteError, setNoteError] = useState('');
   const [orderModal, setOrderModal] = useState(null); // orderId of the order detail popup
+  const [detail, setDetail] = useState(null);         // the refund row shown in the details popup
 
   const [status, setStatus] = useState('');
 
@@ -87,31 +88,34 @@ function AdminRefundsPage() {
     act(d.refund, d.status, n);
   }
 
+  // Open the "Mark as refunded" confirm for an approved refund.
+  function askComplete(r) {
+    setConfirm({
+      refund: r, status: 'Completed', title: 'Mark as refunded?',
+      message: `Confirm ${money(r.refundAmount)} has been refunded for ${r.orderId}. `
+        + (r.refundAmount < r.orderTotalAmount
+            ? 'This is a partial refund — only this amount is returned and the payment stays active for the remaining balance.'
+            : 'This fully refunds the order and marks the payment as Refunded.'),
+      color: 'primary',
+    });
+  }
+
   function renderActions(r) {
     const busy = busyId === r.refundId;
-    if (r.refundStatus === 'Pending') {
-      return (
-        <div className="d-flex gap-2 justify-content-center">
-          <button className="btn btn-success btn-sm" disabled={busy} onClick={() => openDecision(r, 'Approved')}>Approve</button>
-          <button className="btn btn-outline-danger btn-sm" disabled={busy}
-            onClick={() => openDecision(r, 'Rejected')}>Reject</button>
-        </div>
-      );
-    }
-    if (r.refundStatus === 'Approved') {
-      return (
-        <button className="btn btn-primary btn-sm" disabled={busy}
-          onClick={() => setConfirm({
-            refund: r, status: 'Completed', title: 'Mark as refunded?',
-            message: `Confirm ${money(r.refundAmount)} has been refunded for ${r.orderId}. `
-              + (r.refundAmount < r.orderTotalAmount
-                  ? 'This is a partial refund — only this amount is returned and the payment stays active for the remaining balance.'
-                  : 'This fully refunds the order and marks the payment as Refunded.'),
-            color: 'primary',
-          })}>Mark refunded</button>
-      );
-    }
-    return <span className="text-muted">—</span>;
+    return (
+      <div className="d-flex gap-2 justify-content-center flex-wrap">
+        <button className="btn btn-outline-secondary btn-sm" onClick={() => setDetail(r)}>Details</button>
+        {r.refundStatus === 'Pending' && (
+          <>
+            <button className="btn btn-success btn-sm" disabled={busy} onClick={() => openDecision(r, 'Approved')}>Approve</button>
+            <button className="btn btn-outline-danger btn-sm" disabled={busy} onClick={() => openDecision(r, 'Rejected')}>Reject</button>
+          </>
+        )}
+        {r.refundStatus === 'Approved' && (
+          <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => askComplete(r)}>Mark refunded</button>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -154,7 +158,7 @@ function AdminRefundsPage() {
                 <SortableTh label="Amount" columnKey="refundAmount" sort={sort} className="text-end" style={{ width: 110 }} />
                 <SortableTh label="Status" columnKey="refundStatus" sort={sort} className="text-center" style={{ width: 110 }} />
                 <th style={{ width: 90 }}>Proof</th>
-                <th className="text-center" style={{ width: 180 }}>Action</th>
+                <th className="text-center" style={{ width: 240 }}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -260,6 +264,84 @@ function AdminRefundsPage() {
           </div>
         </div>
       )}
+
+      {/* Full refund details */}
+      {detail && (() => {
+        const r = detail;
+        const proofs = refundProofUrls(r.refundProof);
+        return (
+          <div className="modal show d-block" tabIndex="-1"
+            style={{ background: 'rgba(0,0,0,.5)' }} onClick={() => setDetail(null)}>
+            <div className="modal-dialog modal-dialog-centered modal-lg" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">
+                    Refund details
+                    <span className={`badge ms-2 text-bg-${STATUS_COLORS[r.refundStatus] || 'secondary'}`}>{r.refundStatus}</span>
+                  </h5>
+                  <button type="button" className="btn-close" onClick={() => setDetail(null)}></button>
+                </div>
+                <div className="modal-body">
+                  <dl className="row mb-0">
+                    <dt className="col-sm-3">Order</dt>
+                    <dd className="col-sm-9">
+                      <button type="button" className="btn btn-link p-0 text-decoration-none"
+                        onClick={() => { setDetail(null); setOrderModal(r.orderId); }}>
+                        {r.orderId} — view order &amp; products
+                      </button>
+                    </dd>
+                    <dt className="col-sm-3">Customer</dt><dd className="col-sm-9">{r.customerName}</dd>
+                    <dt className="col-sm-3">Requested</dt><dd className="col-sm-9">{new Date(r.requestDate).toLocaleString()}</dd>
+                    <dt className="col-sm-3">Amount</dt>
+                    <dd className="col-sm-9">
+                      {money(r.refundAmount)}
+                      {r.refundAmount < r.orderTotalAmount &&
+                        <span className="badge text-bg-warning ms-2">Partial · order {money(r.orderTotalAmount)}</span>}
+                    </dd>
+                    <dt className="col-sm-3">Reason</dt>
+                    <dd className="col-sm-9" style={{ overflowWrap: 'anywhere' }}>{r.refundReason}</dd>
+                    {r.adminNote && (<>
+                      <dt className="col-sm-3">Admin note</dt>
+                      <dd className="col-sm-9" style={{ overflowWrap: 'anywhere' }}>{r.adminNote}</dd>
+                    </>)}
+                  </dl>
+
+                  <div className="mt-3">
+                    <div className="fw-semibold mb-2">Evidence photos {proofs.length > 0 && `(${proofs.length})`}</div>
+                    {proofs.length === 0 ? (
+                      <p className="text-muted mb-0">No photos were attached.</p>
+                    ) : (
+                      <div className="d-flex flex-wrap gap-2">
+                        {proofs.map((u, i) => (
+                          <a key={i} href={u} target="_blank" rel="noreferrer" title="Open full size">
+                            <img src={u} alt={`Evidence ${i + 1}`}
+                              style={{ width: 110, height: 110, objectFit: 'cover', borderRadius: 8, border: '1px solid #dee2e6' }} />
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  {r.refundStatus === 'Pending' && (
+                    <>
+                      <button type="button" className="btn btn-outline-danger"
+                        onClick={() => { setDetail(null); openDecision(r, 'Rejected'); }}>Reject</button>
+                      <button type="button" className="btn btn-success"
+                        onClick={() => { setDetail(null); openDecision(r, 'Approved'); }}>Approve</button>
+                    </>
+                  )}
+                  {r.refundStatus === 'Approved' && (
+                    <button type="button" className="btn btn-primary"
+                      onClick={() => { setDetail(null); askComplete(r); }}>Mark refunded</button>
+                  )}
+                  <button type="button" className="btn btn-secondary" onClick={() => setDetail(null)}>Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <OrderDetailModal orderId={orderModal} onClose={() => setOrderModal(null)} />
 
