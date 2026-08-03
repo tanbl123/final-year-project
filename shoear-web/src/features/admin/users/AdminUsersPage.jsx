@@ -690,12 +690,12 @@ function AdminUsersPage() {
                 <p className="text-muted small">
                   They won't be able to sign in. We'll email them this reason and a link to appeal.
                 </p>
-                {suspendErr && <div className="alert alert-danger py-2">{suspendErr}</div>}
                 <label className="form-label small mb-1">Reason (shown to the user)</label>
                 <textarea className={`form-control ${suspendErr ? 'is-invalid' : ''}`} rows={3}
                   value={suspendForm.reason}
                   placeholder="e.g. Repeated policy violations in product reviews."
                   onChange={(e) => { setSuspendForm((f) => ({ ...f, reason: e.target.value })); if (suspendErr) setSuspendErr(''); }} />
+                {suspendErr && <div className="invalid-feedback d-block">{suspendErr}</div>}
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-light" onClick={() => setSuspendForm(null)}>Cancel</button>
