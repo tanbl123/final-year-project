@@ -1066,6 +1066,8 @@ function handleMe(PDO $pdo, array $auth): void {
                                licenseClass, licenseExpiry,
                                icNumber, icPhotoUrl, icPhotoBackUrl, dateOfBirth, coverageZones, isAvailable
                           FROM delivery_personnel WHERE userId = :id');
+  } elseif ($u['role'] === 'ArSpecialist') {
+    $p = $pdo->prepare('SELECT arSpecialistId, icNumber FROM ar_specialist WHERE userId = :id');
   } else {
     $p = null;
   }

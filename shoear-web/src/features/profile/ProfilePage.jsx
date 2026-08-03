@@ -314,6 +314,12 @@ function ProfilePage() {
                     </dd>
                   </>
                 )}
+                {me.role === 'ArSpecialist' && me.profile && (
+                  <>
+                    <dt className="col-sm-4">IC / NRIC</dt>
+                    <dd className="col-sm-8">{me.profile.icNumber || <span className="text-muted">—</span>}</dd>
+                  </>
+                )}
 
                 <dt className="col-sm-4">Member since</dt>
                 <dd className="col-sm-8">{new Date(me.created_at).toLocaleDateString()}</dd>
