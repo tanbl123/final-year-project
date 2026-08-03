@@ -48,7 +48,7 @@ function scoreCouriers(PDO $pdo, ?string $state = null): array {
             u.fullName,
             u.userId,
             dp.vehicleType, dp.vehicleBrand, dp.vehicleModel, dp.vehiclePlate,
-            dp.coverageZones, dp.isAvailable,
+            dp.coverageZones, dp.isAvailable, dp.payoutsEnabled,
             COUNT(d.deliveryId) AS activeLoad
        FROM delivery_personnel dp
        JOIN `user` u
@@ -56,7 +56,7 @@ function scoreCouriers(PDO $pdo, ?string $state = null): array {
        LEFT JOIN delivery d
          ON d.deliveryPersonnelId = dp.deliveryPersonnelId
         AND d.deliveryStatus IN ('Assigned', 'PickedUp', 'OutForDelivery')
-      GROUP BY dp.deliveryPersonnelId, u.fullName, u.userId, dp.vehicleType, dp.vehicleBrand, dp.vehicleModel, dp.vehiclePlate, dp.coverageZones, dp.isAvailable"
+      GROUP BY dp.deliveryPersonnelId, u.fullName, u.userId, dp.vehicleType, dp.vehicleBrand, dp.vehicleModel, dp.vehiclePlate, dp.coverageZones, dp.isAvailable, dp.payoutsEnabled"
   )->fetchAll();
 
   $wantZone = $state !== null && $state !== '';
@@ -67,8 +67,9 @@ function scoreCouriers(PDO $pdo, ?string $state = null): array {
     // No state to match → treat everyone as covering (load-only ranking).
     $r['coversZone']    = $wantZone ? in_array($state, $zones, true) : true;
     // Online/on-duty status — dispatch only auto-assigns to available couriers.
-    $r['available']     = (bool) (int) $r['isAvailable'];
-    $r['score']         = scoreCourier($r);
+    $r['available']      = (bool) (int) $r['isAvailable'];
+    $r['payoutsEnabled'] = (bool) (int) $r['payoutsEnabled'];
+    $r['score']          = scoreCourier($r);
   }
   unset($r);
 
@@ -159,7 +160,10 @@ function assignDelivery(PDO $pdo, string $orderId, string $supplierId): array {
   if ($sameState) {
     $candidates = scoreCouriers($pdo, $custState);
     foreach ($candidates as $c) {         // ranked online-first, covering-first, then load
-      if ($c['coversZone'] && $c['available']) { $best = $c; break; }
+      // Never auto-assign to a courier we can't pay: they must be online, cover
+      // the zone, AND have payouts enabled (defence-in-depth — going online is
+      // already gated on payouts, but this guarantees dispatch honours it too).
+      if ($c['coversZone'] && $c['available'] && $c['payoutsEnabled']) { $best = $c; break; }
     }
   }
 

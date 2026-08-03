@@ -796,8 +796,11 @@ function handleRegisterCourier(PDO $pdo): void {
     )->execute(['id' => $userId, 'un' => $username, 'pw' => $hash, 'em' => $email, 'fn' => $fullName, 'ph' => $phoneNumber, 'av' => $avatarUrl !== '' ? $avatarUrl : null]);
 
     $deliveryPersonnelId = nextId($pdo, 'delivery_personnel', 'deliveryPersonnelId', 'DEL');
-    $pdo->prepare('INSERT INTO delivery_personnel (deliveryPersonnelId, userId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate, licenseNumber, licensePhotoUrl, licensePhotoBackUrl, licenseIsDigital, eLicenseUrl, licenseClass, licenseExpiry, icNumber, icPhotoUrl, icPhotoBackUrl, dateOfBirth, termsAcceptedAt, coverageZones)
-                   VALUES (:did, :uid, :vt, :vb, :vm, :vp, :ln, :lp, :lpb, :lid, :el, :lc, :le, :ic, :ip, :ipb, :dob, NOW(), :cz)')
+    // isAvailable defaults to 0 (offline): a newly-approved courier goes online
+    // themselves once they've set up payouts, so they never receive orders by
+    // accident before they're ready.
+    $pdo->prepare('INSERT INTO delivery_personnel (deliveryPersonnelId, userId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate, licenseNumber, licensePhotoUrl, licensePhotoBackUrl, licenseIsDigital, eLicenseUrl, licenseClass, licenseExpiry, icNumber, icPhotoUrl, icPhotoBackUrl, dateOfBirth, termsAcceptedAt, coverageZones, isAvailable)
+                   VALUES (:did, :uid, :vt, :vb, :vm, :vp, :ln, :lp, :lpb, :lid, :el, :lc, :le, :ic, :ip, :ipb, :dob, NOW(), :cz, 0)')
         ->execute(['did' => $deliveryPersonnelId, 'uid' => $userId, 'vt' => $vehicleType, 'vb' => $vehicleBrand, 'vm' => $vehicleModel, 'vp' => $vehiclePlate,
                    'ln' => $licenseNumber, 'lp' => $licensePhotoUrl !== '' ? $licensePhotoUrl : null,
                    'lpb' => $licensePhotoBackUrl !== '' ? $licensePhotoBackUrl : null,
