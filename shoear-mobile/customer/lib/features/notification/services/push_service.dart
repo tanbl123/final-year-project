@@ -1,9 +1,16 @@
+import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'package:customer/firebase_options.dart';
 import 'package:customer/core/utils/refresh_bus.dart';
 import 'package:customer/features/notification/services/notification_service.dart';
+import 'package:customer/features/catalog/screens/product_detail_screen.dart';
+import 'package:customer/features/order/screens/order_detail_screen.dart';
+
+/// App-wide navigator, so a push tap can navigate without a BuildContext.
+/// Wired to MaterialApp.navigatorKey in main.dart.
+final navigatorKey = GlobalKey<NavigatorState>();
 
 /// Firebase Cloud Messaging client (background push).
 ///
@@ -35,12 +42,32 @@ class PushService {
         onMessageCallback?.call();
         bumpRefresh();
       });
-      FirebaseMessaging.onMessageOpenedApp.listen((_) {
+      // Tapped a push while the app was backgrounded → refresh + deep-link.
+      FirebaseMessaging.onMessageOpenedApp.listen((message) {
         onMessageCallback?.call();
         bumpRefresh();
+        _openFromData(message.data);
       });
+      // Tapped a push that launched the app from terminated → navigate once the
+      // first frame is up (the navigator doesn't exist yet during init()).
+      final initial = await FirebaseMessaging.instance.getInitialMessage();
+      if (initial != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _openFromData(initial.data));
+      }
     } catch (_) {
       _available = false; // Firebase not configured on this build → no push
+    }
+  }
+
+  // Deep-link from a push's data payload (set by the backend fcmSend).
+  void _openFromData(Map<String, dynamic> data) {
+    final nav = navigatorKey.currentState;
+    if (nav == null) return;
+    final type = data['type']?.toString();
+    if (type == 'product' && (data['productId']?.toString().isNotEmpty ?? false)) {
+      nav.push(MaterialPageRoute(builder: (_) => ProductDetailScreen(productId: data['productId'].toString())));
+    } else if (type == 'order' && (data['orderId']?.toString().isNotEmpty ?? false)) {
+      nav.push(MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: data['orderId'].toString())));
     }
   }
 

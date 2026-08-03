@@ -69,6 +69,7 @@ class ShoeArApp extends StatelessWidget {
       ],
       child: MaterialApp(
         title: 'ShoeAR',
+        navigatorKey: navigatorKey,   // lets a push tap deep-link (see PushService)
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4F46E5)),

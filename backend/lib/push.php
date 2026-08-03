@@ -16,7 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────
 
 // Send a push to every device registered to $userId. No-op unless FCM is set up.
-function pushToUser(PDO $pdo, string $userId, string $title, string $body, ?string $orderId): void {
+function pushToUser(PDO $pdo, string $userId, string $title, string $body, ?string $orderId, ?string $productId = null): void {
   $cfg    = notifConfig();
   $saPath = function_exists('firebaseServiceAccountPath') ? firebaseServiceAccountPath($cfg) : ($cfg['fcm_service_account'] ?? '');
   if ($saPath === '' || !is_file($saPath)) { return; }   // not configured → silent no-op
@@ -36,19 +36,21 @@ function pushToUser(PDO $pdo, string $userId, string $title, string $body, ?stri
   if (!$accessToken || $projectId === '') { return; }
 
   foreach ($tokens as $token) {
-    fcmSend($accessToken, (string) $projectId, (string) $token, $title, $body, $orderId);
+    fcmSend($accessToken, (string) $projectId, (string) $token, $title, $body, $orderId, $productId);
   }
 }
 
-// POST one FCM message (HTTP v1). The data payload carries the orderId so the
-// app can deep-link to the order when the user taps the push.
-function fcmSend(string $accessToken, string $projectId, string $token, string $title, string $body, ?string $orderId): void {
+// POST one FCM message (HTTP v1). The data payload carries a deep-link target
+// (a product or an order) so the app can navigate when the user taps the push.
+function fcmSend(string $accessToken, string $projectId, string $token, string $title, string $body, ?string $orderId, ?string $productId = null): void {
   $message = [
     'token'        => $token,
     'notification' => ['title' => $title, 'body' => $body],
     'android'      => ['priority' => 'high'],
   ];
-  if ($orderId !== null && $orderId !== '') {
+  if ($productId !== null && $productId !== '') {
+    $message['data'] = ['type' => 'product', 'productId' => $productId];
+  } elseif ($orderId !== null && $orderId !== '') {
     $message['data'] = ['type' => 'order', 'orderId' => $orderId];
   }
   $ch = curl_init("https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send");

@@ -41,7 +41,7 @@ function createNotification(PDO $pdo, string $userId, string $type, string $titl
   }
   // best-effort real push (no-op unless FCM is configured)
   if (function_exists('pushToUser')) {
-    try { pushToUser($pdo, $userId, $title, $body, $orderId); } catch (Throwable $e) { /* ignore */ }
+    try { pushToUser($pdo, $userId, $title, $body, $orderId, $productId); } catch (Throwable $e) { /* ignore */ }
   }
 }
 
