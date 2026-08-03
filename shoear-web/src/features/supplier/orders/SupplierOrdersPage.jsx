@@ -162,9 +162,11 @@ function SupplierOrdersPage() {
                   </td>
                   <td>{o.customerName}</td>
                   <td className="text-center">
-                    <span className={`badge text-bg-${STATUS_COLORS[o.orderStatus] || 'secondary'}`}>
-                      {label(o.orderStatus)}
-                    </span>
+                    {o.partiallyDelivered
+                      ? <span className="badge" style={{ backgroundColor: '#4f46e5', color: '#fff' }}>Partially delivered</span>
+                      : <span className={`badge text-bg-${STATUS_COLORS[o.orderStatus] || 'secondary'}`}>
+                          {label(o.orderStatus)}
+                        </span>}
                     {o.myDeliveryStatus && (
                       <div className="mt-1">
                         <span className={`badge text-bg-${DELIV_COLORS[o.myDeliveryStatus] || 'secondary'}`}>

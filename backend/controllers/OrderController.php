@@ -90,7 +90,9 @@ function handleListSupplierOrders(PDO $pdo, array $auth): void {
             (SELECT d.deliveryMethod FROM delivery d
               WHERE d.orderId = o.orderId AND d.supplierId = :dmsid LIMIT 1) AS myDeliveryMethod,
             (SELECT rf.refundStatus FROM refund rf
-              WHERE rf.orderId = o.orderId ORDER BY rf.requestDate DESC LIMIT 1) AS refundStatus
+              WHERE rf.orderId = o.orderId ORDER BY rf.requestDate DESC LIMIT 1) AS refundStatus,
+            (SELECT (SUM(d3.deliveryStatus = 'Delivered') > 0 AND SUM(d3.deliveryStatus = 'Delivered') < COUNT(*))
+              FROM delivery d3 WHERE d3.orderId = o.orderId) AS partiallyDelivered
        FROM `order` o
        JOIN order_item oi      ON oi.orderId = o.orderId
        JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
@@ -105,8 +107,9 @@ function handleListSupplierOrders(PDO $pdo, array $auth): void {
   $stmt->execute($params);
   $rows = $stmt->fetchAll();
   foreach ($rows as &$r) {
-    $r['itemCount']        = (int) $r['itemCount'];
-    $r['supplierSubtotal'] = (float) $r['supplierSubtotal'];
+    $r['itemCount']          = (int) $r['itemCount'];
+    $r['supplierSubtotal']   = (float) $r['supplierSubtotal'];
+    $r['partiallyDelivered'] = (bool) $r['partiallyDelivered'];
   }
   unset($r);
   sendJson(200, true, ['orders' => $rows]);
@@ -146,7 +149,9 @@ function handleGetSupplierOrder(PDO $pdo, array $auth, string $orderId, array $c
   $h = $pdo->prepare(
     "SELECT o.orderId, o.orderDate, o.orderStatus,
             buyer.fullName AS customerName,
-            pay.paymentStatus
+            pay.paymentStatus,
+            (SELECT (SUM(d3.deliveryStatus = 'Delivered') > 0 AND SUM(d3.deliveryStatus = 'Delivered') < COUNT(*))
+              FROM delivery d3 WHERE d3.orderId = o.orderId) AS partiallyDelivered
        FROM `order` o
        JOIN customer c   ON c.customerId = o.customerId
        JOIN `user` buyer ON buyer.userId = c.userId
@@ -155,6 +160,7 @@ function handleGetSupplierOrder(PDO $pdo, array $auth, string $orderId, array $c
   );
   $h->execute(['oid' => $orderId]);
   $order = $h->fetch();
+  $order['partiallyDelivered'] = (bool) $order['partiallyDelivered'];
 
   $order['items']            = $items;
   $order['itemCount']        = count($items);
@@ -225,7 +231,9 @@ function handleListAdminOrders(PDO $pdo): void {
             pay.paymentStatus,
             (SELECT d.deliveryStatus FROM delivery d WHERE d.orderId = o.orderId
                ORDER BY FIELD(d.deliveryStatus,'Pending','Assigned','PickedUp','OutForDelivery','Delivered','Failed')
-               LIMIT 1) AS deliveryStatus
+               LIMIT 1) AS deliveryStatus,
+            (SELECT (SUM(d3.deliveryStatus = 'Delivered') > 0 AND SUM(d3.deliveryStatus = 'Delivered') < COUNT(*))
+              FROM delivery d3 WHERE d3.orderId = o.orderId) AS partiallyDelivered
        FROM `order` o
        JOIN customer c   ON c.customerId = o.customerId
        JOIN `user` buyer ON buyer.userId = c.userId
@@ -237,8 +245,9 @@ function handleListAdminOrders(PDO $pdo): void {
   $stmt->execute($params);
   $rows = $stmt->fetchAll();
   foreach ($rows as &$r) {
-    $r['orderTotalAmount'] = (float) $r['orderTotalAmount'];
-    $r['itemCount']        = (int) $r['itemCount'];
+    $r['orderTotalAmount']   = (float) $r['orderTotalAmount'];
+    $r['itemCount']          = (int) $r['itemCount'];
+    $r['partiallyDelivered'] = (bool) $r['partiallyDelivered'];
   }
   unset($r);
   sendJson(200, true, ['orders' => $rows]);
@@ -250,7 +259,9 @@ function handleGetAdminOrder(PDO $pdo, string $orderId): void {
   $h = $pdo->prepare(
     "SELECT o.orderId, o.orderDate, o.orderStatus, o.orderTotalAmount, o.orderDeliveryAddress,
             buyer.fullName AS customerName, buyer.email AS customerEmail, buyer.phoneNumber AS customerPhone,
-            pay.paymentMethod, pay.transactionId, pay.paymentAmount, pay.paymentStatus, pay.paymentDate
+            pay.paymentMethod, pay.transactionId, pay.paymentAmount, pay.paymentStatus, pay.paymentDate,
+            (SELECT (SUM(d3.deliveryStatus = 'Delivered') > 0 AND SUM(d3.deliveryStatus = 'Delivered') < COUNT(*))
+              FROM delivery d3 WHERE d3.orderId = o.orderId) AS partiallyDelivered
        FROM `order` o
        JOIN customer c   ON c.customerId = o.customerId
        JOIN `user` buyer ON buyer.userId = c.userId
@@ -263,6 +274,7 @@ function handleGetAdminOrder(PDO $pdo, string $orderId): void {
     sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Order not found.']);
   }
   $order['orderTotalAmount'] = (float) $order['orderTotalAmount'];
+  $order['partiallyDelivered'] = (bool) $order['partiallyDelivered'];
   if ($order['paymentAmount'] !== null) { $order['paymentAmount'] = (float) $order['paymentAmount']; }
 
   $it = $pdo->prepare(

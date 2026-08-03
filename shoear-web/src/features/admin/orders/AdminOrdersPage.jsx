@@ -115,7 +115,9 @@ function AdminOrdersPage() {
                   <td className="text-end fw-semibold">{money(o.orderTotalAmount)}</td>
                   <td className="text-center">{o.itemCount}</td>
                   <td className="text-center">
-                    <span className={`badge text-bg-${STATUS_COLORS[o.orderStatus] || 'secondary'}`}>{label(o.orderStatus)}</span>
+                    {o.partiallyDelivered
+                      ? <span className="badge" style={{ backgroundColor: '#4f46e5', color: '#fff' }}>Partially delivered</span>
+                      : <span className={`badge text-bg-${STATUS_COLORS[o.orderStatus] || 'secondary'}`}>{label(o.orderStatus)}</span>}
                   </td>
                   <td className="text-center">
                     {o.paymentStatus

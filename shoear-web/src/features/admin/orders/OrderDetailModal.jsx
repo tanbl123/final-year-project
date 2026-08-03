@@ -22,7 +22,9 @@ export function OrderDetailBody({ order }) {
           <div className="text-muted">{new Date(order.orderDate).toLocaleString()}</div>
         </div>
         <div className="d-flex gap-2 flex-wrap">
-          <span className={`badge text-bg-${STATUS_COLORS[order.orderStatus] || 'secondary'} fs-6`}>{label(order.orderStatus)}</span>
+          {order.partiallyDelivered
+            ? <span className="badge fs-6" style={{ backgroundColor: '#4f46e5', color: '#fff' }}>Partially delivered</span>
+            : <span className={`badge text-bg-${STATUS_COLORS[order.orderStatus] || 'secondary'} fs-6`}>{label(order.orderStatus)}</span>}
           {order.paymentStatus && <span className={`badge text-bg-${PAY_COLORS[order.paymentStatus] || 'secondary'} fs-6`}>{order.paymentStatus}</span>}
         </div>
       </div>
