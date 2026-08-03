@@ -58,10 +58,15 @@ Both share one core function `payOutSupplierBalance(pdo, config, supplier, isAut
 - **Frontend:** admin **Supplier Payouts** page (mirrors the courier one) + a
   supplier **Earnings** panel in the Profile payouts card.
 
-### Phase 2 — automatic sweep + reminders
-- `sweepSupplierPayouts()` in `runAllSweeps()` behind `supplier_auto_payout`.
-- Email reminder for suppliers who haven't connected Stripe (suppliers have no
-  in-app inbox on web, so this is email via `mail.php`).
+### Phase 2 (built) — automatic sweep + reminders
+- `sweepSupplierPayouts()` registered in `runAllSweeps()`, gated by the
+  `supplier_auto_payout` config flag (default OFF — `SUPPLIER_AUTO_PAYOUT=1` to
+  enable). Pays every connected supplier their balance at most once per calendar
+  month; shares `payOutSupplierBalance` with the manual path.
+- Email reminder (`sendSupplierPayoutSetupReminderEmail`) for suppliers who have a
+  payable balance but haven't connected Stripe — `POST /admin/suppliers/{id}/remind-payout`,
+  surfaced as a "Remind" button on the admin Supplier Payouts page.
+- The "Run reminders" sweep summary now reports the supplier payout run.
 
 ### Phase 3 — hardening (optional / real-world)
 - A formal `supplier_ledger` (signed entries) for standing negative balances when a

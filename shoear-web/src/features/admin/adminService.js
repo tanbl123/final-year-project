@@ -98,6 +98,11 @@ export function getSupplierPayoutHistory(supplierId) {
   return apiGet(`/admin/suppliers/${supplierId}/payouts`, getToken());
 }
 
+// Email a supplier who has a payable balance but hasn't connected Stripe yet.
+export function remindSupplierPayout(supplierId) {
+  return apiPost(`/admin/suppliers/${supplierId}/remind-payout`, {}, getToken());
+}
+
 // Products awaiting approval.
 export function getPendingProducts() {
   return apiGet('/admin/products/pending', getToken());

@@ -71,6 +71,11 @@ function Layout() {
         ? `• Courier monthly payout: paid ${cp.paid ?? 0} (RM ${Number(cp.total ?? 0).toFixed(2)})` +
           (cp.failed ? `, ${cp.failed} failed` : '')
         : `• Courier monthly payout: skipped (${cp.reason ?? 'n/a'})`;
+      const sp = s.supplierPayouts ?? {};
+      const supplierPayoutLine = sp.ran
+        ? `• Supplier monthly payout: paid ${sp.paid ?? 0} (RM ${Number(sp.total ?? 0).toFixed(2)})` +
+          (sp.failed ? `, ${sp.failed} failed` : '')
+        : `• Supplier monthly payout: skipped (${sp.reason ?? 'n/a'})`;
       alert(
         'Reminder sweeps run:\n' +
         `• Payment reminders: ${s.paymentReminders ?? 0}\n` +
@@ -79,7 +84,8 @@ function Layout() {
         `• Orders auto-cancelled: ${s.autoCancelled ?? 0}\n` +
         `• Parcels re-assigned to couriers: ${s.redispatched ?? 0}\n` +
         `• Recommender model: ${s.recommenderReloaded ? 'refreshed' : 'not configured/reachable'}\n` +
-        payoutLine
+        payoutLine + '\n' +
+        supplierPayoutLine
       );
     } catch (e) {
       alert('Could not run sweeps: ' + (e?.message ?? 'unknown error'));

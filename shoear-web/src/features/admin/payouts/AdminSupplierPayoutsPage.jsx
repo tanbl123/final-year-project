@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getSupplierPayouts, paySupplier, getSupplierPayoutHistory } from '../adminService';
+import { getSupplierPayouts, paySupplier, getSupplierPayoutHistory, remindSupplierPayout } from '../adminService';
 import SortableTh from '../../../components/SortableTh';
 import Toast from '../../../components/Toast';
 import ConfirmDialog from '../../../components/ConfirmDialog';
@@ -41,6 +41,19 @@ function AdminSupplierPayoutsPage() {
       setHistory((h) => { const next = { ...h }; delete next[supplier.supplierId]; return next; });
       if (openId === supplier.supplierId) setOpenId('');
       load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function remind(supplier) {
+    setBusyId(supplier.supplierId);
+    setError('');
+    try {
+      const res = await remindSupplierPayout(supplier.supplierId);
+      setNotice(res.message || `Reminder emailed to ${supplier.companyName}.`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -90,7 +103,7 @@ function AdminSupplierPayoutsPage() {
         <div className="alert alert-warning py-2">
           <strong>{notSetUp.length}</strong> supplier{notSetUp.length > 1 ? 's have' : ' has'} a payable
           balance but {notSetUp.length > 1 ? 'have' : 'has'} not finished connecting a Stripe payout
-          account, so they can't be paid yet.
+          account, so they can't be paid yet. Use <em>Remind</em> to email them.
         </div>
       )}
 
@@ -136,6 +149,14 @@ function AdminSupplierPayoutsPage() {
                         onClick={() => toggleHistory(s.supplierId)}>
                         {openId === s.supplierId ? 'Hide' : 'History'}
                       </button>
+                      {!ready && s.pendingBalance > 0 && (
+                        <button className="btn btn-outline-warning btn-sm me-2"
+                          disabled={busyId === s.supplierId}
+                          title="Email the supplier to finish connecting their payout account"
+                          onClick={() => remind(s)}>
+                          {busyId === s.supplierId ? '…' : 'Remind'}
+                        </button>
+                      )}
                       <button className="btn btn-primary btn-sm"
                         disabled={!canPay || busyId === s.supplierId}
                         title={!s.connected ? 'Supplier must connect Stripe first'

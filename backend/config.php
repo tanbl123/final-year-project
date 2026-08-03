@@ -64,6 +64,11 @@ $config = [
   // any time. Set COURIER_AUTO_PAYOUT=0 to disable and rely on manual only.
   'courier_auto_payout' => getenv('COURIER_AUTO_PAYOUT') !== '0',
 
+  // Automatically pay every connected supplier their payable balance once per
+  // calendar month. OFF by default (money movement) — admins settle via the
+  // manual "Pay now" button until they opt in. Set SUPPLIER_AUTO_PAYOUT=1 to enable.
+  'supplier_auto_payout' => getenv('SUPPLIER_AUTO_PAYOUT') === '1',
+
   // SMTP — used to email supplier registration verification codes. Keep the
   // password OUT of git: set these in config.local.php (see the example file).
   // For Gmail: host smtp.gmail.com, port 587, secure 'tls', username your

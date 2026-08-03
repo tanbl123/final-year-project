@@ -247,6 +247,22 @@ function sendShipReminderEmail(array $config, string $toEmail, string $companyNa
   sendMail($config, $toEmail, $companyName, $subject, $text, $html);
 }
 
+// Nudge an approved supplier who has a payable balance but hasn't finished
+// connecting a Stripe payout account, so the platform can transfer their earnings.
+function sendSupplierPayoutSetupReminderEmail(array $config, string $toEmail, string $companyName): void {
+  $name = $companyName !== '' ? $companyName : 'Supplier';
+
+  $subject  = 'ShoeAR — Set up your payout account to receive your earnings';
+  $textBody = "You have sales earnings ready to be paid out, but we can't send them yet because your payout account isn't fully set up.\n\n"
+            . "Please sign in to the ShoeAR Supplier Portal, open Profile → Payouts, and connect your Stripe account. Once it's verified, your payable balance is transferred to your bank automatically.";
+  $bodyHtml = '<p>You have sales earnings ready to be paid out, but we can\'t send them yet because your payout account isn\'t fully set up.</p>'
+            . '<p>Please sign in to the ShoeAR Supplier Portal, open <strong>Profile → Payouts</strong>, and connect your Stripe account. Once it\'s verified, your payable balance is transferred to your bank automatically.</p>';
+
+  $text = "Dear $name,\n\n$textBody\n\nYours sincerely,\nThe ShoeAR Team";
+  $html = formalLetterHtml($name, $bodyHtml, '👟 ShoeAR');
+  sendMail($config, $toEmail, $companyName, $subject, $text, $html);
+}
+
 function sendSupplierDecisionEmail(array $config, string $toEmail, string $companyName, string $status, ?string $reason): void {
   $name      = $companyName !== '' ? $companyName : 'Applicant';
   $reasonTxt = ($reason !== null && $reason !== '') ? $reason : '';

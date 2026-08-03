@@ -295,6 +295,9 @@ function runAllSweeps(PDO $pdo, array $config): array {
   if (function_exists('sweepCourierPayouts')) {
     $result['courierPayouts'] = sweepCourierPayouts($pdo, $config);
   }
+  if (function_exists('sweepSupplierPayouts')) {
+    $result['supplierPayouts'] = sweepSupplierPayouts($pdo, $config);
+  }
   $result['recommenderReloaded'] = sweepReloadRecommender($config);
   return $result;
 }

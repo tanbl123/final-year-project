@@ -290,6 +290,76 @@ function handleSupplierPayoutHistory(PDO $pdo, string $supplierId): void {
   sendJson(200, true, ['payouts' => $payouts]);
 }
 
+// POST /admin/suppliers/{supplierId}/remind-payout — email an approved supplier
+// who has a payable balance but hasn't finished connecting a Stripe payout
+// account (suppliers have no in-app inbox on web, so this is email).
+function handleRemindSupplierPayout(PDO $pdo, array $config, string $supplierId): void {
+  $stmt = $pdo->prepare(
+    'SELECT s.companyName, s.payoutsEnabled, u.email
+       FROM supplier s JOIN `user` u ON u.userId = s.userId
+      WHERE s.supplierId = :id'
+  );
+  $stmt->execute(['id' => $supplierId]);
+  $supplier = $stmt->fetch();
+  if (!$supplier) {
+    sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Supplier not found.']);
+  }
+  if ((int) $supplier['payoutsEnabled'] === 1) {
+    sendJson(409, false, null, ['code' => 'ALREADY_SET', 'message' => 'This supplier has already set up payouts.']);
+  }
+  if (empty($supplier['email'])) {
+    sendJson(409, false, null, ['code' => 'NO_EMAIL', 'message' => 'This supplier has no email on file.']);
+  }
+
+  try {
+    sendSupplierPayoutSetupReminderEmail($config, $supplier['email'], $supplier['companyName']);
+  } catch (Throwable $e) {
+    sendJson(502, false, null, ['code' => 'MAIL_ERROR', 'message' => 'Could not send the reminder email.']);
+  }
+  sendJson(200, true, ['message' => 'Reminder emailed to ' . $supplier['companyName'] . '.']);
+}
+
+// Automatic monthly payout sweep — pays every connected supplier their payable
+// balance, at most ONCE per calendar month (safe to call as often as the cron /
+// "run sweeps" fires). OFF unless supplier_auto_payout is enabled. Suppliers who
+// haven't connected Stripe keep accruing until they do. Returns a summary.
+function sweepSupplierPayouts(PDO $pdo, array $config): array {
+  if (($config['supplier_auto_payout'] ?? false) !== true) {
+    return ['ran' => false, 'reason' => 'disabled'];
+  }
+  if (!stripeConfigured($config)) {
+    return ['ran' => false, 'reason' => 'stripe_not_configured'];
+  }
+  // already run an automatic supplier payout this calendar month? then do nothing.
+  $already = $pdo->query(
+    "SELECT COUNT(*) FROM supplier_payout
+      WHERE isAuto = 1 AND payoutStatus = 'Paid'
+        AND YEAR(created_at) = YEAR(NOW()) AND MONTH(created_at) = MONTH(NOW())"
+  )->fetchColumn();
+  if ((int) $already > 0) {
+    return ['ran' => false, 'reason' => 'already_ran_this_month'];
+  }
+
+  $rows = $pdo->query(
+    "SELECT s.supplierId, s.stripeAccountId, s.payoutsEnabled, s.companyName
+       FROM supplier s JOIN `user` u ON u.userId = s.userId AND u.status = 'Active'
+      WHERE s.payoutsEnabled = 1 AND s.stripeAccountId IS NOT NULL"
+  )->fetchAll();
+
+  $paid = 0; $failed = 0; $total = 0.0;
+  foreach ($rows as $s) {
+    if (supplierBalance($pdo, $s['supplierId'])['balance'] <= 0) { continue; }
+    try {
+      $res = payOutSupplierBalance($pdo, $config, $s, true);   // true = automatic
+      $paid++;
+      $total += $res['amount'];
+    } catch (Throwable $e) {
+      $failed++;   // recorded as Failed payout rows; keep going for the rest
+    }
+  }
+  return ['ran' => true, 'paid' => $paid, 'failed' => $failed, 'total' => round($total, 2)];
+}
+
 // POST /admin/suppliers/{supplierId}/payout — pay a supplier their whole payable
 // balance in one Stripe transfer.
 function handlePaySupplier(PDO $pdo, array $config, string $supplierId): void {
