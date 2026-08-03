@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
 import Toast from '../../../components/Toast';
 import ConfirmDialog from '../../../components/ConfirmDialog';
+import Pagination from '../../../components/Pagination';
 import UserDetailModal from '../users/UserDetailModal';
+import { usePagination } from '../../../hooks/usePagination';
 import { getAppeals, getUser, resolveAppeal, refreshBadges } from '../adminService';
+
+const PAGE_SIZE = 10;
 
 const roleLabel = (r) => (r === 'DeliveryPersonnel' ? 'Delivery' : r === 'ArSpecialist' ? 'AR Specialist' : r);
 
@@ -63,6 +67,8 @@ function AdminAppealsPage() {
     }
   }
 
+  const { page, setPage, totalPages, pageItems } = usePagination(appeals, PAGE_SIZE);
+
   return (
     <div className="container py-4">
       <h1 className="mb-1">🙋 Suspension Appeals</h1>
@@ -77,7 +83,7 @@ function AdminAppealsPage() {
         <div className="card card-body text-center text-muted">🎉 No appeals to review.</div>
       ) : (
         <div className="d-flex flex-column gap-3">
-          {appeals.map((a) => (
+          {pageItems.map((a) => (
             <div key={a.appealId} className="card">
               <div className="card-body">
                 <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
@@ -109,6 +115,8 @@ function AdminAppealsPage() {
               </div>
             </div>
           ))}
+          <Pagination page={page} totalPages={totalPages} onChange={setPage}
+            summary={`Page ${page} of ${totalPages} · ${appeals.length} appeal${appeals.length === 1 ? '' : 's'}`} />
         </div>
       )}
 

@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getSupplierPayouts, paySupplier, getSupplierPayoutHistory, remindSupplierPayout, adjustSupplier } from '../adminService';
 import SortableTh from '../../../components/SortableTh';
 import Toast from '../../../components/Toast';
 import ConfirmDialog from '../../../components/ConfirmDialog';
+import Pagination from '../../../components/Pagination';
+import ClearableInput from '../../../components/ClearableInput';
 import { useTableSort } from '../../../hooks/useTableSort';
+import { usePagination } from '../../../hooks/usePagination';
+
+const PAGE_SIZE = 10;
 
 // Supplier payouts — each active supplier's payable balance (delivered orders past
 // the refund window, net of commission/SST/delivery/refunds), with a one-click
@@ -115,6 +120,14 @@ function AdminSupplierPayoutsPage() {
       (k === 'pendingBalance' || k === 'pendingOrders' || k === 'lifetimePaid') ? Number(s[k]) : (s[k] ?? ''),
   });
 
+  // search by company name or email, then paginate the sorted+filtered list
+  const [search, setSearch] = useState('');
+  const q = search.trim().toLowerCase();
+  const filtered = useMemo(
+    () => (q ? sort.sorted.filter((s) => `${s.companyName || ''} ${s.email || ''}`.toLowerCase().includes(q)) : sort.sorted),
+    [sort.sorted, q]);
+  const { page, setPage, totalPages, pageItems } = usePagination(filtered, PAGE_SIZE, q);
+
   return (
     <div className="container py-4">
       <h1 className="mb-1">💰 Supplier Payouts</h1>
@@ -139,6 +152,16 @@ function AdminSupplierPayoutsPage() {
       ) : suppliers.length === 0 ? (
         <div className="card card-body text-center text-muted">No active suppliers yet.</div>
       ) : (
+        <>
+        <div className="row g-2 mb-3">
+          <div className="col-md-5">
+            <ClearableInput type="text" placeholder="Search supplier or email"
+              value={search} onChange={(e) => setSearch(e.target.value)} onClear={() => setSearch('')} />
+          </div>
+        </div>
+        {filtered.length === 0 ? (
+          <div className="card card-body text-center text-muted">No suppliers match your search.</div>
+        ) : (
         <div className="table-responsive">
           <table className="table align-middle">
             <thead>
@@ -152,7 +175,7 @@ function AdminSupplierPayoutsPage() {
               </tr>
             </thead>
             <tbody>
-              {sort.sorted.map((s) => {
+              {pageItems.map((s) => {
                 const ready = s.connected && s.payoutsEnabled;
                 const canPay = ready && s.pendingBalance > 0;
                 return (
@@ -210,7 +233,11 @@ function AdminSupplierPayoutsPage() {
               })}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onChange={setPage}
+            summary={`Page ${page} of ${totalPages} · ${filtered.length} supplier${filtered.length === 1 ? '' : 's'}`} />
         </div>
+        )}
+        </>
       )}
 
       {/* payout history (modal — keeps the table clean as history grows) */}

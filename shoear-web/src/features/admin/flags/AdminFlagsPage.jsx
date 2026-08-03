@@ -2,8 +2,12 @@ import { useEffect, useState } from 'react';
 import Toast from '../../../components/Toast';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import StarRating from '../../../components/StarRating';
+import Pagination from '../../../components/Pagination';
 import UserDetailModal from '../users/UserDetailModal';
+import { usePagination } from '../../../hooks/usePagination';
 import { getFlags, getUser, resolveFlag, refreshBadges } from '../adminService';
+
+const PAGE_SIZE = 10;
 
 // Reactive moderation queue: customer-reported reviews/avatars. The admin views
 // the reported user's avatar and can remove it, suspend the user, or dismiss.
@@ -71,6 +75,8 @@ function AdminFlagsPage() {
     }
   }
 
+  const { page, setPage, totalPages, pageItems } = usePagination(flags, PAGE_SIZE);
+
   return (
     <div className="container py-4">
       <h1 className="mb-1">🚩 Flagged Content</h1>
@@ -85,7 +91,7 @@ function AdminFlagsPage() {
         <div className="card card-body text-center text-muted">🎉 No open reports.</div>
       ) : (
         <div className="d-flex flex-column gap-3">
-          {flags.map((f) => (
+          {pageItems.map((f) => (
             <div key={f.flagId} className="card">
               <div className="card-body d-flex align-items-start gap-3 flex-wrap">
                 <div className="text-center flex-shrink-0">
@@ -182,6 +188,8 @@ function AdminFlagsPage() {
               </div>
             </div>
           ))}
+          <Pagination page={page} totalPages={totalPages} onChange={setPage}
+            summary={`Page ${page} of ${totalPages} · ${flags.length} report${flags.length === 1 ? '' : 's'}`} />
         </div>
       )}
 

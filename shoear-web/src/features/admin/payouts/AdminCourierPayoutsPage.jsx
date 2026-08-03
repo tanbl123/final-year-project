@@ -1,9 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { getCourierPayouts, payCourier, getCourierPayoutHistory, remindCourierPayout, getCourierFee, setCourierFee } from '../adminService';
 import SortableTh from '../../../components/SortableTh';
 import Toast from '../../../components/Toast';
 import ConfirmDialog from '../../../components/ConfirmDialog';
+import Pagination from '../../../components/Pagination';
+import ClearableInput from '../../../components/ClearableInput';
 import { useTableSort } from '../../../hooks/useTableSort';
+import { usePagination } from '../../../hooks/usePagination';
+
+const PAGE_SIZE = 10;
 
 // Courier payouts — each active courier's accrued per-delivery earnings, with a
 // one-click Stripe payout of their pending balance. A courier must have finished
@@ -122,6 +127,14 @@ function AdminCourierPayoutsPage() {
       (k === 'pendingBalance' || k === 'pendingDeliveries') ? Number(c[k]) : (c[k] ?? ''),
   });
 
+  // search by courier name or email, then paginate the sorted+filtered list
+  const [search, setSearch] = useState('');
+  const q = search.trim().toLowerCase();
+  const filtered = useMemo(
+    () => (q ? sort.sorted.filter((c) => `${c.fullName || ''} ${c.email || ''}`.toLowerCase().includes(q)) : sort.sorted),
+    [sort.sorted, q]);
+  const { page, setPage, totalPages, pageItems } = usePagination(filtered, PAGE_SIZE, q);
+
   return (
     <div className="container py-4">
       <h1 className="mb-1">💸 Courier Payouts</h1>
@@ -216,6 +229,16 @@ function AdminCourierPayoutsPage() {
       ) : couriers.length === 0 ? (
         <div className="card card-body text-center text-muted">No active couriers yet.</div>
       ) : (
+        <>
+        <div className="row g-2 mb-3">
+          <div className="col-md-5">
+            <ClearableInput type="text" placeholder="Search courier or email"
+              value={search} onChange={(e) => setSearch(e.target.value)} onClear={() => setSearch('')} />
+          </div>
+        </div>
+        {filtered.length === 0 ? (
+          <div className="card card-body text-center text-muted">No couriers match your search.</div>
+        ) : (
         <div className="table-responsive">
           <table className="table align-middle">
             <thead>
@@ -228,7 +251,7 @@ function AdminCourierPayoutsPage() {
               </tr>
             </thead>
             <tbody>
-              {sort.sorted.map((c) => {
+              {pageItems.map((c) => {
                 const ready = c.connected && c.payoutsEnabled;
                 const canPay = ready && c.pendingBalance > 0;
                 return (
@@ -279,7 +302,11 @@ function AdminCourierPayoutsPage() {
               })}
             </tbody>
           </table>
+          <Pagination page={page} totalPages={totalPages} onChange={setPage}
+            summary={`Page ${page} of ${totalPages} · ${filtered.length} courier${filtered.length === 1 ? '' : 's'}`} />
         </div>
+        )}
+        </>
       )}
 
       {/* payout history (modal — keeps the table clean as history grows) */}
