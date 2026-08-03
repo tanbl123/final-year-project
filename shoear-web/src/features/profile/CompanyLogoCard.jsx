@@ -97,13 +97,10 @@ function CompanyLogoCard({ profile, onSaved, onToast }) {
 
             <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp"
               className="d-none" onChange={onPick} />
-            <div className="mt-2">
-              <button className="btn btn-outline-primary btn-sm" disabled={busy}
-                onClick={() => fileRef.current?.click()}>
-                {busy ? 'Uploading…' : (previewUrl ? 'Upload new logo' : 'Upload logo')}
-              </button>
+            <div className="form-text mt-2">
+              {previewUrl ? 'Click the logo to change it. ' : 'Click the circle to add a logo. '}
+              JPG, PNG or WebP · up to 5&nbsp;MB — you&apos;ll adjust it to fit the circle.
             </div>
-            <div className="form-text mt-1">Square image · JPG, PNG or WebP · up to 5&nbsp;MB · 400×400px or larger recommended.</div>
             {error && <div className="text-danger small mt-1">{error}</div>}
           </div>
         </div>
