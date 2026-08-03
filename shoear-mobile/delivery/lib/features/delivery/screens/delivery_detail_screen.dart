@@ -152,11 +152,29 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
               ]),
               const SizedBox(height: 16),
               Text('Items', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 4),
+              const SizedBox(height: 8),
               for (final it in d.items)
                 Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 3),
-                  child: Text('• ${it.brand} ${it.productName}  ·  ${it.size}  ·  x${it.qty}'),
+                  padding: const EdgeInsets.symmetric(vertical: 5),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _ItemThumb(url: it.imageUrl),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('${it.brand} ${it.productName}',
+                                style: const TextStyle(fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 2),
+                            Text('Size ${it.size}  ·  x${it.qty}',
+                                style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               const Divider(height: 28),
               if (d.proofOfDelivery != null) ...[
@@ -312,5 +330,46 @@ class _DeliveryDetailScreenState extends State<DeliveryDetailScreen> {
           ),
         ];
     }
+  }
+}
+
+/// Small product thumbnail for the items list — shows the shoe image when
+/// available, otherwise a neutral placeholder.
+class _ItemThumb extends StatelessWidget {
+  final String? url;
+  const _ItemThumb({this.url});
+
+  @override
+  Widget build(BuildContext context) {
+    final placeholder = Container(
+      width: 48,
+      height: 48,
+      color: Colors.grey.shade200,
+      child: Icon(Icons.image_not_supported_outlined, size: 20, color: Colors.grey.shade400),
+    );
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: (url == null)
+          ? placeholder
+          : Image.network(
+              url!,
+              width: 48,
+              height: 48,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => placeholder,
+              loadingBuilder: (context, child, progress) => progress == null
+                  ? child
+                  : SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Center(
+                        child: SizedBox(
+                          width: 16, height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    ),
+            ),
+    );
   }
 }

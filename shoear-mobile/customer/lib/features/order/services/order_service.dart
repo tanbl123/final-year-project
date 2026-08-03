@@ -99,12 +99,6 @@ class OrderService {
     await api.post('/orders/$orderId/cancel', {});
   }
 
-  /// POST /orders/{id}/deliveries/{deliveryId}/resend-otp — re-send myself the
-  /// delivery code (notification + push) for one out-for-delivery parcel.
-  Future<void> resendDeliveryOtp(String orderId, String deliveryId) async {
-    await api.post('/orders/$orderId/deliveries/$deliveryId/resend-otp', {});
-  }
-
   /// POST /orders/{id}/deliveries/{deliveryId}/confirm-receipt — confirm a
   /// Standard (3PL) parcel has arrived ("Order received"). Marks it Delivered.
   Future<void> confirmReceipt(String orderId, String deliveryId) async {

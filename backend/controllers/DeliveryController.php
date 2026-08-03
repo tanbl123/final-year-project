@@ -303,7 +303,9 @@ function handleGetCourierDelivery(PDO $pdo, array $auth, string $deliveryId): vo
 
   // only the items from THIS parcel's supplier (an order may have other parcels)
   $it = $pdo->prepare(
-    "SELECT p.productName, p.productBrand AS brand, oi.orderSize AS size, oi.orderQuantity AS qty
+    "SELECT p.productName, p.productBrand AS brand, oi.orderSize AS size, oi.orderQuantity AS qty,
+            (SELECT pi.productImageUrl FROM product_image pi
+              WHERE pi.productId = p.productId ORDER BY pi.productImageId LIMIT 1) AS imageUrl
        FROM order_item oi
        JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
        JOIN product p          ON p.productId = pv.productId

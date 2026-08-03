@@ -47,14 +47,16 @@ class DeliveryItem {
   final String brand;
   final String size;
   final int qty;
+  final String? imageUrl;
 
-  DeliveryItem({required this.productName, required this.brand, required this.size, required this.qty});
+  DeliveryItem({required this.productName, required this.brand, required this.size, required this.qty, this.imageUrl});
 
   factory DeliveryItem.fromJson(Map<String, dynamic> j) => DeliveryItem(
         productName: j['productName']?.toString() ?? '',
         brand: j['brand']?.toString() ?? '',
         size: j['size']?.toString() ?? '',
         qty: (j['qty'] as num?)?.toInt() ?? 0,
+        imageUrl: (j['imageUrl'] as String?)?.isNotEmpty == true ? j['imageUrl'] as String : null,
       );
 }
 

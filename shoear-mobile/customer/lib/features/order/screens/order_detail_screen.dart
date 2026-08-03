@@ -770,21 +770,7 @@ class _ParcelBlock extends StatefulWidget {
 }
 
 class _ParcelBlockState extends State<_ParcelBlock> {
-  bool _resending = false;
   bool _confirming = false;
-
-  // Re-send myself the delivery code (notification + push) if I missed it.
-  Future<void> _resendOtp() async {
-    setState(() => _resending = true);
-    try {
-      await context.read<OrderService>().resendDeliveryOtp(widget.orderId, widget.parcel.deliveryId);
-      if (mounted) context.showSnack('Code re-sent to your notifications.');
-    } catch (e) {
-      if (mounted) context.showSnack(e.toString());
-    } finally {
-      if (mounted) setState(() => _resending = false);
-    }
-  }
 
   // Confirm a Standard (3PL) parcel has arrived — "Order received". Marks it
   // Delivered and unlocks reviews, mirroring Shopee/Lazada.
@@ -891,16 +877,6 @@ class _ParcelBlockState extends State<_ParcelBlock> {
                 Text('Show this code to the courier', style: TextStyle(fontSize: 12, color: Colors.amber.shade900)),
                 const SizedBox(height: 4),
                 Text(parcel.otpCode!, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, letterSpacing: 6)),
-                const SizedBox(height: 4),
-                TextButton.icon(
-                  onPressed: _resending ? null : _resendOtp,
-                  icon: _resending
-                      ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                      : Icon(Icons.refresh, size: 16, color: Colors.amber.shade900),
-                  label: Text(_resending ? 'Sending…' : 'Resend code',
-                      style: TextStyle(fontSize: 12, color: Colors.amber.shade900)),
-                  style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                ),
               ],
             ),
           ),
