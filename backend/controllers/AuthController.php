@@ -1069,6 +1069,14 @@ function handleLogin(PDO $pdo, string $secret): void {
     'exp'    => $now + (7 * 24 * 60 * 60),
   ], $secret);
 
+  // Suppliers' approved company logo doubles as their avatar in the portal header.
+  $companyPhotoUrl = null;
+  if ($user['role'] === 'Supplier') {
+    $ps = $pdo->prepare('SELECT companyPhotoUrl FROM supplier WHERE userId = :uid');
+    $ps->execute(['uid' => $user['userId']]);
+    $companyPhotoUrl = $ps->fetchColumn() ?: null;
+  }
+
   sendJson(200, true, [
     'token' => $token,
     'user'  => [
@@ -1078,6 +1086,7 @@ function handleLogin(PDO $pdo, string $secret): void {
       'phoneNumber'     => $user['phoneNumber'],
       'status'          => $user['status'],
       'rejectionReason' => $user['rejectionReason'],
+      'companyPhotoUrl' => $companyPhotoUrl,
       'mustChangePassword' => (bool) $user['mustChangePassword'],
       'hasPassword'     => true, // password was verified above, so it is never null here
     ],

@@ -125,7 +125,12 @@ function Layout() {
               </button>
             )}
             <Link to="/profile" className="d-inline-flex align-items-center text-decoration-none text-dark text-nowrap">
-              <Avatar name={user.fullName} size={32} className="me-2" />
+              <Avatar
+                name={user.fullName}
+                size={32}
+                className="me-2"
+                url={user.role === 'Supplier' ? (user.companyPhotoUrl || null) : null}
+              />
               <span>{user.fullName}</span>
             </Link>
             <button className="btn btn-outline-secondary btn-sm" onClick={handleLogout}>

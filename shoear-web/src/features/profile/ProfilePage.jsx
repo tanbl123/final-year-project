@@ -56,18 +56,29 @@ function ProfilePage() {
   const [discard, setDiscard] = useState(null);   // 'profile' | 'password' when confirming a discard
   const [storeNameOverride, setStoreNameOverride] = useState(null); // live store name after a save (suppliers)
 
+  // Keep the cached auth user (used by the header avatar) in sync with the
+  // freshly-loaded profile, so a supplier's approved company logo shows in the
+  // top-right avatar without needing to log in again.
+  function applyMe(data) {
+    setMe(data);
+    if (data?.role === 'Supplier') {
+      updateUser({ companyPhotoUrl: data.profile?.companyPhotoUrl || null });
+    }
+  }
+
   useEffect(() => {
     let active = true;
     getMe()
-      .then((data) => { if (active) setMe(data); })
+      .then((data) => { if (active) applyMe(data); })
       .catch((err) => { if (active) setError(err.message); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // re-fetch the profile (e.g. after submitting a company logo for review)
   function reloadMe() {
-    getMe().then(setMe).catch((err) => setError(err.message));
+    getMe().then(applyMe).catch((err) => setError(err.message));
   }
 
   function startEdit() {
