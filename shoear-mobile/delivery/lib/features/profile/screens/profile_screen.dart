@@ -8,6 +8,7 @@ import 'package:delivery/features/auth/state/auth_provider.dart';
 import 'package:delivery/features/auth/screens/change_password_screen.dart';
 import 'package:delivery/features/profile/screens/edit_profile_screen.dart';
 import 'package:delivery/features/profile/screens/vehicle_licence_screen.dart';
+import 'package:delivery/features/profile/screens/identity_card_screen.dart';
 import 'package:delivery/features/earnings/screens/earnings_screen.dart';
 
 /// The courier's profile: view/edit details, change password, sign out.
@@ -54,16 +55,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _row('Brand', profile['vehicleBrand']?.toString() ?? '—'),
               _row('Model', profile['vehicleModel']?.toString() ?? '—'),
               _row('Plate', profile['vehiclePlate']?.toString() ?? '—'),
-              _row('IC number', profile['icNumber']?.toString() ?? '—'),
-              // IC is a fixed identity document (verified at approval), so it's
-              // shown here read-only — it isn't editable in Vehicle & licence.
-              if (_hasIc(profile)) ...[
-                const SizedBox(height: 12),
-                const Text('Identity card (IC)', style: TextStyle(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 8),
-                _docThumb('IC (front)', profile['icPhotoUrl']?.toString()),
-                _docThumb('IC (back)', profile['icPhotoBackUrl']?.toString()),
-              ],
               const SizedBox(height: 20),
               FilledButton.icon(
                 onPressed: () => Navigator.of(context).push(
@@ -81,9 +72,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: _openVehicleLicence,
-                icon: const Icon(Icons.badge_outlined),
+                icon: const Icon(Icons.directions_car_outlined),
                 label: const Text('Vehicle & licence'),
               ),
+              if (_hasIc(profile)) ...[
+                const SizedBox(height: 8),
+                // IC lives behind a tap so it isn't exposed at a glance to anyone
+                // looking at the phone.
+                OutlinedButton.icon(
+                  onPressed: () => _openIdentityCard(profile),
+                  icon: const Icon(Icons.badge_outlined),
+                  label: const Text('Identity card (IC)'),
+                ),
+              ],
               const SizedBox(height: 8),
               OutlinedButton.icon(
                 onPressed: _openChangePassword,
@@ -115,68 +116,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
 
   static bool _hasIc(Map profile) =>
+      (profile['icNumber']?.toString().isNotEmpty ?? false) ||
       (profile['icPhotoUrl']?.toString().isNotEmpty ?? false) ||
       (profile['icPhotoBackUrl']?.toString().isNotEmpty ?? false);
 
-  // A labelled, read-only document preview. Tap to open full-screen and zoom.
-  Widget _docThumb(String label, String? url) {
-    if (url == null || url.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 4),
-          GestureDetector(
-            onTap: () => _openFullScreen(label, url),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Stack(
-                children: [
-                  Image.network(url, height: 150, width: double.infinity, fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                            height: 90, width: double.infinity, color: Colors.grey.shade200,
-                            child: const Center(child: Icon(Icons.description_outlined, color: Colors.grey)),
-                          )),
-                  Positioned(
-                    right: 6,
-                    bottom: 6,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(6)),
-                      child: const Icon(Icons.zoom_in, color: Colors.white, size: 18),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _openFullScreen(String label, String url) {
+  void _openIdentityCard(Map profile) {
     Navigator.of(context).push(MaterialPageRoute(
-      fullscreenDialog: true,
-      builder: (_) => Scaffold(
-        backgroundColor: Colors.black,
-        appBar: AppBar(
-          backgroundColor: Colors.black,
-          foregroundColor: Colors.white,
-          title: Text(label, style: const TextStyle(color: Colors.white, fontSize: 16)),
-        ),
-        body: Center(
-          child: InteractiveViewer(
-            minScale: 0.8,
-            maxScale: 5,
-            child: Image.network(url, fit: BoxFit.contain,
-                loadingBuilder: (_, child, progress) =>
-                    progress == null ? child : const CircularProgressIndicator(color: Colors.white),
-                errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, color: Colors.white70, size: 48)),
-          ),
-        ),
+      builder: (_) => IdentityCardScreen(
+        icNumber: profile['icNumber']?.toString(),
+        icFrontUrl: profile['icPhotoUrl']?.toString(),
+        icBackUrl: profile['icPhotoBackUrl']?.toString(),
       ),
     ));
   }
