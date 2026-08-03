@@ -576,6 +576,51 @@ function handleResendStaffInvite(PDO $pdo, array $config, string $userId): void 
   ]);
 }
 
+// PUT /admin/staff/{userId} — update an AR Specialist's editable profile fields
+// (name, phone, IC). Email is NOT changed here — it's their login / invite
+// target; a mistyped email on a still-pending account is corrected via
+// resend-invite instead.
+function handleUpdateStaff(PDO $pdo, string $userId): void {
+  $stmt = $pdo->prepare('SELECT userId, role FROM `user` WHERE userId = :id');
+  $stmt->execute(['id' => $userId]);
+  $u = $stmt->fetch();
+  if (!$u) {
+    sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'User not found.']);
+  }
+  if ($u['role'] !== 'ArSpecialist') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Only AR Specialist accounts can be edited here.']);
+  }
+
+  $body     = getJsonBody();
+  $fullName = trim($body['fullName'] ?? '');
+  $phone    = trim($body['phoneNumber'] ?? '');
+  $icNumber = trim($body['icNumber'] ?? '');
+  if ($fullName === '' || mb_strlen($fullName) > 120) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Full name is required and must be 120 characters or fewer.']);
+  }
+  if ($phone !== '' && mb_strlen($phone) > 20) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Phone number must be 20 characters or fewer.']);
+  }
+  if ($icNumber !== '' && mb_strlen($icNumber) > 20) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'IC / NRIC number must be 20 characters or fewer.']);
+  }
+
+  $pdo->beginTransaction();
+  try {
+    $pdo->prepare('UPDATE `user` SET fullName = :fn, phoneNumber = :ph WHERE userId = :id')
+        ->execute(['fn' => $fullName, 'ph' => $phone !== '' ? $phone : null, 'id' => $userId]);
+    $pdo->prepare('UPDATE ar_specialist SET icNumber = :ic WHERE userId = :id')
+        ->execute(['ic' => $icNumber !== '' ? $icNumber : null, 'id' => $userId]);
+    $pdo->commit();
+  } catch (Throwable $e) {
+    $pdo->rollBack();
+    sendJson(500, false, null, ['code' => 'UPDATE_FAILED', 'message' => 'Could not update the staff account.']);
+  }
+
+  sendJson(200, true, ['userId' => $userId, 'fullName' => $fullName,
+    'phoneNumber' => $phone, 'icNumber' => $icNumber]);
+}
+
 // GET /ar/queue — try-on products still awaiting AR preparation: virtual try-on
 // is enabled, a 3D model exists, and no AR-ready marker is set yet. This is the
 // AR Specialist's work inbox (Admins can see it too). Approved products that

@@ -145,6 +145,13 @@ export function resendStaffInvite(userId, { fullName, email }) {
   return apiPut(`/admin/staff/${userId}/resend-invite`, { fullName, email }, getToken());
 }
 
+// Update an AR Specialist's editable profile fields (name, phone, IC). Email is
+// not changed here (it's their login); correct a pending account's email via
+// resendStaffInvite instead.
+export function updateStaff(userId, { fullName, phoneNumber = '', icNumber = '' }) {
+  return apiPut(`/admin/staff/${userId}`, { fullName, phoneNumber, icNumber }, getToken());
+}
+
 // Full product detail (images, description, sizes, 3D model) for review before
 // approving/rejecting. Works for any status, unlike the customer catalog.
 export function getAdminProduct(productId) {

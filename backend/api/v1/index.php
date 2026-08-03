@@ -1018,6 +1018,14 @@ if ($method === 'PUT' && preg_match('#^/admin/staff/([^/]+)/resend-invite$#', $p
   handleResendStaffInvite($pdo, $config, $m[1]);
 }
 
+// update an AR Specialist's editable profile fields (name, phone, IC)
+if ($method === 'PUT' && preg_match('#^/admin/staff/([^/]+)$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleUpdateStaff($pdo, $m[1]);
+}
+
 // ── admin delivery dispatch (require an Admin token) ──
 if ($method === 'GET' && $path === '/admin/deliveries') {
   $auth = requireAuth($secret);

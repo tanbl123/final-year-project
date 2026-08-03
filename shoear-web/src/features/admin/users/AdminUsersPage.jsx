@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getUsers, getUser, setUserStatus, createStaff, resendStaffInvite } from '../adminService';
+import { getUsers, getUser, setUserStatus, createStaff, resendStaffInvite, updateStaff } from '../adminService';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Toast from '../../../components/Toast';
 import Pagination from '../../../components/Pagination';
@@ -73,6 +73,11 @@ function AdminUsersPage() {
   const [resendErr, setResendErr] = useState('');
   const [resendErrors, setResendErrors] = useState({});
 
+  const [editForm, setEditForm] = useState(null);   // edit AR-specialist form (null = closed)
+  const [editing, setEditing] = useState(false);
+  const [editErr, setEditErr] = useState('');
+  const [editErrors, setEditErrors] = useState({});
+
   // open/close the create form, clearing any previous input + errors
   function openCreate() { setCreateErr(''); setStaffErrors({}); setCreateForm({ ...EMPTY_STAFF }); }
   function closeCreate() { setCreateForm(null); setStaffErrors({}); setCreateErr(''); }
@@ -145,6 +150,53 @@ function AdminUsersPage() {
       else setResendErr(err.message || 'Could not resend the invite.');
     } finally {
       setResending(false);
+    }
+  }
+
+  // ── edit an AR Specialist's profile (name / phone / IC) ──
+  async function openEdit(u) {
+    setEditErr(''); setEditErrors({});
+    setEditForm({ userId: u.userId, fullName: u.fullName || '', phoneNumber: '', icNumber: '', loading: true });
+    try {
+      const d = await getUser(u.userId);   // fetch phone + IC (not in the row)
+      setEditForm({ userId: u.userId, fullName: d.fullName || '',
+        phoneNumber: d.phoneNumber || '', icNumber: d.profile?.icNumber || '', loading: false });
+    } catch (err) {
+      setEditForm((f) => (f ? { ...f, loading: false } : f));
+      setEditErr(err.message || 'Could not load the account.');
+    }
+  }
+  function closeEdit() { setEditForm(null); setEditErrors({}); setEditErr(''); }
+  function setEditField(name, value) {
+    setEditForm((f) => ({ ...f, [name]: value }));
+    if (name === 'fullName') {
+      setEditErrors((prev) => {
+        if (!('fullName' in prev)) return prev;
+        const next = { ...prev };
+        const msg = staffFieldError('fullName', value);
+        if (msg) next.fullName = msg; else delete next.fullName;
+        return next;
+      });
+    }
+  }
+  async function submitEdit(e) {
+    e.preventDefault();
+    const msg = staffFieldError('fullName', editForm.fullName);
+    if (msg) { setEditErrors({ fullName: msg }); return; }
+    setEditing(true); setEditErr('');
+    try {
+      const res = await updateStaff(editForm.userId, {
+        fullName: editForm.fullName.trim(),
+        phoneNumber: editForm.phoneNumber.trim(),
+        icNumber: editForm.icNumber.trim(),
+      });
+      setUsers((prev) => prev.map((x) => (x.userId === res.userId ? { ...x, fullName: res.fullName } : x)));
+      setToast(`Updated ${res.fullName}.`);
+      closeEdit();
+    } catch (err) {
+      setEditErr(err.message || 'Could not update the account.');
+    } finally {
+      setEditing(false);
     }
   }
 
@@ -269,6 +321,11 @@ function AdminUsersPage() {
     if (u.status !== 'Deleted') {
       btns.push(<button key="del" className="btn btn-outline-danger btn-sm" disabled={busy}
         onClick={() => askConfirm(u, 'Deleted', 'Delete')}>Delete</button>);
+    }
+    // AR Specialists can have their profile (name/phone/IC) edited by the admin.
+    if (u.role === 'ArSpecialist' && u.status !== 'Deleted') {
+      btns.push(<button key="ed" className="btn btn-outline-primary btn-sm" disabled={busy}
+        onClick={() => openEdit(u)}>Edit</button>);
     }
     if (u.pendingSetup && u.role === 'ArSpecialist' && u.status !== 'Deleted') {
       btns.push(<button key="ri" className="btn btn-outline-primary btn-sm" disabled={busy}
@@ -486,6 +543,57 @@ function AdminUsersPage() {
                 <button type="button" className="btn btn-light" onClick={closeResend} disabled={resending}>Cancel</button>
                 <button type="submit" className="btn btn-primary" disabled={resending}>
                   {resending ? 'Sending…' : 'Resend invite'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* edit an AR Specialist's profile (name / phone / IC) */}
+      {editForm && (
+        <div className="modal show d-block" tabIndex="-1" style={{ background: 'rgba(0,0,0,.5)' }}
+          onClick={() => !editing && closeEdit()}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <form className="modal-content" onSubmit={submitEdit} noValidate>
+              <div className="modal-header">
+                <h5 className="modal-title">Edit AR Specialist</h5>
+                <button type="button" className="btn-close" onClick={closeEdit} disabled={editing}></button>
+              </div>
+              <div className="modal-body">
+                {editErr && <div className="alert alert-danger py-2">{editErr}</div>}
+                {editForm.loading ? (
+                  <p className="text-muted mb-0">Loading…</p>
+                ) : (
+                  <>
+                    <div className="mb-2">
+                      <label className="form-label small mb-1">Full name</label>
+                      <ClearableInput className={editErrors.fullName ? 'is-invalid' : ''}
+                        value={editForm.fullName}
+                        onChange={(e) => setEditField('fullName', e.target.value)}
+                        onClear={() => setEditField('fullName', '')} />
+                      {editErrors.fullName && <div className="invalid-feedback d-block">{editErrors.fullName}</div>}
+                    </div>
+                    <div className="mb-2">
+                      <label className="form-label small mb-1">Phone number <span className="text-muted">(optional)</span></label>
+                      <ClearableInput value={editForm.phoneNumber}
+                        onChange={(e) => setEditField('phoneNumber', e.target.value)}
+                        onClear={() => setEditField('phoneNumber', '')} />
+                    </div>
+                    <div className="mb-1">
+                      <label className="form-label small mb-1">IC / NRIC number <span className="text-muted">(optional)</span></label>
+                      <ClearableInput value={editForm.icNumber}
+                        onChange={(e) => setEditField('icNumber', e.target.value)}
+                        onClear={() => setEditField('icNumber', '')} />
+                    </div>
+                    <p className="text-muted small mt-2 mb-0">Email is the sign-in address and can't be changed here.</p>
+                  </>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-light" onClick={closeEdit} disabled={editing}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={editing || editForm.loading}>
+                  {editing ? 'Saving…' : 'Save changes'}
                 </button>
               </div>
             </form>
