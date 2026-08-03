@@ -233,8 +233,11 @@ function handleCreateRefund(PDO $pdo, array $auth, string $orderId, array $confi
   }
   // Policy: a refund can only be requested AFTER every parcel is delivered,
   // and within the refund window. (Before delivery the customer cancels.)
-  // Fulfilment lives on the parcels, not orderStatus.
-  if ($order['orderStatus'] !== 'Paid') {
+  // Fulfilment lives on the parcels, not orderStatus — and note the order status
+  // advances to 'Delivered'/'Completed' once parcels arrive, so we must NOT
+  // require orderStatus === 'Paid' here. The order just has to be paid for
+  // (i.e. not still awaiting payment, and not cancelled).
+  if (in_array($order['orderStatus'], ['Placed', 'Cancelled'], true)) {
     sendJson(409, false, null, ['code' => 'NOT_REFUNDABLE', 'message' => 'This order is not refundable.']);
   }
   $ds = $pdo->prepare("SELECT deliveryStatus FROM delivery WHERE orderId = :oid");

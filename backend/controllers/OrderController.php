@@ -645,10 +645,14 @@ function handleGetCustomerOrder(PDO $pdo, array $auth, string $orderId): void {
   $order['refunds'] = $refunds;
 
   // ── Action eligibility ───────────────────────────────────────────────────
-  // Fulfilment is tracked on the parcels (deliveryStatus), not orderStatus
-  // (which stays 'Paid'). So derive cancel/refund eligibility from the parcels.
+  // Fulfilment is tracked on the parcels (deliveryStatus). The order status
+  // itself advances to 'Delivered'/'Completed' once parcels arrive, so cancel/
+  // refund eligibility is derived from the parcels + whether the order is paid.
   $hasActiveRefund = _orderHasActiveRefund($pdo, $orderId);
-  $paid = $order['orderStatus'] === 'Paid';
+  // "Paid for" = the customer has paid: the order has moved past 'Placed' and
+  // wasn't cancelled. (Do NOT use orderStatus === 'Paid' — it becomes
+  // 'Delivered' after delivery, which is exactly when a refund is allowed.)
+  $paidForOrder = !in_array($order['orderStatus'], ['Placed', 'Cancelled'], true);
   $dstat = array_column($order['deliveries'], 'deliveryStatus');
   $shippedStates = ['PickedUp', 'OutForDelivery', 'Delivered'];
   $anyShipped = count(array_intersect($dstat, $shippedStates)) > 0;
@@ -656,11 +660,11 @@ function handleGetCustomerOrder(PDO $pdo, array $auth, string $orderId): void {
       && count(array_filter($dstat, fn($s) => $s === 'Delivered')) === count($dstat);
 
   // Cancel: paid order, nothing shipped yet, no refund in progress.
-  $order['canCancel'] = $paid && !$anyShipped && !$hasActiveRefund;
+  $order['canCancel'] = $paidForOrder && !$anyShipped && !$hasActiveRefund;
 
-  // Refund: paid, every parcel delivered, within the window, no active refund.
+  // Refund: paid for, every parcel delivered, within the window, no active refund.
   $canRefund = false;
-  if ($paid && $allDelivered && !$hasActiveRefund) {
+  if ($paidForOrder && $allDelivered && !$hasActiveRefund) {
     $ref = _orderDeliveredAt($pdo, $orderId) ?? $order['orderDate'];
     $canRefund = time() <= strtotime($ref) + REFUND_WINDOW_DAYS * 86400;
   }
