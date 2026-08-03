@@ -25,6 +25,21 @@ function DiffRow({ label, from, to, isDoc }) {
   );
 }
 
+const licenceType = (v) => (Number(v) === 1 ? 'Digital (e-licence)' : 'Physical card');
+
+// Did any of the uploaded documents (or the licence form) change vs the live row?
+function docsChanged(r) {
+  const pairs = [
+    [r.curLicenseIsDigital, r.newLicenseIsDigital],
+    [r.curLicensePhotoUrl, r.newLicensePhotoUrl],
+    [r.curLicensePhotoBackUrl, r.newLicensePhotoBackUrl],
+    [r.curELicenseUrl, r.newELicenseUrl],
+    [r.curIcPhotoUrl, r.newIcPhotoUrl],
+    [r.curIcPhotoBackUrl, r.newIcPhotoBackUrl],
+  ];
+  return pairs.some(([a, b]) => String(a ?? '') !== String(b ?? ''));
+}
+
 // A courier's plate + driving-licence changes (post-approval re-verification).
 // The account stays Active and keeps delivering; approving copies the proposed
 // values onto the live courier row, rejecting leaves it unchanged.
@@ -120,10 +135,10 @@ function AdminCourierChangesPage() {
                   </div>
                 </div>
 
-                {r.newLicensePhotoUrl && r.newLicensePhotoUrl !== r.curLicensePhotoUrl && (
+                {docsChanged(r) && (
                   <div className="alert alert-info py-2 small mb-2">
-                    📄 <strong>Licence photo updated</strong> — confirm the document matches the licence number
-                    and the holder, and that it hasn&apos;t expired.
+                    📄 <strong>Documents updated</strong> — open each new file and confirm it matches the
+                    licence number and the holder, and that the licence hasn&apos;t expired.
                   </div>
                 )}
 
@@ -136,7 +151,17 @@ function AdminCourierChangesPage() {
                 <DiffRow label="Licence no." from={r.curLicenseNumber} to={r.newLicenseNumber} />
                 <DiffRow label="Licence class" from={r.curLicenseClass} to={r.newLicenseClass} />
                 <DiffRow label="Licence expiry" from={fmtDate(r.curLicenseExpiry)} to={fmtDate(r.newLicenseExpiry)} />
-                <DiffRow label="Licence photo" from={r.curLicensePhotoUrl} to={r.newLicensePhotoUrl} isDoc />
+                <DiffRow label="Licence type" from={licenceType(r.curLicenseIsDigital)} to={licenceType(r.newLicenseIsDigital)} />
+                {Number(r.newLicenseIsDigital) === 1 ? (
+                  <DiffRow label="Digital licence" from={r.curELicenseUrl} to={r.newELicenseUrl} isDoc />
+                ) : (
+                  <>
+                    <DiffRow label="Licence (front)" from={r.curLicensePhotoUrl} to={r.newLicensePhotoUrl} isDoc />
+                    <DiffRow label="Licence (back)" from={r.curLicensePhotoBackUrl} to={r.newLicensePhotoBackUrl} isDoc />
+                  </>
+                )}
+                <DiffRow label="IC (front)" from={r.curIcPhotoUrl} to={r.newIcPhotoUrl} isDoc />
+                <DiffRow label="IC (back)" from={r.curIcPhotoBackUrl} to={r.newIcPhotoBackUrl} isDoc />
               </div>
             </div>
           ))}

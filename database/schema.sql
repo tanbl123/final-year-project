@@ -180,6 +180,8 @@ CREATE TABLE delivery_personnel (
     isAvailable         TINYINT(1)   NOT NULL DEFAULT 1,    -- 1 = online/on-duty (dispatch only picks online couriers)
     stripeAccountId     VARCHAR(60)  NULL,                  -- Stripe Connect account (acct_...) for payouts
     payoutsEnabled      TINYINT(1)   NOT NULL DEFAULT 0,    -- set once Stripe verifies payouts
+    licenceReminderStage TINYINT     NULL,                  -- most-urgent expiry stage already notified (30/7/1 days, 0 = lapsed)
+    licenceReminderFor   DATE        NULL,                  -- the licenseExpiry that stage was about (renewal re-arms reminders)
     PRIMARY KEY (deliveryPersonnelId),
     UNIQUE KEY uq_delivery_user (userId),
     CONSTRAINT fk_delivery_user FOREIGN KEY (userId) REFERENCES `user`(userId)
@@ -198,7 +200,12 @@ CREATE TABLE courier_change_request (
     licenseNumber       VARCHAR(50)  NOT NULL,
     licenseClass        VARCHAR(60)  NOT NULL,                 -- comma-separated, e.g. 'B2,D'
     licenseExpiry       DATE         NULL,
-    licensePhotoUrl     VARCHAR(255) NULL,
+    licensePhotoUrl     VARCHAR(255) NULL,                     -- physical licence — front
+    licensePhotoBackUrl VARCHAR(255) NULL,                     -- physical licence — back
+    licenseIsDigital    TINYINT(1)   NOT NULL DEFAULT 0,       -- 1 = digital (MyJPJ e-licence) instead of a physical card
+    eLicenseUrl         VARCHAR(255) NULL,                     -- uploaded e-licence file (image/PDF) when digital
+    icPhotoUrl          VARCHAR(255) NULL,                     -- IC photo — front
+    icPhotoBackUrl      VARCHAR(255) NULL,                     -- IC photo — back
     requestStatus       ENUM('Pending','Approved','Rejected') NOT NULL DEFAULT 'Pending',
     reviewNote          VARCHAR(255) NULL,
     reviewedBy          VARCHAR(10)  NULL,

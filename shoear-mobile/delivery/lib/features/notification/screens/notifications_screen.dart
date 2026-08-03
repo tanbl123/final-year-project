@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'package:delivery/features/notification/models/app_notification.dart';
 import 'package:delivery/features/notification/state/notification_provider.dart';
+import 'package:delivery/features/profile/screens/vehicle_licence_screen.dart';
 
 /// The bell: lists the courier's notifications (e.g. vehicle/licence change
 /// outcomes) and lets them mark all read.
@@ -90,7 +91,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       trailing: n.isRead
           ? null
           : Container(width: 10, height: 10, decoration: BoxDecoration(color: theme.colorScheme.primary, shape: BoxShape.circle)),
-      onTap: () => context.read<NotificationProvider>().markRead(n.id),
+      onTap: () {
+        context.read<NotificationProvider>().markRead(n.id);
+        // A licence-expiry reminder deep-links to where the courier renews it.
+        if (n.type == 'licence') {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const VehicleLicenceScreen()),
+          );
+        }
+      },
     );
   }
 
@@ -99,6 +108,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         'delivery' => Icons.local_shipping_outlined,
         'payment' => Icons.payments_outlined,
         'payout' => Icons.account_balance_wallet_outlined,
+        'licence' => Icons.badge_outlined,
         _ => Icons.notifications_outlined,
       };
 

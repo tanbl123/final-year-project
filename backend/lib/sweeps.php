@@ -170,6 +170,67 @@ function notifyCourierNewAssignment(PDO $pdo, string $deliveryPersonnelId, strin
   }
 }
 
+// Warn couriers as their driving licence nears expiry (and once it lapses) so
+// they renew and re-upload it via Profile → Vehicle & licence before they end up
+// delivering on a lapsed licence. Fires once per urgency stage — 30, 7, 1 days
+// out, then on lapse — per expiry date. Renewing the licence (a new expiry date,
+// applied when an admin approves the change) re-arms the whole cycle. Deduped/
+// re-armed via delivery_personnel.licenceReminderStage + licenceReminderFor.
+function sweepLicenceExpiryReminders(PDO $pdo): int {
+  if (!function_exists('createNotification')) { return 0; }
+  try {
+    $rows = $pdo->query(
+      "SELECT dp.deliveryPersonnelId, dp.userId, dp.licenseExpiry,
+              DATEDIFF(dp.licenseExpiry, CURDATE()) AS daysLeft,
+              dp.licenceReminderStage, dp.licenceReminderFor
+         FROM delivery_personnel dp
+         JOIN `user` u ON u.userId = dp.userId
+        WHERE u.role = 'DeliveryPersonnel' AND u.status = 'Active'
+          AND dp.licenseExpiry IS NOT NULL
+          AND dp.licenseExpiry <= (CURDATE() + INTERVAL 30 DAY)"
+    )->fetchAll();
+  } catch (Throwable $e) {
+    return 0;
+  }
+  $mark = $pdo->prepare(
+    'UPDATE delivery_personnel SET licenceReminderStage = :st, licenceReminderFor = :fr
+      WHERE deliveryPersonnelId = :id'
+  );
+  $sent = 0;
+  foreach ($rows as $r) {
+    $daysLeft = (int) $r['daysLeft'];
+    // Most-urgent threshold reached (smaller = more urgent; 0 = lapsed).
+    $target = $daysLeft <= 0 ? 0 : ($daysLeft <= 1 ? 1 : ($daysLeft <= 7 ? 7 : 30));
+
+    // Same expiry + already notified at an equal-or-more-urgent stage → skip.
+    $sameExpiry = ((string) $r['licenceReminderFor'] === (string) $r['licenseExpiry']);
+    $lastStage  = $r['licenceReminderStage'];
+    if ($sameExpiry && $lastStage !== null && (int) $lastStage <= $target) { continue; }
+
+    [$title, $body] = licenceExpiryCopy($daysLeft);
+    createNotification($pdo, (string) $r['userId'], 'licence', $title, $body);
+    try { $mark->execute(['st' => $target, 'fr' => $r['licenseExpiry'], 'id' => $r['deliveryPersonnelId']]); }
+    catch (Throwable $e) { /* ignore — a repeat next sweep is harmless */ }
+    $sent++;
+  }
+  return $sent;
+}
+
+// Friendly copy for a licence-expiry reminder, keyed on days remaining
+// (<= 0 means it has already lapsed).
+function licenceExpiryCopy(int $daysLeft): array {
+  if ($daysLeft <= 0) {
+    return ['Driving licence expired ⚠️',
+      'Your driving licence has expired. Renew it, then update it in Profile → Vehicle & licence to keep delivering legally.'];
+  }
+  if ($daysLeft <= 1) {
+    return ['Driving licence expires tomorrow',
+      'Your driving licence expires very soon. Renew and re-upload it in Profile → Vehicle & licence.'];
+  }
+  return ['Driving licence expiring soon',
+    "Your driving licence expires in $daysLeft days. Renew and update it in Profile → Vehicle & licence so you can keep delivering."];
+}
+
 // How long a paid Standard (3PL) parcel may sit unshipped before the supplier is
 // auto-reminded, and how often to re-nudge while it's still not shipped. Tunable.
 const SHIP_REMINDER_AFTER_HOURS  = 48;
@@ -256,6 +317,7 @@ function runNotificationSweeps(PDO $pdo): array {
     'abandonedCarts'   => sweepAbandonedCarts($pdo),
     'reviewReminders'  => sweepReviewReminders($pdo),
     'redispatched'     => sweepRedispatchDeliveries($pdo),
+    'licenceExpiry'    => sweepLicenceExpiryReminders($pdo),
     'autoCancelled'    => $cancelled,
   ];
 }
