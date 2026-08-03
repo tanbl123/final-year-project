@@ -11,7 +11,8 @@ function appealUserForToken(PDO $pdo, string $userId, string $token): ?array {
   $stmt = $pdo->prepare('SELECT userId, fullName, status, rejectionReason, appealToken FROM `user` WHERE userId = :id');
   $stmt->execute(['id' => $userId]);
   $u = $stmt->fetch();
-  if (!$u || empty($u['appealToken']) || !password_verify($token, (string) $u['appealToken'])) {
+  // Constant-time compare against the stable stored token.
+  if (!$u || empty($u['appealToken']) || !hash_equals((string) $u['appealToken'], $token)) {
     return null;
   }
   return $u;

@@ -972,7 +972,7 @@ function handleLogin(PDO $pdo, string $secret): void {
   // look up by email OR username (prepared statement → safe from SQL injection).
   // Two distinct placeholders: with emulation off, PDO won't reuse one twice.
   $stmt = $pdo->prepare(
-    'SELECT userId, email, password, role, fullName, phoneNumber, status, rejectionReason, mustChangePassword
+    'SELECT userId, email, password, role, fullName, phoneNumber, status, rejectionReason, appealToken, mustChangePassword
        FROM `user` WHERE email = :email OR username = :username'
   );
   $stmt->execute(['email' => $identifier, 'username' => $identifier]);
@@ -1002,14 +1002,18 @@ function handleLogin(PDO $pdo, string $secret): void {
   $isRejectedCourier  = $user['role'] === 'DeliveryPersonnel' && $user['status'] === 'Rejected';
   if (!$isActive && !$isRejectedSupplier && !$isRejectedCourier) {
     if ($user['status'] === 'Suspended') {
-      // Surface WHY, and — since they've proven the password — mint a fresh
-      // appeal token so the login page can offer a working "Appeal" link (also
-      // covers the case where the suspension email wasn't delivered).
-      $rawToken = bin2hex(random_bytes(32));
-      try {
-        $pdo->prepare('UPDATE `user` SET appealToken = :tok WHERE userId = :id')
-            ->execute(['tok' => password_hash($rawToken, PASSWORD_BCRYPT), 'id' => $user['userId']]);
-      } catch (Throwable $e) { $rawToken = ''; }
+      // Surface WHY + offer a working "Appeal" link. Reuse the STABLE appeal
+      // token set at suspension (so the email link and every login link stay
+      // valid); only mint one if it's somehow missing. Stored as-is because it
+      // only authorises viewing the reason + submitting an appeal.
+      $rawToken = (string) ($user['appealToken'] ?? '');
+      if ($rawToken === '') {
+        $rawToken = bin2hex(random_bytes(32));
+        try {
+          $pdo->prepare('UPDATE `user` SET appealToken = :tok WHERE userId = :id')
+              ->execute(['tok' => $rawToken, 'id' => $user['userId']]);
+        } catch (Throwable $e) { $rawToken = ''; }
+      }
       $msg = !empty($user['rejectionReason'])
         ? 'Your account has been suspended: ' . $user['rejectionReason']
         : 'Your account has been suspended.';

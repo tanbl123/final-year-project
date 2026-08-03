@@ -390,10 +390,11 @@ function handleSetUserStatus(PDO $pdo, array $auth, string $userId, array $confi
     }
     if (mb_strlen($reason) > 255) { $reason = mb_substr($reason, 0, 255); }
 
+    // Store the token as-is (a stable appeal token, reused by the login page)
+    // — it only authorises viewing the reason + submitting an appeal.
     $rawToken = bin2hex(random_bytes(32));
     $pdo->prepare('UPDATE `user` SET status = :s, rejectionReason = :r, appealToken = :tok WHERE userId = :id')
-        ->execute(['s' => $status, 'r' => $reason,
-                   'tok' => password_hash($rawToken, PASSWORD_BCRYPT), 'id' => $userId]);
+        ->execute(['s' => $status, 'r' => $reason, 'tok' => $rawToken, 'id' => $userId]);
 
     $emailSent = false;
     if (function_exists('mailConfigured') && mailConfigured($config) && function_exists('sendAccountSuspendedEmail')) {
