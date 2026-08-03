@@ -326,7 +326,7 @@ function handleGetUser(PDO $pdo, string $userId): void {
   } elseif ($u['role'] === 'DeliveryPersonnel') {
     $p = $pdo->prepare('SELECT deliveryPersonnelId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate FROM delivery_personnel WHERE userId = :id');
   } elseif ($u['role'] === 'ArSpecialist') {
-    $p = $pdo->prepare('SELECT arSpecialistId, icNumber, position, department FROM ar_specialist WHERE userId = :id');
+    $p = $pdo->prepare('SELECT arSpecialistId, icNumber FROM ar_specialist WHERE userId = :id');
   } else {
     $p = null;
   }
@@ -397,10 +397,8 @@ function handleCreateStaff(PDO $pdo, array $config): void {
   $fullName = trim($body['fullName'] ?? '');
   $role     = trim($body['role'] ?? 'ArSpecialist');
   // optional identity fields (make the account clearly a real person)
-  $phone      = trim($body['phoneNumber'] ?? '');
-  $icNumber   = trim($body['icNumber'] ?? '');
-  $position   = trim($body['position'] ?? '');
-  $department = trim($body['department'] ?? '');
+  $phone    = trim($body['phoneNumber'] ?? '');
+  $icNumber = trim($body['icNumber'] ?? '');
 
   // Only AR Specialist is provisionable here for now (guard against creating
   // Admins or anything else through this endpoint).
@@ -419,9 +417,6 @@ function handleCreateStaff(PDO $pdo, array $config): void {
   }
   if ($icNumber !== '' && mb_strlen($icNumber) > 20) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'IC / NRIC number must be 20 characters or fewer.']);
-  }
-  if (mb_strlen($position) > 80 || mb_strlen($department) > 80) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Position and department must be 80 characters or fewer.']);
   }
   // We email the set-password link, so email must be configured.
   if (!mailConfigured($config)) {
@@ -458,13 +453,10 @@ function handleCreateStaff(PDO $pdo, array $config): void {
                 'tok' => password_hash($token, PASSWORD_BCRYPT)]);
 
     $pdo->prepare(
-      'INSERT INTO ar_specialist (arSpecialistId, userId, icNumber, position, department)
-       VALUES (:aid, :uid, :ic, :pos, :dep)'
+      'INSERT INTO ar_specialist (arSpecialistId, userId, icNumber) VALUES (:aid, :uid, :ic)'
     )->execute([
       'aid' => $arsId, 'uid' => $userId,
       'ic'  => $icNumber !== '' ? $icNumber : null,
-      'pos' => $position !== '' ? $position : null,
-      'dep' => $department !== '' ? $department : null,
     ]);
 
     $pdo->commit();

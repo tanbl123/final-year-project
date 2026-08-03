@@ -18,9 +18,9 @@ const STATUS_COLORS = {
 };
 const roleLabel = (r) => (r === 'DeliveryPersonnel' ? 'Delivery' : r === 'ArSpecialist' ? 'AR Specialist' : r);
 
-// username auto-generated; password set by the staff member via link. Phone / IC
-// / position / department are optional identity fields.
-const EMPTY_STAFF = { fullName: '', email: '', phoneNumber: '', icNumber: '', position: '', department: '' };
+// username auto-generated; password set by the staff member via link. Phone and
+// IC / NRIC are optional identity fields.
+const EMPTY_STAFF = { fullName: '', email: '', phoneNumber: '', icNumber: '' };
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const NAME_MAX = 120;                       // user.fullName VARCHAR(120)
 
@@ -433,10 +433,6 @@ function AdminUsersPage() {
                         <dd className="col-8">{detail.profile.arSpecialistId}</dd>
                         <dt className="col-4">IC / NRIC</dt>
                         <dd className="col-8">{detail.profile.icNumber || <span className="text-muted">—</span>}</dd>
-                        <dt className="col-4">Position</dt>
-                        <dd className="col-8">{detail.profile.position || <span className="text-muted">—</span>}</dd>
-                        <dt className="col-4">Department</dt>
-                        <dd className="col-8">{detail.profile.department || <span className="text-muted">—</span>}</dd>
                       </>
                     )}
                     <dt className="col-4">Joined</dt>
@@ -503,18 +499,6 @@ function AdminUsersPage() {
                     <ClearableInput value={createForm.icNumber} placeholder="e.g. 990101-14-5678"
                       onChange={(e) => setStaffField('icNumber', e.target.value)}
                       onClear={() => setStaffField('icNumber', '')} />
-                  </div>
-                  <div className="col-sm-6 mb-1">
-                    <label className="form-label small mb-1">Position / title</label>
-                    <ClearableInput value={createForm.position} placeholder="e.g. AR Content Specialist"
-                      onChange={(e) => setStaffField('position', e.target.value)}
-                      onClear={() => setStaffField('position', '')} />
-                  </div>
-                  <div className="col-sm-6 mb-1">
-                    <label className="form-label small mb-1">Department</label>
-                    <ClearableInput value={createForm.department} placeholder="e.g. AR Studio"
-                      onChange={(e) => setStaffField('department', e.target.value)}
-                      onClear={() => setStaffField('department', '')} />
                   </div>
                 </div>
               </div>
