@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import Toast from '../../../components/Toast';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import StarRating from '../../../components/StarRating';
-import { getFlags, resolveFlag, refreshBadges } from '../adminService';
+import UserDetailModal from '../users/UserDetailModal';
+import { getFlags, getUser, resolveFlag, refreshBadges } from '../adminService';
 
 // Reactive moderation queue: customer-reported reviews/avatars. The admin views
 // the reported user's avatar and can remove it, suspend the user, or dismiss.
@@ -14,6 +14,24 @@ function AdminFlagsPage() {
   const [notice, setNotice] = useState('');
   const [busyId, setBusyId] = useState('');
   const [confirm, setConfirm] = useState(null);   // { flag, action, title, message, color }
+  const [detail, setDetail] = useState(null);     // user shown in the in-place detail popup
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  // View a user's details WITHOUT leaving the moderation queue — open the shared
+  // detail modal right here so the admin can decide on the flag afterwards.
+  async function viewUser(userId) {
+    if (!userId) return;
+    setDetailLoading(true);
+    setDetail({});
+    try {
+      setDetail(await getUser(userId));
+    } catch (err) {
+      setError(err.message);
+      setDetail(null);
+    } finally {
+      setDetailLoading(false);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -86,7 +104,8 @@ function AdminFlagsPage() {
                   <div className="text-muted small text-uppercase" style={{ letterSpacing: '.03em' }}>Reported user</div>
                   <div className="fw-semibold">
                     {f.targetUserId
-                      ? <Link to={`/admin/users?open=${f.targetUserId}`} title="View user details">{f.targetName}</Link>
+                      ? <button type="button" className="btn btn-link p-0 fw-semibold align-baseline text-decoration-none"
+                          onClick={() => viewUser(f.targetUserId)} title="View user details">{f.targetName}</button>
                       : f.targetName}
                     {f.targetRole && <span className="text-muted small ms-2">{f.targetRole}</span>}
                     <span className={`badge ms-2 text-bg-${f.targetStatus === 'Suspended' ? 'secondary' : 'success'}`}>{f.targetStatus}</span>
@@ -114,7 +133,8 @@ function AdminFlagsPage() {
                   <div className="text-muted small mt-2">
                     Reported by{' '}
                     {f.reporterUserId
-                      ? <Link to={`/admin/users?open=${f.reporterUserId}`} className="fw-semibold" title="View user details">{f.reporterName}</Link>
+                      ? <button type="button" className="btn btn-link p-0 fw-semibold align-baseline text-decoration-none"
+                          onClick={() => viewUser(f.reporterUserId)} title="View user details">{f.reporterName}</button>
                       : <strong>{f.reporterName}</strong>}
                     {f.reporterEmail && <> · {f.reporterEmail}</>}
                     {f.reporterRole && <> · {f.reporterRole}</>}
@@ -162,6 +182,9 @@ function AdminFlagsPage() {
         onCancel={() => setConfirm(null)}
         onConfirm={() => { const c = confirm; setConfirm(null); if (c) act(c.flag, c.action); }}
       />
+
+      {/* in-place user detail — keeps the admin in the moderation queue */}
+      <UserDetailModal detail={detail} loading={detailLoading} onClose={() => setDetail(null)} />
     </div>
   );
 }
