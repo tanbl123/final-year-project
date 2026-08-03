@@ -2,14 +2,12 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import PlatformSalesReport from './PlatformSalesReport';
 import SupplierPerformanceReport from './SupplierPerformanceReport';
-import AdminOrderReport from './AdminOrderReport';
 import AdminRefundReport from './AdminRefundReport';
 
 // Platform-operator reports, grouped under one tabbed section.
 const TABS = [
   { key: 'sales',     label: '💰 Platform sales',     Component: PlatformSalesReport },
   { key: 'suppliers', label: '🏪 Supplier performance', Component: SupplierPerformanceReport },
-  { key: 'orders',    label: '🚚 Orders & fulfilment', Component: AdminOrderReport },
   { key: 'refunds',   label: '💸 Refunds',            Component: AdminRefundReport },
 ];
 
@@ -41,7 +39,7 @@ function AdminReportsPage() {
   return (
     <div className="container py-4 text-start">
       <h1 className="mb-1">📈 Platform Reports</h1>
-      <p className="text-muted">Marketplace-wide sales, suppliers, fulfilment and refunds.</p>
+      <p className="text-muted">Marketplace-wide sales, suppliers and refunds.</p>
 
       <ul className="nav nav-tabs mb-4 flex-nowrap overflow-auto">
         {TABS.map((t) => (

@@ -23,11 +23,6 @@ export function getInventoryReport() {
   return apiGet('/reports/inventory', getToken());
 }
 
-// Order & fulfilment — this supplier's parcels by status + on-time rate.
-export function getFulfilmentReport(range = {}) {
-  return apiGet(`/reports/orders${periodQs(range)}`, getToken());
-}
-
 // Refunds raised on orders containing this supplier's products.
 export function getRefundReport(range = {}) {
   return apiGet(`/reports/refunds${periodQs(range)}`, getToken());

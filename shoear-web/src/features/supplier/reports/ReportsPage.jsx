@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 import SalesReport from './SalesReport';
 import ProductPerformanceReport from './ProductPerformanceReport';
 import InventoryReport from './InventoryReport';
-import FulfilmentReport from './FulfilmentReport';
 import RefundReport from './RefundReport';
 
 // Supplier reports, grouped under one tabbed section (like Shopee/Lazada's
@@ -13,7 +12,6 @@ const TABS = [
   { key: 'sales',     label: '📊 Sales',           Component: SalesReport },
   { key: 'products',  label: '🏆 Product performance', Component: ProductPerformanceReport },
   { key: 'inventory', label: '📦 Inventory',        Component: InventoryReport },
-  { key: 'orders',    label: '🚚 Order & fulfilment', Component: FulfilmentReport },
   { key: 'refunds',   label: '💸 Refunds',          Component: RefundReport },
 ];
 
@@ -34,7 +32,7 @@ function ReportsPage() {
   return (
     <div className="container py-4 text-start">
       <h1 className="mb-1">📈 Reports</h1>
-      <p className="text-muted">Insights into your sales, products, inventory, fulfilment and refunds.</p>
+      <p className="text-muted">Insights into your sales, products, inventory and refunds.</p>
 
       <ul className="nav nav-tabs mb-4 flex-nowrap overflow-auto">
         {TABS.map((t) => (

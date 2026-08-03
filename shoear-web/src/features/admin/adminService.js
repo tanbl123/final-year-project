@@ -366,11 +366,6 @@ export function getAdminSupplierReport(range = {}) {
   return apiGet(`/admin/reports/suppliers${reportQs(range)}`, getToken());
 }
 
-// Platform-wide orders by status + on-time delivery rate.
-export function getAdminOrderReport(range = {}) {
-  return apiGet(`/admin/reports/orders${reportQs(range)}`, getToken());
-}
-
 // Platform-wide refunds by status + refund rate.
 export function getAdminRefundReport(range = {}) {
   return apiGet(`/admin/reports/refunds${reportQs(range)}`, getToken());
