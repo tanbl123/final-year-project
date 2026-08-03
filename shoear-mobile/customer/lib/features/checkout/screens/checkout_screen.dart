@@ -224,7 +224,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     // Malaysian phone: local (0XX-XXXXXXX, incl. landlines) or international
     // (+60.../60...). Mobile and home numbers both start with 0 locally.
     if (!RegExp(r'^(0\d{8,10}|\+?60\d{8,10})$').hasMatch(v)) {
-      return 'Enter a valid Malaysian phone number, e.g. 0123456789.';
+      return 'Enter a valid phone number.';
     }
     return null;
   }
