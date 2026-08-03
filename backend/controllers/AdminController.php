@@ -356,7 +356,7 @@ function handleSetUserStatus(PDO $pdo, array $auth, string $userId): void {
     sendJson(409, false, null, ['code' => 'SELF', 'message' => 'You cannot change your own account status.']);
   }
 
-  $stmt = $pdo->prepare('SELECT role FROM `user` WHERE userId = :id');
+  $stmt = $pdo->prepare('SELECT role, status FROM `user` WHERE userId = :id');
   $stmt->execute(['id' => $userId]);
   $target = $stmt->fetch();
   if (!$target) {
@@ -364,6 +364,20 @@ function handleSetUserStatus(PDO $pdo, array $auth, string $userId): void {
   }
   if ($target['role'] === 'Admin') {
     sendJson(403, false, null, ['code' => 'FORBIDDEN', 'message' => 'Admin accounts cannot be changed here.']);
+  }
+
+  // Only allow sensible transitions, so e.g. a Rejected/Banned applicant can't be
+  // flipped to Active/Suspended by mistake (they resubmit + get re-reviewed).
+  $allowedFrom = [
+    'Active'    => ['Pending', 'Suspended'],                          // approve a pending applicant, or un-suspend
+    'Suspended' => ['Active'],                                        // suspend an active account
+    'Rejected'  => ['Pending'],                                       // reject a pending applicant
+    'Deleted'   => ['Pending', 'Active', 'Suspended', 'Rejected', 'Banned'], // soft-delete anything live
+  ];
+  $current = $target['status'];
+  if (!in_array($current, $allowedFrom[$status] ?? [], true)) {
+    sendJson(409, false, null, ['code' => 'INVALID_TRANSITION',
+      'message' => "Can't change a {$current} account to {$status} here."]);
   }
 
   $upd = $pdo->prepare('UPDATE `user` SET status = :s WHERE userId = :id');

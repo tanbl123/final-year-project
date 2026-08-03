@@ -282,7 +282,10 @@ function AdminUsersPage() {
     } else if (u.status === 'Active') {
       btns.push(<button key="sp" className="btn btn-outline-secondary btn-sm" disabled={busy}
         onClick={() => askConfirm(u, 'Suspended', 'Suspend')}>Suspend</button>);
-    } else if (u.status === 'Suspended' || u.status === 'Rejected') {
+    } else if (u.status === 'Suspended') {
+      // only a suspended account can be reactivated. A Rejected/Banned applicant
+      // is a registration-review state — they resubmit (→ Pending) and are
+      // re-reviewed on the Couriers/Suppliers page, not force-activated here.
       btns.push(<button key="re" className="btn btn-success btn-sm" disabled={busy}
         onClick={() => changeStatus(u, 'Active')}>Reactivate</button>);
     }
