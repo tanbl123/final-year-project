@@ -892,17 +892,40 @@ class _ImageCarouselState extends State<_ImageCarousel> {
     super.dispose();
   }
 
+  // Open the tapped image full-screen (zoomable, swipeable).
+  void _openFullscreen(int index) {
+    Navigator.of(context).push(MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => _FullscreenGallery(images: widget.images, initialIndex: index),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final images = widget.images;
-    if (images.length == 1) return ProductImage(url: images.first);
+    if (images.length == 1) {
+      return GestureDetector(onTap: () => _openFullscreen(0), child: ProductImage(url: images.first));
+    }
 
     return Stack(
       children: [
         PageView(
           controller: _controller,
           onPageChanged: (i) => setState(() => _page = i),
-          children: [for (final url in images) ProductImage(url: url)],
+          children: [
+            for (int i = 0; i < images.length; i++)
+              GestureDetector(onTap: () => _openFullscreen(i), child: ProductImage(url: images[i])),
+          ],
+        ),
+        // hint that the image can be opened full-size
+        Positioned(
+          bottom: 12,
+          right: 12,
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.zoom_out_map, color: Colors.white, size: 18),
+          ),
         ),
         Positioned(
           top: 12,
@@ -941,6 +964,66 @@ class _ImageCarouselState extends State<_ImageCarousel> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// Full-screen image viewer: shows the product's photos at full size on a black
+// background, with pinch / double-tap-to-zoom + pan (InteractiveViewer) and
+// swipe between images.
+class _FullscreenGallery extends StatefulWidget {
+  final List<String> images;
+  final int initialIndex;
+  const _FullscreenGallery({required this.images, this.initialIndex = 0});
+
+  @override
+  State<_FullscreenGallery> createState() => _FullscreenGalleryState();
+}
+
+class _FullscreenGalleryState extends State<_FullscreenGallery> {
+  late final PageController _pc = PageController(initialPage: widget.initialIndex);
+  late int _page = widget.initialIndex;
+
+  @override
+  void dispose() {
+    _pc.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: widget.images.length > 1
+            ? Text('${_page + 1} / ${widget.images.length}',
+                style: const TextStyle(color: Colors.white, fontSize: 16))
+            : null,
+      ),
+      body: PageView(
+        controller: _pc,
+        onPageChanged: (i) => setState(() => _page = i),
+        children: [
+          for (final url in widget.images)
+            InteractiveViewer(
+              minScale: 1,
+              maxScale: 5,
+              child: Center(
+                child: Image.network(
+                  url,
+                  fit: BoxFit.contain,
+                  loadingBuilder: (_, child, p) =>
+                      p == null ? child : const Center(child: CircularProgressIndicator(color: Colors.white)),
+                  errorBuilder: (_, __, ___) =>
+                      const Icon(Icons.broken_image_outlined, color: Colors.white70, size: 48),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
