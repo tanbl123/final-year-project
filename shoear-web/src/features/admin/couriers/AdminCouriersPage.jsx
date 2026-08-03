@@ -23,15 +23,25 @@ function ageFrom(dateStr) {
 
 // A labelled photo that opens full-size in a new tab when clicked.
 function Photo({ label, url }) {
+  const isPdf = !!url && /\.pdf(\?|$)/i.test(url);
   return (
     <div>
       <div className="text-muted small mb-1">{label}</div>
       {url ? (
-        <a href={url} target="_blank" rel="noreferrer" title="Open full size">
-          <img src={url} alt={label}
-            style={{ width: '100%', height: 140, objectFit: 'cover' }}
-            className="border rounded" />
-        </a>
+        isPdf ? (
+          <a href={url} target="_blank" rel="noreferrer" title="Open PDF"
+            className="border rounded bg-light d-flex flex-column align-items-center justify-content-center text-decoration-none"
+            style={{ height: 140 }}>
+            <span style={{ fontSize: 28 }}>📄</span>
+            <span className="small">Open PDF</span>
+          </a>
+        ) : (
+          <a href={url} target="_blank" rel="noreferrer" title="Open full size">
+            <img src={url} alt={label}
+              style={{ width: '100%', height: 140, objectFit: 'cover' }}
+              className="border rounded" />
+          </a>
+        )
       ) : (
         <div className="border rounded bg-light d-flex align-items-center justify-content-center text-muted small"
           style={{ height: 140 }}>not provided</div>
@@ -271,8 +281,16 @@ function AdminCouriersPage() {
                       <h6 className="text-uppercase text-muted small">Documents</h6>
                       <div className="d-flex flex-column gap-3">
                         <Photo label="Profile photo" url={viewing.avatarUrl} />
-                        <Photo label="IC photo" url={viewing.icPhotoUrl} />
-                        <Photo label="Driving licence photo" url={viewing.licensePhotoUrl} />
+                        <Photo label="IC photo (front)" url={viewing.icPhotoUrl} />
+                        <Photo label="IC photo (back)" url={viewing.icPhotoBackUrl} />
+                        {Number(viewing.licenseIsDigital) === 1 ? (
+                          <Photo label="Digital licence (e-licence)" url={viewing.eLicenseUrl} />
+                        ) : (
+                          <>
+                            <Photo label="Driving licence (front)" url={viewing.licensePhotoUrl} />
+                            <Photo label="Driving licence (back)" url={viewing.licensePhotoBackUrl} />
+                          </>
+                        )}
                       </div>
                       <div className="form-text mt-1">Click a photo to open it full size.</div>
                     </div>

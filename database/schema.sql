@@ -158,11 +158,15 @@ CREATE TABLE delivery_personnel (
     vehicleModel        VARCHAR(50) NOT NULL DEFAULT '',
     vehiclePlate        VARCHAR(20) NOT NULL DEFAULT '',
     licenseNumber       VARCHAR(50)  NOT NULL DEFAULT '',   -- driving licence no.
-    licensePhotoUrl     VARCHAR(255) NULL,                  -- photo of the licence
+    licensePhotoUrl     VARCHAR(255) NULL,                  -- physical licence — front
+    licensePhotoBackUrl VARCHAR(255) NULL,                  -- physical licence — back
+    licenseIsDigital    TINYINT(1)   NOT NULL DEFAULT 0,    -- 1 = digital (MyJPJ e-licence) instead of a physical card
+    eLicenseUrl         VARCHAR(255) NULL,                  -- uploaded e-licence file (image/PDF) when digital
     licenseClass        VARCHAR(60)  NOT NULL DEFAULT '',   -- comma-separated classes, e.g. 'B2,D'
     licenseExpiry       DATE         NULL,                  -- licence expiry date
     icNumber            VARCHAR(20)  NOT NULL DEFAULT '',   -- IC / identity no.
-    icPhotoUrl          VARCHAR(255) NULL,                  -- photo of the IC
+    icPhotoUrl          VARCHAR(255) NULL,                  -- IC photo — front
+    icPhotoBackUrl      VARCHAR(255) NULL,                  -- IC photo — back
     dateOfBirth         DATE         NULL,                  -- for the 18+ eligibility check
     termsAcceptedAt     DATETIME     NULL,                  -- when PDPA/T&C consent was given
     coverageZones       VARCHAR(255) NOT NULL DEFAULT '',   -- comma-separated states the courier delivers to

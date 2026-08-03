@@ -435,6 +435,12 @@ function validateCourierKyc(array $body): array {
   $dateOfBirth     = trim($body['dateOfBirth'] ?? '');
   $termsAccepted   = ($body['termsAccepted'] ?? false) === true;
   $avatarUrl       = trim($body['avatarUrl'] ?? '');
+  // extra KYC documents: IC back, physical-licence back, and the digital
+  // e-licence alternative (MyJPJ) with its flag.
+  $icPhotoBackUrl      = trim($body['icPhotoBackUrl'] ?? '');
+  $licensePhotoBackUrl = trim($body['licensePhotoBackUrl'] ?? '');
+  $licenseIsDigital    = ($body['licenseIsDigital'] ?? false) === true;
+  $eLicenseUrl         = trim($body['eLicenseUrl'] ?? '');
   $rawZones = $body['coverageZones'] ?? [];
   if (is_string($rawZones)) { $rawZones = explode(',', $rawZones); }
   $coverageZones = is_array($rawZones)
@@ -452,8 +458,20 @@ function validateCourierKyc(array $body): array {
   if (mb_strlen($vehiclePlate) < 3 || !preg_match('/^[A-Za-z0-9 \-]+$/', $vehiclePlate)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Enter a valid plate number (letters, numbers, spaces or hyphens).']);
   }
-  if ($licenseNumber === '' || $licensePhotoUrl === '' || $icNumber === '' || $icPhotoUrl === '' || $avatarUrl === '') {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Driving licence, IC (both number + photo) and a profile photo are all required.']);
+  if ($licenseNumber === '' || $icNumber === '' || $avatarUrl === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Driving licence number, IC number and a profile photo are all required.']);
+  }
+  // IC: both sides required.
+  if ($icPhotoUrl === '' || $icPhotoBackUrl === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Both the front and back of your IC photo are required.']);
+  }
+  // Licence: a digital e-licence file, OR both sides of the physical card.
+  if ($licenseIsDigital) {
+    if ($eLicenseUrl === '') {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please upload your digital driving licence (e-licence) file.']);
+    }
+  } elseif ($licensePhotoUrl === '' || $licensePhotoBackUrl === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Both the front and back of your driving licence photo are required.']);
   }
   if (mb_strlen($licenseNumber) > 20) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Licence number is too long (max 20 characters).']);
@@ -511,8 +529,11 @@ function validateCourierKyc(array $body): array {
     'vehicleType' => $vehicleType, 'vehicleBrand' => $vehicleBrand,
     'vehicleModel' => $vehicleModel, 'vehiclePlate' => $vehiclePlate,
     'licenseNumber' => $licenseNumber, 'licensePhotoUrl' => $licensePhotoUrl,
+    'licensePhotoBackUrl' => $licensePhotoBackUrl,
+    'licenseIsDigital' => $licenseIsDigital ? 1 : 0, 'eLicenseUrl' => $eLicenseUrl,
     'licenseClass' => implode(',', $licenseClasses), 'licenseExpiry' => $licenseExpiry,
-    'icNumber' => $icNumber, 'icPhotoUrl' => $icPhotoUrl, 'dateOfBirth' => $dateOfBirth,
+    'icNumber' => $icNumber, 'icPhotoUrl' => $icPhotoUrl, 'icPhotoBackUrl' => $icPhotoBackUrl,
+    'dateOfBirth' => $dateOfBirth,
     'coverageZones' => implode(',', $coverageZones), 'avatarUrl' => $avatarUrl,
   ];
 }
@@ -543,14 +564,20 @@ function handleResubmitCourierApplication(PDO $pdo, array $auth): void {
     $pdo->prepare(
       'UPDATE delivery_personnel
           SET vehicleType = :vt, vehicleBrand = :vb, vehicleModel = :vm, vehiclePlate = :vp,
-              licenseNumber = :ln, licensePhotoUrl = :lp, licenseClass = :lc, licenseExpiry = :le,
-              icNumber = :ic, icPhotoUrl = :ip, dateOfBirth = :dob, coverageZones = :cz,
+              licenseNumber = :ln, licensePhotoUrl = :lp, licensePhotoBackUrl = :lpb,
+              licenseIsDigital = :lid, eLicenseUrl = :el, licenseClass = :lc, licenseExpiry = :le,
+              icNumber = :ic, icPhotoUrl = :ip, icPhotoBackUrl = :ipb, dateOfBirth = :dob, coverageZones = :cz,
               termsAcceptedAt = NOW()
         WHERE userId = :id'
     )->execute([
       'vt' => $k['vehicleType'], 'vb' => $k['vehicleBrand'], 'vm' => $k['vehicleModel'], 'vp' => $k['vehiclePlate'],
-      'ln' => $k['licenseNumber'], 'lp' => $k['licensePhotoUrl'], 'lc' => $k['licenseClass'], 'le' => $k['licenseExpiry'],
-      'ic' => $k['icNumber'], 'ip' => $k['icPhotoUrl'], 'dob' => $k['dateOfBirth'], 'cz' => $k['coverageZones'],
+      'ln' => $k['licenseNumber'], 'lp' => $k['licensePhotoUrl'] !== '' ? $k['licensePhotoUrl'] : null,
+      'lpb' => $k['licensePhotoBackUrl'] !== '' ? $k['licensePhotoBackUrl'] : null,
+      'lid' => $k['licenseIsDigital'], 'el' => $k['eLicenseUrl'] !== '' ? $k['eLicenseUrl'] : null,
+      'lc' => $k['licenseClass'], 'le' => $k['licenseExpiry'],
+      'ic' => $k['icNumber'], 'ip' => $k['icPhotoUrl'] !== '' ? $k['icPhotoUrl'] : null,
+      'ipb' => $k['icPhotoBackUrl'] !== '' ? $k['icPhotoBackUrl'] : null,
+      'dob' => $k['dateOfBirth'], 'cz' => $k['coverageZones'],
       'id' => $auth['userId'],
     ]);
     $pdo->commit();
@@ -588,6 +615,12 @@ function handleRegisterCourier(PDO $pdo): void {
   $dateOfBirth     = trim($body['dateOfBirth'] ?? '');     // YYYY-MM-DD
   $termsAccepted   = ($body['termsAccepted'] ?? false) === true;
   $avatarUrl       = trim($body['avatarUrl'] ?? '');
+  // extra KYC documents: IC back, physical-licence back, and the digital
+  // e-licence alternative (MyJPJ) with its flag.
+  $icPhotoBackUrl      = trim($body['icPhotoBackUrl'] ?? '');
+  $licensePhotoBackUrl = trim($body['licensePhotoBackUrl'] ?? '');
+  $licenseIsDigital    = ($body['licenseIsDigital'] ?? false) === true;
+  $eLicenseUrl         = trim($body['eLicenseUrl'] ?? '');
   // Coverage zones: states the courier delivers to. Accept an array or a
   // comma-separated string; normalise to a clean, de-duplicated list.
   $rawZones        = $body['coverageZones'] ?? [];
@@ -616,9 +649,20 @@ function handleRegisterCourier(PDO $pdo): void {
   if (!preg_match('/^[A-Za-z0-9 \-]+$/', $vehiclePlate)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Only letters, numbers, spaces or hyphens.']);
   }
-  // KYC required: licence (number + photo), IC (number + photo), profile photo
-  if ($licenseNumber === '' || $licensePhotoUrl === '' || $icNumber === '' || $icPhotoUrl === '' || $avatarUrl === '') {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Driving licence, IC (both number + photo) and a profile photo are all required.']);
+  // KYC required: licence + IC numbers, profile photo; both IC sides; and either
+  // a digital e-licence file or both sides of the physical licence.
+  if ($licenseNumber === '' || $icNumber === '' || $avatarUrl === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Driving licence number, IC number and a profile photo are all required.']);
+  }
+  if ($icPhotoUrl === '' || $icPhotoBackUrl === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Both the front and back of your IC photo are required.']);
+  }
+  if ($licenseIsDigital) {
+    if ($eLicenseUrl === '') {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Please upload your digital driving licence (e-licence) file.']);
+    }
+  } elseif ($licensePhotoUrl === '' || $licensePhotoBackUrl === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Both the front and back of your driving licence photo are required.']);
   }
   if (mb_strlen($licenseNumber) > 20) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Licence number is too long (max 20 characters).']);
@@ -734,11 +778,16 @@ function handleRegisterCourier(PDO $pdo): void {
     )->execute(['id' => $userId, 'un' => $username, 'pw' => $hash, 'em' => $email, 'fn' => $fullName, 'ph' => $phoneNumber, 'av' => $avatarUrl !== '' ? $avatarUrl : null]);
 
     $deliveryPersonnelId = nextId($pdo, 'delivery_personnel', 'deliveryPersonnelId', 'DEL');
-    $pdo->prepare('INSERT INTO delivery_personnel (deliveryPersonnelId, userId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate, licenseNumber, licensePhotoUrl, licenseClass, licenseExpiry, icNumber, icPhotoUrl, dateOfBirth, termsAcceptedAt, coverageZones)
-                   VALUES (:did, :uid, :vt, :vb, :vm, :vp, :ln, :lp, :lc, :le, :ic, :ip, :dob, NOW(), :cz)')
+    $pdo->prepare('INSERT INTO delivery_personnel (deliveryPersonnelId, userId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate, licenseNumber, licensePhotoUrl, licensePhotoBackUrl, licenseIsDigital, eLicenseUrl, licenseClass, licenseExpiry, icNumber, icPhotoUrl, icPhotoBackUrl, dateOfBirth, termsAcceptedAt, coverageZones)
+                   VALUES (:did, :uid, :vt, :vb, :vm, :vp, :ln, :lp, :lpb, :lid, :el, :lc, :le, :ic, :ip, :ipb, :dob, NOW(), :cz)')
         ->execute(['did' => $deliveryPersonnelId, 'uid' => $userId, 'vt' => $vehicleType, 'vb' => $vehicleBrand, 'vm' => $vehicleModel, 'vp' => $vehiclePlate,
-                   'ln' => $licenseNumber, 'lp' => $licensePhotoUrl, 'lc' => implode(',', $licenseClasses), 'le' => $licenseExpiry,
-                   'ic' => $icNumber, 'ip' => $icPhotoUrl, 'dob' => $dateOfBirth, 'cz' => implode(',', $coverageZones)]);
+                   'ln' => $licenseNumber, 'lp' => $licensePhotoUrl !== '' ? $licensePhotoUrl : null,
+                   'lpb' => $licensePhotoBackUrl !== '' ? $licensePhotoBackUrl : null,
+                   'lid' => $licenseIsDigital ? 1 : 0, 'el' => $eLicenseUrl !== '' ? $eLicenseUrl : null,
+                   'lc' => implode(',', $licenseClasses), 'le' => $licenseExpiry,
+                   'ic' => $icNumber, 'ip' => $icPhotoUrl !== '' ? $icPhotoUrl : null,
+                   'ipb' => $icPhotoBackUrl !== '' ? $icPhotoBackUrl : null,
+                   'dob' => $dateOfBirth, 'cz' => implode(',', $coverageZones)]);
 
     $pdo->commit();
   } catch (Throwable $e) {
