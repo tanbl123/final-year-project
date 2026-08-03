@@ -141,7 +141,14 @@ function AdminSupplierPayoutsPage() {
                           ? <span className="text-warning">Onboarding incomplete</span>
                           : <span className="text-muted">Not connected</span>}
                     </td>
-                    <td className="text-end fw-semibold">{fmt(s.pendingBalance)}</td>
+                    <td className="text-end fw-semibold">
+                      {fmt(s.pendingBalance)}
+                      {!!s.adjustments && s.adjustments !== 0 && (
+                        <div className={'small ' + (s.adjustments < 0 ? 'text-danger' : 'text-success')}>
+                          incl. {fmt(s.adjustments)} adj.
+                        </div>
+                      )}
+                    </td>
                     <td className="text-end">{s.pendingOrders}</td>
                     <td className="text-end text-muted">{fmt(s.lifetimePaid)}</td>
                     <td className="text-end text-nowrap">

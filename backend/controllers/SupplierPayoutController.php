@@ -83,12 +83,79 @@ function supplierPayableRows(PDO $pdo, ?string $supplierId = null): array {
   return $out;
 }
 
-// A supplier's payable balance (net of all payable slices) + the order count.
+// Outstanding (unsettled) ledger balance for a supplier — signed. Negative means
+// the supplier owes (e.g. a refund clawed back after they were already paid).
+function supplierLedgerBalance(PDO $pdo, string $supplierId): float {
+  $stmt = $pdo->prepare(
+    "SELECT COALESCE(SUM(amount), 0) FROM supplier_ledger
+      WHERE supplierId = :sid AND settledByPayoutId IS NULL"
+  );
+  $stmt->execute(['sid' => $supplierId]);
+  return round((float) $stmt->fetchColumn(), 2);
+}
+
+// A supplier's payable balance: the net of all payable order slices PLUS any
+// outstanding ledger adjustments (clawbacks/manual adjustments).
 function supplierBalance(PDO $pdo, string $supplierId): array {
   $rows = supplierPayableRows($pdo, $supplierId);
-  $bal = 0.0;
-  foreach ($rows as $r) { $bal += $r['net']; }
-  return ['balance' => round($bal, 2), 'orders' => count($rows), 'rows' => $rows];
+  $payable = 0.0;
+  foreach ($rows as $r) { $payable += $r['net']; }
+  $ledger = supplierLedgerBalance($pdo, $supplierId);
+  return [
+    'balance' => round($payable + $ledger, 2),
+    'payable' => round($payable, 2),
+    'ledger'  => $ledger,
+    'orders'  => count($rows),
+    'rows'    => $rows,
+  ];
+}
+
+// Record refund clawbacks when a refund lands on an order a supplier was ALREADY
+// paid for (the per-order payable set can't reduce an already-paid order, so we
+// post a negative ledger entry that nets against the supplier's next payout).
+// Only affects suppliers with a 'Paid' payout for the order; not-yet-paid orders
+// are handled by the refund reducing their payable net directly. Best-effort:
+// called after a refund completes. $refundAmount is the amount refunded in THIS
+// step (partial or full).
+function recordPostPayoutRefundClawback(PDO $pdo, string $orderId, float $refundAmount): void {
+  if ($refundAmount <= 0) { return; }
+  $rate    = activeCommissionRate($pdo);
+  $sstRate = serviceTaxRate();
+  // net kept per RM of sale = 1 − commission − SST-on-commission
+  $netFactor = 1 - ($rate / 100) * (1 + $sstRate / 100);
+
+  // suppliers in this order that already have a Paid payout for it, with their
+  // share of the order by item subtotal
+  $stmt = $pdo->prepare(
+    "SELECT p.supplierId, SUM(oi.orderSubtotal) AS supplierSub, ot.orderSub
+       FROM order_item oi
+       JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+       JOIN product p          ON p.productId = pv.productId
+       JOIN (SELECT orderId, SUM(orderSubtotal) AS orderSub FROM order_item GROUP BY orderId) ot
+         ON ot.orderId = oi.orderId
+      WHERE oi.orderId = :oid
+        AND EXISTS (SELECT 1 FROM supplier_payout sp
+                     WHERE sp.orderId = :oid AND sp.supplierId = p.supplierId AND sp.payoutStatus = 'Paid')
+      GROUP BY p.supplierId, ot.orderSub"
+  );
+  $stmt->execute(['oid' => $orderId]);
+  $ins = $pdo->prepare(
+    "INSERT INTO supplier_ledger (ledgerId, supplierId, orderId, entryType, amount, note)
+     VALUES (:id, :sid, :oid, 'RefundClawback', :amt, :note)"
+  );
+  foreach ($stmt->fetchAll() as $r) {
+    $orderSub = (float) $r['orderSub'];
+    if ($orderSub <= 0) { continue; }
+    $share    = $refundAmount * ((float) $r['supplierSub'] / $orderSub);
+    $clawback = round($share * $netFactor, 2);       // net the supplier keeps on that share
+    if ($clawback <= 0) { continue; }
+    $ins->execute([
+      'id'  => nextId($pdo, 'supplier_ledger', 'ledgerId', 'SLG'),
+      'sid' => $r['supplierId'], 'oid' => $orderId,
+      'amt' => -$clawback,                            // negative: reduces the next payout
+      'note' => 'Refund on an already-paid order (RM ' . number_format($refundAmount, 2) . ' refunded)',
+    ]);
+  }
 }
 
 // Core payout: transfer a supplier's whole payable balance in ONE Stripe transfer,
@@ -102,11 +169,29 @@ function payOutSupplierBalance(PDO $pdo, array $config, array $supplier, bool $i
   if ($bal['balance'] <= 0) {
     throw new RuntimeException('This supplier has no payable balance.');
   }
+  // don't send tiny transfers — carry to the next run instead
+  $minPayout = (float) ($config['supplier_min_payout'] ?? 0);
+  if ($minPayout > 0 && $bal['balance'] < $minPayout) {
+    throw new RuntimeException('Balance RM ' . number_format($bal['balance'], 2)
+      . ' is below the RM ' . number_format($minPayout, 2) . ' minimum payout — it carries to the next run.');
+  }
 
   $cents = (int) round($bal['balance'] * 100);
   $auto  = $isAuto ? 1 : 0;
   // one transfer_group id shared by every supplier_payout row in this run
   $group = nextId($pdo, 'supplier_payout', 'payoutId', 'PYT');
+
+  // outstanding ledger entries this payout will clear
+  $ledgerIds = $pdo->prepare("SELECT ledgerId FROM supplier_ledger WHERE supplierId = :sid AND settledByPayoutId IS NULL");
+  $ledgerIds->execute(['sid' => $supplierId]);
+  $ledgerIds = $ledgerIds->fetchAll(PDO::FETCH_COLUMN);
+
+  // deterministic key so a retry of the SAME logical payout never double-transfers
+  $orderIds = array_map(fn($r) => $r['orderId'], $rows);
+  sort($orderIds);
+  $idemKey = 'suppay_' . $supplierId . '_' . substr(md5(
+    implode(',', $orderIds) . '|' . implode(',', $ledgerIds) . '|' . number_format($bal['balance'], 2, '.', '')
+  ), 0, 40);
 
   $transferId = null;
   try {
@@ -115,7 +200,7 @@ function payOutSupplierBalance(PDO $pdo, array $config, array $supplier, bool $i
       'currency'       => 'myr',
       'destination'    => $supplier['stripeAccountId'],
       'transfer_group' => $group,
-    ]);
+    ], $idemKey);
     $transferId = $transfer['id'] ?? null;
   } catch (Throwable $e) {
     // record failed attempts (one per covered order) so they're auditable, then
@@ -138,17 +223,32 @@ function payOutSupplierBalance(PDO $pdo, array $config, array $supplier, bool $i
 
   try {
     $pdo->beginTransaction();
+    // serialise concurrent payouts for this supplier: the lock + the NOT EXISTS
+    // guard below mean a second (racing) run records nothing, while the Stripe
+    // idempotency key means it never sent a second transfer either.
+    $lock = $pdo->prepare('SELECT supplierId FROM supplier WHERE supplierId = :sid FOR UPDATE');
+    $lock->execute(['sid' => $supplierId]);
+
     $ins = $pdo->prepare(
       "INSERT INTO supplier_payout
          (payoutId, supplierId, orderId, stripeTransferId, grossAmount, commissionAmount, serviceTaxAmount, netAmount, currency, payoutStatus, isAuto, paidAt)
-       VALUES (:id, :sid, :oid, :tr, :g, :c, :t, :n, 'myr', 'Paid', :au, NOW())"
+       SELECT :id, :sid, :oid, :tr, :g, :c, :t, :n, 'myr', 'Paid', :au, NOW() FROM DUAL
+        WHERE NOT EXISTS (SELECT 1 FROM supplier_payout sp
+                           WHERE sp.orderId = :oid2 AND sp.supplierId = :sid2 AND sp.payoutStatus = 'Paid')"
     );
     foreach ($rows as $r) {
       $ins->execute([
         'id' => nextId($pdo, 'supplier_payout', 'payoutId', 'PYT'),
         'sid' => $supplierId, 'oid' => $r['orderId'], 'tr' => $transferId,
         'g' => $r['gross'], 'c' => $r['commission'], 't' => $r['serviceTax'], 'n' => $r['net'], 'au' => $auto,
+        'oid2' => $r['orderId'], 'sid2' => $supplierId,
       ]);
+    }
+    // clear the ledger entries this payout accounted for
+    if ($ledgerIds) {
+      $in = implode(',', array_fill(0, count($ledgerIds), '?'));
+      $upd = $pdo->prepare("UPDATE supplier_ledger SET settledByPayoutId = ? WHERE ledgerId IN ($in) AND settledByPayoutId IS NULL");
+      $upd->execute(array_merge([$group], $ledgerIds));
     }
     $pdo->commit();
   } catch (Throwable $e) {
@@ -215,6 +315,8 @@ function handleSupplierEarnings(PDO $pdo, array $config, array $auth): void {
 
   sendJson(200, true, [
     'balance'        => $bal['balance'],
+    'payable'        => $bal['payable'],
+    'adjustments'    => $bal['ledger'],     // signed; negative = a clawback owed
     'payableOrders'  => $bal['orders'],
     'inHoldOrders'   => $inHoldOrders,
     'refundWindowDays' => $win,
@@ -239,6 +341,14 @@ function handleListSupplierBalances(PDO $pdo): void {
     $agg[$sid]['balance'] += $r['net'];
     $agg[$sid]['orders']  += 1;
   }
+  // outstanding ledger adjustments (clawbacks) per supplier, in one query
+  $ledgerAgg = [];
+  foreach ($pdo->query(
+    "SELECT supplierId, SUM(amount) AS bal FROM supplier_ledger
+      WHERE settledByPayoutId IS NULL GROUP BY supplierId"
+  )->fetchAll() as $lr) {
+    $ledgerAgg[$lr['supplierId']] = (float) $lr['bal'];
+  }
 
   $rows = $pdo->query(
     "SELECT s.supplierId, s.companyName, u.email, s.stripeAccountId, s.payoutsEnabled,
@@ -249,14 +359,16 @@ function handleListSupplierBalances(PDO $pdo): void {
       ORDER BY s.companyName ASC"
   )->fetchAll();
 
-  $suppliers = array_map(function ($r) use ($agg) {
+  $suppliers = array_map(function ($r) use ($agg, $ledgerAgg) {
     $sid = $r['supplierId'];
+    $adj = round($ledgerAgg[$sid] ?? 0.0, 2);
     return [
       'supplierId'     => $sid,
       'companyName'    => $r['companyName'],
       'email'          => $r['email'],
-      'pendingBalance' => round($agg[$sid]['balance'] ?? 0.0, 2),
+      'pendingBalance' => round(($agg[$sid]['balance'] ?? 0.0) + $adj, 2),
       'pendingOrders'  => $agg[$sid]['orders'] ?? 0,
+      'adjustments'    => $adj,   // signed; negative = clawback owed
       'lifetimePaid'   => round((float) $r['lifetimePaid'], 2),
       'connected'      => (bool) $r['stripeAccountId'],
       'payoutsEnabled' => (bool) $r['payoutsEnabled'],
@@ -380,8 +492,15 @@ function handlePaySupplier(PDO $pdo, array $config, string $supplierId): void {
     sendJson(409, false, null, ['code' => 'NOT_CONNECTED',
       'message' => 'This supplier has not finished connecting their payout account.']);
   }
-  if (supplierBalance($pdo, $supplierId)['balance'] <= 0) {
+  $balance   = supplierBalance($pdo, $supplierId)['balance'];
+  $minPayout = (float) ($config['supplier_min_payout'] ?? 0);
+  if ($balance <= 0) {
     sendJson(409, false, null, ['code' => 'NOTHING_DUE', 'message' => 'This supplier has no payable balance.']);
+  }
+  if ($minPayout > 0 && $balance < $minPayout) {
+    sendJson(409, false, null, ['code' => 'BELOW_MIN',
+      'message' => 'Balance RM ' . number_format($balance, 2) . ' is below the RM '
+        . number_format($minPayout, 2) . ' minimum payout. It carries to the next run.']);
   }
 
   try {

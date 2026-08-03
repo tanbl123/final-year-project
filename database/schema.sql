@@ -566,6 +566,30 @@ CREATE TABLE supplier_payout (
     CONSTRAINT chk_payout_amounts CHECK (grossAmount >= 0 AND commissionAmount >= 0)
 ) ENGINE=InnoDB;
 
+-- Signed adjustments to a supplier's payable balance, used for cases the per-order
+-- payable set can't express. The main one: a refund that lands on an order the
+-- supplier was ALREADY paid for (only reachable by admin override, since normal
+-- refunds happen inside the window and payouts only after it). Such a refund
+-- records a negative 'RefundClawback' entry that nets against the supplier's next
+-- payout; if they never sell again it stands as an amount owed. Admins can also
+-- post manual 'Adjustment' entries. An entry is outstanding until a payout stamps
+-- it with settledByPayoutId.
+CREATE TABLE supplier_ledger (
+    ledgerId          VARCHAR(12)   NOT NULL,             -- SLG00000001
+    supplierId        VARCHAR(10)   NOT NULL,
+    orderId           VARCHAR(10)   NULL,                 -- the order that triggered it, if any
+    entryType         ENUM('RefundClawback','Adjustment') NOT NULL,
+    amount            DECIMAL(10,2) NOT NULL,             -- signed: negative reduces the payout (supplier owes)
+    note              VARCHAR(255)  NULL,
+    settledByPayoutId VARCHAR(10)   NULL,                 -- transfer_group id of the payout that cleared it
+    created_at        DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (ledgerId),
+    KEY idx_ledger_supplier (supplierId),
+    KEY idx_ledger_settled (settledByPayoutId),
+    CONSTRAINT fk_ledger_supplier FOREIGN KEY (supplierId) REFERENCES supplier(supplierId)
+        ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB;
+
 -- Courier earnings payout: the admin pays a courier the accrued per-delivery
 -- fees for all their as-yet-unpaid Delivered parcels in one Stripe transfer.
 -- Each covered delivery row is stamped with this payoutId.

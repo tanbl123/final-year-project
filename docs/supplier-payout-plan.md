@@ -68,11 +68,20 @@ Both share one core function `payOutSupplierBalance(pdo, config, supplier, isAut
   surfaced as a "Remind" button on the admin Supplier Payouts page.
 - The "Run reminders" sweep summary now reports the supplier payout run.
 
-### Phase 3 — hardening (optional / real-world)
-- A formal `supplier_ledger` (signed entries) for standing negative balances when a
-  supplier is refunded after payout and never sells again (collections).
-- Stripe idempotency keys + row locking for concurrent-payout safety.
-- Minimum-payout threshold (`supplier_min_payout`) to avoid tiny transfers.
+### Phase 3 (built) — hardening
+- `supplier_ledger` (signed entries): a refund on an order a supplier was ALREADY
+  paid for records a negative `RefundClawback` (via `recordPostPayoutRefundClawback`,
+  called from the refund-completion path) that nets against their next payout — or
+  stands as owed if they never sell again. The balance = payable nets + outstanding
+  ledger; a payout settles the entries it clears (`settledByPayoutId`).
+- Concurrency safety: a deterministic Stripe **Idempotency-Key** on the transfer
+  (a retried run never double-sends), plus a `SELECT … FOR UPDATE` supplier-row
+  lock and a `NOT EXISTS` guard so a racing run records nothing.
+- Minimum-payout threshold (`supplier_min_payout`, default 0 = none): a balance
+  below it carries to the next run instead of sending a tiny transfer.
+
+Still open (genuinely optional): an admin UI to post manual `Adjustment` ledger
+entries (the table + netting support them; only the button is unbuilt).
 
 ## Edge cases
 - Supplier not Stripe-connected → accrues, cannot be paid; admin sees the status.

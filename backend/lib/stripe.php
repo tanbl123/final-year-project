@@ -12,11 +12,17 @@ function stripeConfigured(array $config): bool {
 
 // $params is a (possibly nested) array; http_build_query renders Stripe's
 // expected bracket notation, e.g. capabilities[transfers][requested]=true.
-function stripeApi(string $secret, string $method, string $path, array $params = []): array {
+function stripeApi(string $secret, string $method, string $path, array $params = [], ?string $idempotencyKey = null): array {
   $ch = curl_init('https://api.stripe.com' . $path);
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
   curl_setopt($ch, CURLOPT_USERPWD, $secret . ':');
   curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+
+  // An idempotency key makes a retried POST safe: Stripe returns the original
+  // result instead of creating a second transfer/refund for the same logical op.
+  if ($idempotencyKey !== null && $idempotencyKey !== '') {
+    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Idempotency-Key: ' . $idempotencyKey]);
+  }
 
   if (strtoupper($method) === 'POST') {
     curl_setopt($ch, CURLOPT_POST, true);

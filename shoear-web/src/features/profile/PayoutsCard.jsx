@@ -109,6 +109,9 @@ function PayoutsCard() {
                 <div className="text-muted small">
                   {earnings.payableOrders} order{earnings.payableOrders === 1 ? '' : 's'} · past refund window
                 </div>
+                {!!earnings.adjustments && earnings.adjustments < 0 && (
+                  <div className="text-danger small">includes {rm(earnings.adjustments)} from a later refund</div>
+                )}
               </div>
             </div>
             <div className="col-sm-4">

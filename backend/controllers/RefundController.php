@@ -109,6 +109,12 @@ function handleSetRefundStatus(PDO $pdo, string $refundId, array $config = []): 
             WHERE orderId = :oid"
         )->execute(['ref' => $newRefunded, 'oid' => $refund['orderId']]);
       }
+      // if any supplier was ALREADY paid for this order, record a clawback so the
+      // refund nets against their next payout (normal case: the order isn't paid
+      // yet, so its payable net just drops — no clawback needed).
+      if (function_exists('recordPostPayoutRefundClawback')) {
+        recordPostPayoutRefundClawback($pdo, $refund['orderId'], $refundAmount);
+      }
     }
     $pdo->commit();
   } catch (Throwable $e) {

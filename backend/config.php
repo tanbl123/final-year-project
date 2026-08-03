@@ -69,6 +69,11 @@ $config = [
   // manual "Pay now" button until they opt in. Set SUPPLIER_AUTO_PAYOUT=1 to enable.
   'supplier_auto_payout' => getenv('SUPPLIER_AUTO_PAYOUT') === '1',
 
+  // Don't transfer a supplier payout below this amount (RM) — a balance under it
+  // simply carries to the next run, avoiding tiny transfers (and their fees).
+  // 0 = no minimum. Applies to both manual "Pay now" and the automatic sweep.
+  'supplier_min_payout' => (float) (getenv('SUPPLIER_MIN_PAYOUT') ?: 0),
+
   // SMTP — used to email supplier registration verification codes. Keep the
   // password OUT of git: set these in config.local.php (see the example file).
   // For Gmail: host smtp.gmail.com, port 587, secure 'tls', username your
