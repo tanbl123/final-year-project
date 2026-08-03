@@ -413,6 +413,15 @@ function generateStaffUsername(PDO $pdo, string $fullName): string {
 // member chooses their own password before they can sign in. The SYSTEM also
 // generates the username (login is by email). So nothing sensitive is exposed
 // in the email and the admin never knows the password.
+// Shared validation for an AR Specialist's identity fields (now required).
+function staffIdentityError(string $phone, string $icNumber): ?string {
+  if ($phone === '') { return 'Phone number is required.'; }
+  if (!preg_match('/^\+?[0-9\s\-]{7,20}$/', $phone)) { return 'Please provide a valid phone number.'; }
+  if ($icNumber === '') { return 'IC / NRIC number is required.'; }
+  if (strlen(preg_replace('/\D/', '', $icNumber)) !== 12) { return 'IC / NRIC must be 12 digits (e.g. 990101-14-5678).'; }
+  return null;
+}
+
 function handleCreateStaff(PDO $pdo, array $config): void {
   $body     = getJsonBody();
   $email    = trim($body['email'] ?? '');
@@ -433,12 +442,10 @@ function handleCreateStaff(PDO $pdo, array $config): void {
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid email is required.']);
   }
-  // light bounds on the optional fields (all may be left blank)
-  if ($phone !== '' && mb_strlen($phone) > 20) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Phone number must be 20 characters or fewer.']);
-  }
-  if ($icNumber !== '' && mb_strlen($icNumber) > 20) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'IC / NRIC number must be 20 characters or fewer.']);
+  // phone + IC are required (they identify the real person behind the account)
+  $idErr = staffIdentityError($phone, $icNumber);
+  if ($idErr !== null) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => $idErr]);
   }
   // We email the set-password link, so email must be configured.
   if (!mailConfigured($config)) {
@@ -536,11 +543,17 @@ function handleResendStaffInvite(PDO $pdo, array $config, string $userId): void 
   $body     = getJsonBody();
   $email    = array_key_exists('email', $body) ? trim((string) $body['email']) : (string) $u['email'];
   $fullName = array_key_exists('fullName', $body) ? trim((string) $body['fullName']) : (string) $u['fullName'];
+  $phone    = trim((string) ($body['phoneNumber'] ?? ''));
+  $icNumber = trim((string) ($body['icNumber'] ?? ''));
   if ($fullName === '' || mb_strlen($fullName) > 120) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Full name is required and must be 120 characters or fewer.']);
   }
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid email is required.']);
+  }
+  $idErr = staffIdentityError($phone, $icNumber);
+  if ($idErr !== null) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => $idErr]);
   }
   if ($email !== $u['email']) {
     $chk = $pdo->prepare('SELECT userId FROM `user` WHERE email = :e AND userId <> :id LIMIT 1');
@@ -550,14 +563,18 @@ function handleResendStaffInvite(PDO $pdo, array $config, string $userId): void 
     }
   }
 
-  // Fresh one-time token (invalidates any earlier link) + apply the corrections.
+  // Fresh one-time token (invalidates any earlier link) + apply the corrections
+  // (name, email, phone, IC).
   $token = bin2hex(random_bytes(32));
   $pdo->prepare(
     "UPDATE `user`
-        SET email = :e, fullName = :fn,
+        SET email = :e, fullName = :fn, phoneNumber = :ph,
             setPasswordToken = :tok, setPasswordExpires = DATE_ADD(NOW(), INTERVAL 48 HOUR)
       WHERE userId = :id"
-  )->execute(['e' => $email, 'fn' => $fullName, 'tok' => password_hash($token, PASSWORD_BCRYPT), 'id' => $userId]);
+  )->execute(['e' => $email, 'fn' => $fullName, 'ph' => $phone,
+              'tok' => password_hash($token, PASSWORD_BCRYPT), 'id' => $userId]);
+  $pdo->prepare('UPDATE ar_specialist SET icNumber = :ic WHERE userId = :id')
+      ->execute(['ic' => $icNumber, 'id' => $userId]);
 
   $appUrl = rtrim((string) ($config['app_url'] ?? 'http://localhost:5173'), '/');
   $setUrl = $appUrl . '/set-password?email=' . rawurlencode($email) . '&token=' . $token;
@@ -598,19 +615,17 @@ function handleUpdateStaff(PDO $pdo, string $userId): void {
   if ($fullName === '' || mb_strlen($fullName) > 120) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Full name is required and must be 120 characters or fewer.']);
   }
-  if ($phone !== '' && mb_strlen($phone) > 20) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Phone number must be 20 characters or fewer.']);
-  }
-  if ($icNumber !== '' && mb_strlen($icNumber) > 20) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'IC / NRIC number must be 20 characters or fewer.']);
+  $idErr = staffIdentityError($phone, $icNumber);
+  if ($idErr !== null) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => $idErr]);
   }
 
   $pdo->beginTransaction();
   try {
     $pdo->prepare('UPDATE `user` SET fullName = :fn, phoneNumber = :ph WHERE userId = :id')
-        ->execute(['fn' => $fullName, 'ph' => $phone !== '' ? $phone : null, 'id' => $userId]);
+        ->execute(['fn' => $fullName, 'ph' => $phone, 'id' => $userId]);
     $pdo->prepare('UPDATE ar_specialist SET icNumber = :ic WHERE userId = :id')
-        ->execute(['ic' => $icNumber !== '' ? $icNumber : null, 'id' => $userId]);
+        ->execute(['ic' => $icNumber, 'id' => $userId]);
     $pdo->commit();
   } catch (Throwable $e) {
     $pdo->rollBack();

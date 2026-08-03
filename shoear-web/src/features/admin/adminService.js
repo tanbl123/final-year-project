@@ -141,8 +141,8 @@ export function createStaff({ fullName, email, phoneNumber = '', icNumber = '', 
 
 // Re-send a pending staff invite, optionally correcting the email/name first
 // (fixes a mistyped address). Issues a fresh set-password link.
-export function resendStaffInvite(userId, { fullName, email }) {
-  return apiPut(`/admin/staff/${userId}/resend-invite`, { fullName, email }, getToken());
+export function resendStaffInvite(userId, { fullName, email, phoneNumber = '', icNumber = '' }) {
+  return apiPut(`/admin/staff/${userId}/resend-invite`, { fullName, email, phoneNumber, icNumber }, getToken());
 }
 
 // Update an AR Specialist's editable profile fields (name, phone, IC). Email is

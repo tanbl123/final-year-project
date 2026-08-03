@@ -38,11 +38,21 @@ function staffFieldError(name, value) {
     if (v === '') return 'Email is required.';
     return EMAIL_RE.test(v) ? '' : 'Please enter a valid email address.';
   }
+  if (name === 'phoneNumber') {
+    if (v === '') return 'Phone number is required.';
+    if (!/^\+?[0-9\s-]{7,20}$/.test(v)) return 'Enter a valid phone number.';
+    return '';
+  }
+  if (name === 'icNumber') {
+    if (v === '') return 'IC / NRIC number is required.';
+    if (v.replace(/\D/g, '').length !== 12) return 'IC must be 12 digits (e.g. 990101-14-5678).';
+    return '';
+  }
   return '';
 }
-function validateStaff(form) {
+function validateStaff(form, fields = ['fullName', 'email', 'phoneNumber', 'icNumber']) {
   const errs = {};
-  ['fullName', 'email'].forEach((k) => {
+  fields.forEach((k) => {
     const msg = staffFieldError(k, form[k]);
     if (msg) errs[k] = msg;
   });
@@ -103,10 +113,18 @@ function AdminUsersPage() {
     });
   }
 
-  // ── resend a pending staff invite (with editable email/name) ──
-  function openResend(u) {
+  // ── resend a pending staff invite (with editable name/email/phone/IC) ──
+  async function openResend(u) {
     setResendErr(''); setResendErrors({});
-    setResendForm({ userId: u.userId, fullName: u.fullName, email: u.email });
+    setResendForm({ userId: u.userId, fullName: u.fullName, email: u.email, phoneNumber: '', icNumber: '', loading: true });
+    try {
+      const d = await getUser(u.userId);   // prefill phone + IC (not in the row)
+      setResendForm({ userId: u.userId, fullName: d.fullName || '', email: d.email || u.email,
+        phoneNumber: d.phoneNumber || '', icNumber: d.profile?.icNumber || '', loading: false });
+    } catch (err) {
+      setResendForm((f) => (f ? { ...f, loading: false } : f));
+      setResendErr(err.message || 'Could not load the account.');
+    }
   }
   function closeResend() { setResendForm(null); setResendErrors({}); setResendErr(''); }
   function setResendField(name, value) {
@@ -135,6 +153,7 @@ function AdminUsersPage() {
     try {
       const res = await resendStaffInvite(resendForm.userId, {
         fullName: resendForm.fullName.trim(), email: resendForm.email.trim(),
+        phoneNumber: resendForm.phoneNumber.trim(), icNumber: resendForm.icNumber.trim(),
       });
       // reflect any corrected email/name in the row immediately
       setUsers((prev) => prev.map((x) => (x.userId === res.userId
@@ -169,20 +188,26 @@ function AdminUsersPage() {
   function closeEdit() { setEditForm(null); setEditErrors({}); setEditErr(''); }
   function setEditField(name, value) {
     setEditForm((f) => ({ ...f, [name]: value }));
-    if (name === 'fullName') {
-      setEditErrors((prev) => {
-        if (!('fullName' in prev)) return prev;
-        const next = { ...prev };
-        const msg = staffFieldError('fullName', value);
-        if (msg) next.fullName = msg; else delete next.fullName;
-        return next;
-      });
-    }
+    setEditErrors((prev) => {
+      if (!(name in prev)) return prev;
+      const next = { ...prev };
+      const msg = staffFieldError(name, value);
+      if (msg) next[name] = msg; else delete next[name];
+      return next;
+    });
+  }
+  function blurEditField(name) {
+    setEditErrors((prev) => {
+      const next = { ...prev };
+      const msg = staffFieldError(name, editForm?.[name]);
+      if (msg) next[name] = msg; else delete next[name];
+      return next;
+    });
   }
   async function submitEdit(e) {
     e.preventDefault();
-    const msg = staffFieldError('fullName', editForm.fullName);
-    if (msg) { setEditErrors({ fullName: msg }); return; }
+    const v = validateStaff(editForm, ['fullName', 'phoneNumber', 'icNumber']);
+    if (Object.keys(v).length) { setEditErrors(v); return; }
     setEditing(true); setEditErr('');
     try {
       const res = await updateStaff(editForm.userId, {
@@ -476,20 +501,26 @@ function AdminUsersPage() {
                 </div>
 
                 <p className="text-muted small mb-2 mt-3">
-                  Optional — helps identify the person behind the account.
+                  Identifies the person behind the account.
                 </p>
                 <div className="row g-2">
                   <div className="col-sm-6 mb-1">
                     <label className="form-label small mb-1">Phone number</label>
                     <ClearableInput value={createForm.phoneNumber} placeholder="e.g. 012-345 6789"
+                      className={staffErrors.phoneNumber ? 'is-invalid' : ''}
                       onChange={(e) => setStaffField('phoneNumber', e.target.value)}
+                      onBlur={() => blurStaffField('phoneNumber')}
                       onClear={() => setStaffField('phoneNumber', '')} />
+                    {staffErrors.phoneNumber && <div className="invalid-feedback d-block">{staffErrors.phoneNumber}</div>}
                   </div>
                   <div className="col-sm-6 mb-1">
                     <label className="form-label small mb-1">IC / NRIC number</label>
                     <ClearableInput value={createForm.icNumber} placeholder="e.g. 990101-14-5678"
+                      className={staffErrors.icNumber ? 'is-invalid' : ''}
                       onChange={(e) => setStaffField('icNumber', e.target.value)}
+                      onBlur={() => blurStaffField('icNumber')}
                       onClear={() => setStaffField('icNumber', '')} />
+                    {staffErrors.icNumber && <div className="invalid-feedback d-block">{staffErrors.icNumber}</div>}
                   </div>
                 </div>
               </div>
@@ -520,6 +551,10 @@ function AdminUsersPage() {
                   re-send a fresh set-password link (any earlier link stops working).
                 </p>
                 {resendErr && <div className="alert alert-danger py-2">{resendErr}</div>}
+                {resendForm.loading ? (
+                  <p className="text-muted mb-0">Loading…</p>
+                ) : (
+                <>
                 <div className="mb-2">
                   <label className="form-label small mb-1">Full name</label>
                   <ClearableInput className={resendErrors.fullName ? 'is-invalid' : ''}
@@ -529,7 +564,7 @@ function AdminUsersPage() {
                     onClear={() => setResendField('fullName', '')} />
                   {resendErrors.fullName && <div className="invalid-feedback d-block">{resendErrors.fullName}</div>}
                 </div>
-                <div className="mb-1">
+                <div className="mb-2">
                   <label className="form-label small mb-1">Email</label>
                   <ClearableInput type="email" className={resendErrors.email ? 'is-invalid' : ''}
                     value={resendForm.email}
@@ -538,6 +573,28 @@ function AdminUsersPage() {
                     onClear={() => setResendField('email', '')} />
                   {resendErrors.email && <div className="invalid-feedback d-block">{resendErrors.email}</div>}
                 </div>
+                <div className="row g-2">
+                  <div className="col-sm-6 mb-1">
+                    <label className="form-label small mb-1">Phone number</label>
+                    <ClearableInput value={resendForm.phoneNumber} placeholder="e.g. 012-345 6789"
+                      className={resendErrors.phoneNumber ? 'is-invalid' : ''}
+                      onChange={(e) => setResendField('phoneNumber', e.target.value)}
+                      onBlur={() => blurResendField('phoneNumber')}
+                      onClear={() => setResendField('phoneNumber', '')} />
+                    {resendErrors.phoneNumber && <div className="invalid-feedback d-block">{resendErrors.phoneNumber}</div>}
+                  </div>
+                  <div className="col-sm-6 mb-1">
+                    <label className="form-label small mb-1">IC / NRIC number</label>
+                    <ClearableInput value={resendForm.icNumber} placeholder="e.g. 990101-14-5678"
+                      className={resendErrors.icNumber ? 'is-invalid' : ''}
+                      onChange={(e) => setResendField('icNumber', e.target.value)}
+                      onBlur={() => blurResendField('icNumber')}
+                      onClear={() => setResendField('icNumber', '')} />
+                    {resendErrors.icNumber && <div className="invalid-feedback d-block">{resendErrors.icNumber}</div>}
+                  </div>
+                </div>
+                </>
+                )}
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-light" onClick={closeResend} disabled={resending}>Cancel</button>
@@ -575,16 +632,22 @@ function AdminUsersPage() {
                       {editErrors.fullName && <div className="invalid-feedback d-block">{editErrors.fullName}</div>}
                     </div>
                     <div className="mb-2">
-                      <label className="form-label small mb-1">Phone number <span className="text-muted">(optional)</span></label>
-                      <ClearableInput value={editForm.phoneNumber}
+                      <label className="form-label small mb-1">Phone number</label>
+                      <ClearableInput value={editForm.phoneNumber} placeholder="e.g. 012-345 6789"
+                        className={editErrors.phoneNumber ? 'is-invalid' : ''}
                         onChange={(e) => setEditField('phoneNumber', e.target.value)}
+                        onBlur={() => blurEditField('phoneNumber')}
                         onClear={() => setEditField('phoneNumber', '')} />
+                      {editErrors.phoneNumber && <div className="invalid-feedback d-block">{editErrors.phoneNumber}</div>}
                     </div>
                     <div className="mb-1">
-                      <label className="form-label small mb-1">IC / NRIC number <span className="text-muted">(optional)</span></label>
-                      <ClearableInput value={editForm.icNumber}
+                      <label className="form-label small mb-1">IC / NRIC number</label>
+                      <ClearableInput value={editForm.icNumber} placeholder="e.g. 990101-14-5678"
+                        className={editErrors.icNumber ? 'is-invalid' : ''}
                         onChange={(e) => setEditField('icNumber', e.target.value)}
+                        onBlur={() => blurEditField('icNumber')}
                         onClear={() => setEditField('icNumber', '')} />
+                      {editErrors.icNumber && <div className="invalid-feedback d-block">{editErrors.icNumber}</div>}
                     </div>
                     <p className="text-muted small mt-2 mb-0">Email is the sign-in address and can't be changed here.</p>
                   </>
