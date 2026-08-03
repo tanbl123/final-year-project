@@ -73,6 +73,9 @@ class ShoeArApp extends StatelessWidget {
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4F46E5)),
           useMaterial3: true,
+          // let inline field errors wrap onto multiple lines instead of being
+          // truncated with an ellipsis (the default errorMaxLines is 1)
+          inputDecorationTheme: const InputDecorationTheme(errorMaxLines: 3),
         ),
         home: const MainShell(),
       ),
