@@ -16,6 +16,7 @@ function SupplierRefundsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [tab, setTab] = useState('All');
+  const [detail, setDetail] = useState(null);   // refund shown in the details popup
 
   // Click any column header to sort; Amount compares numerically.
   const sort = useTableSort(refunds, {
@@ -92,6 +93,7 @@ function SupplierRefundsPage() {
                 <SortableTh label="Status" columnKey="refundStatus" sort={sort} className="text-center" style={{ width: 120 }} />
                 <SortableTh label="Requested" columnKey="requestDate" sort={sort} style={{ width: 120 }} />
                 <th className="text-center" style={{ width: 90 }}>Proof</th>
+                <th className="text-center" style={{ width: 90 }}>Details</th>
               </tr>
             </thead>
             <tbody>
@@ -120,6 +122,9 @@ function SupplierRefundsPage() {
                       ));
                     })()}
                   </td>
+                  <td className="text-center">
+                    <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setDetail(r)}>Details</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -129,6 +134,65 @@ function SupplierRefundsPage() {
             summary={`Page ${page} of ${totalPages} · ${refunds.length} refunds`} />
         </div>
       )}
+
+      {/* Read-only refund details (the admin processes them) */}
+      {detail && (() => {
+        const r = detail;
+        const proofs = refundProofUrls(r.refundProof);
+        return (
+          <div className="modal show d-block" tabIndex="-1"
+            style={{ background: 'rgba(0,0,0,.5)' }} onClick={() => setDetail(null)}>
+            <div className="modal-dialog modal-dialog-centered modal-lg" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">
+                    Refund details
+                    <span className={`badge ms-2 text-bg-${STATUS_COLORS[r.refundStatus] || 'secondary'}`}>{r.refundStatus}</span>
+                  </h5>
+                  <button type="button" className="btn-close" onClick={() => setDetail(null)}></button>
+                </div>
+                <div className="modal-body">
+                  <dl className="row mb-0">
+                    <dt className="col-sm-3">Order</dt>
+                    <dd className="col-sm-9">
+                      <Link to={`/orders/${r.orderId}`} className="text-decoration-none" onClick={() => setDetail(null)}>
+                        {r.orderId} — view order &amp; products
+                      </Link>
+                    </dd>
+                    <dt className="col-sm-3">Requested</dt><dd className="col-sm-9">{new Date(r.requestDate).toLocaleString()}</dd>
+                    <dt className="col-sm-3">Amount</dt><dd className="col-sm-9">{money(r.refundAmount)}</dd>
+                    <dt className="col-sm-3">Reason</dt>
+                    <dd className="col-sm-9" style={{ overflowWrap: 'anywhere' }}>{r.refundReason}</dd>
+                    {r.adminNote && (<>
+                      <dt className="col-sm-3">Admin note</dt>
+                      <dd className="col-sm-9" style={{ overflowWrap: 'anywhere' }}>{r.adminNote}</dd>
+                    </>)}
+                  </dl>
+
+                  <div className="mt-3">
+                    <div className="fw-semibold mb-2">Evidence photos {proofs.length > 0 && `(${proofs.length})`}</div>
+                    {proofs.length === 0 ? (
+                      <p className="text-muted mb-0">No photos were attached.</p>
+                    ) : (
+                      <div className="d-flex flex-wrap gap-2">
+                        {proofs.map((u, i) => (
+                          <a key={i} href={u} target="_blank" rel="noreferrer" title="Open full size">
+                            <img src={u} alt={`Evidence ${i + 1}`}
+                              style={{ width: 110, height: 110, objectFit: 'cover', borderRadius: 8, border: '1px solid #dee2e6' }} />
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setDetail(null)}>Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
