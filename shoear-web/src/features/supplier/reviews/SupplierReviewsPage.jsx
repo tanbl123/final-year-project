@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import Toast from '../../../components/Toast';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import { getSupplierReviews, replyToReview, deleteReviewReply } from '../../admin/reviewService';
@@ -106,7 +107,10 @@ function SupplierReviewsPage() {
                     {!isReplied(r) && <span className="badge text-bg-warning">Awaiting reply</span>}
                   </div>
                 </div>
-                <div className="text-muted small mt-1">on <span className="fw-semibold">{r.productName}</span></div>
+                <div className="text-muted small mt-1">
+                  on <Link to={`/products/${r.productId}`} className="fw-semibold">{r.productName}</Link>
+                  <span className="text-muted"> ↗</span>
+                </div>
                 {r.reviewComment && <p className="mb-2 mt-2">{r.reviewComment}</p>}
 
                 {isReplied(r) && replyingId !== r.reviewId && (
