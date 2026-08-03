@@ -265,31 +265,36 @@ function recomputeOrderStatus(PDO $pdo, string $orderId): void {
   $statuses = $stmt->fetchAll(PDO::FETCH_COLUMN);
   if (!$statuses) { return; }
 
+  // Never override a terminal state from a delivery-status change.
+  $cur = $pdo->prepare('SELECT orderStatus FROM `order` WHERE orderId = :oid');
+  $cur->execute(['oid' => $orderId]);
+  $previous = $cur->fetchColumn();
+  if (in_array($previous, ['Cancelled', 'Completed'], true)) { return; }
+
   $allDelivered = true;
   $anyOut = false;
   $anyPicked = false;
+  $anyDelivered = false;
   foreach ($statuses as $s) {
     if ($s !== 'Delivered')        { $allDelivered = false; }
+    if ($s === 'Delivered')        { $anyDelivered = true; }
     if ($s === 'OutForDelivery')   { $anyOut = true; }
     if ($s === 'PickedUp')         { $anyPicked = true; }
   }
 
-  $orderStatus = null;
-  if ($allDelivered)   { $orderStatus = 'Delivered'; }
-  elseif ($anyOut)     { $orderStatus = 'OutForDelivery'; }
-  elseif ($anyPicked)  { $orderStatus = 'Shipped'; }
+  // Recompute deterministically EVERY time so a higher status can never linger
+  // once the parcels no longer justify it (e.g. one parcel delivered while
+  // another is still preparing must NOT stay 'Out for delivery').
+  if ($allDelivered)     { $orderStatus = 'Delivered'; }
+  elseif ($anyOut)       { $orderStatus = 'OutForDelivery'; }
+  elseif ($anyPicked)    { $orderStatus = 'Shipped'; }
+  elseif ($anyDelivered) { $orderStatus = 'Shipped'; }   // partially delivered → still in transit
+  else                   { $orderStatus = 'Paid'; }       // nothing shipped yet
 
-  if ($orderStatus !== null) {
-    // read the current status first so we only notify on a real transition
-    $cur = $pdo->prepare('SELECT orderStatus FROM `order` WHERE orderId = :oid');
-    $cur->execute(['oid' => $orderId]);
-    $previous = $cur->fetchColumn();
+  $pdo->prepare('UPDATE `order` SET orderStatus = :os WHERE orderId = :oid')
+      ->execute(['os' => $orderStatus, 'oid' => $orderId]);
 
-    $pdo->prepare('UPDATE `order` SET orderStatus = :os WHERE orderId = :oid')
-        ->execute(['os' => $orderStatus, 'oid' => $orderId]);
-
-    if ($previous !== $orderStatus && function_exists('notifyOrderStatusChange')) {
-      notifyOrderStatusChange($pdo, $orderId, $orderStatus);
-    }
+  if ($previous !== $orderStatus && function_exists('notifyOrderStatusChange')) {
+    notifyOrderStatusChange($pdo, $orderId, $orderStatus);
   }
 }

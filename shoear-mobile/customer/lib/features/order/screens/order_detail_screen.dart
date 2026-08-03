@@ -596,12 +596,27 @@ class _StatusBanner extends StatelessWidget {
     return 'Ordered ${l.day}/${l.month}/${l.year}';
   }
 
+  // True when SOME (but not all) parcels have been delivered — a multi-supplier
+  // order that's only partially fulfilled. The per-parcel timelines below carry
+  // the detail; this keeps the summary honest instead of over-claiming.
+  bool get _partiallyDelivered {
+    final ds = order.deliveries;
+    if (ds.length < 2) return false;
+    final delivered = ds.where((d) => d.deliveryStatus == 'Delivered').length;
+    return delivered > 0 && delivered < ds.length;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final color = order.orderStatus == 'Placed'
-        ? Colors.orange.shade700
-        : (kOrderStatusColors[order.orderStatus] ?? Colors.grey);
-    final (icon, title) = _meta(order.orderStatus);
+    final partial = _partiallyDelivered;
+    final color = partial
+        ? Colors.indigo.shade600
+        : (order.orderStatus == 'Placed'
+            ? Colors.orange.shade700
+            : (kOrderStatusColors[order.orderStatus] ?? Colors.grey));
+    final (icon, title) = partial
+        ? (Icons.local_shipping_outlined, 'Partially delivered')
+        : _meta(order.orderStatus);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
