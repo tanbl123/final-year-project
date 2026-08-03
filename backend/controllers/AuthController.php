@@ -1001,6 +1001,24 @@ function handleLogin(PDO $pdo, string $secret): void {
   // application (the delivery app gates them to the resubmit screen).
   $isRejectedCourier  = $user['role'] === 'DeliveryPersonnel' && $user['status'] === 'Rejected';
   if (!$isActive && !$isRejectedSupplier && !$isRejectedCourier) {
+    if ($user['status'] === 'Suspended') {
+      // Surface WHY, and — since they've proven the password — mint a fresh
+      // appeal token so the login page can offer a working "Appeal" link (also
+      // covers the case where the suspension email wasn't delivered).
+      $rawToken = bin2hex(random_bytes(32));
+      try {
+        $pdo->prepare('UPDATE `user` SET appealToken = :tok WHERE userId = :id')
+            ->execute(['tok' => password_hash($rawToken, PASSWORD_BCRYPT), 'id' => $user['userId']]);
+      } catch (Throwable $e) { $rawToken = ''; }
+      $msg = !empty($user['rejectionReason'])
+        ? 'Your account has been suspended: ' . $user['rejectionReason']
+        : 'Your account has been suspended.';
+      $err = ['code' => 'SUSPENDED', 'message' => $msg];
+      if ($rawToken !== '') {
+        $err['detail'] = ['appealUid' => $user['userId'], 'appealToken' => $rawToken];
+      }
+      sendJson(403, false, null, $err);
+    }
     if ($user['status'] === 'Pending') {
       $msg = 'Your account is pending admin approval. Please wait for approval.';
     } elseif ($user['status'] === 'Banned') {

@@ -41,6 +41,7 @@ function LoginPage({ variant = 'supplier' }) {
   const [form, setForm] = useState({ identifier: '', password: '' });
   const [errors, setErrors] = useState({});       // per-field messages
   const [formError, setFormError] = useState(''); // server/auth error (not field-specific)
+  const [appealLink, setAppealLink] = useState(''); // set when the account is suspended
   const [credsInvalid, setCredsInvalid] = useState(false); // wrong email/password → red-border both fields
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPw, setShowPw] = useState(false);
@@ -85,6 +86,7 @@ function LoginPage({ variant = 'supplier' }) {
     event.preventDefault();   // AJAX submit — no page reload
     setFormError('');
     setCredsInvalid(false);
+    setAppealLink('');
 
     const found = validateForm(form);
     if (Object.keys(found).length > 0) {
@@ -109,13 +111,22 @@ function LoginPage({ variant = 'supplier' }) {
 
       navigate(homePathFor(result.user));   // success → admin or supplier home
     } catch (err) {
+      const msg = err.message || GENERIC_LOGIN_ERROR;
+      // Suspended: the credentials WERE valid, so don't red-border the fields —
+      // show the reason and offer the appeal link the backend returned.
+      if (err.code === 'SUSPENDED') {
+        setFormError(msg);
+        if (err.detail?.appealUid && err.detail?.appealToken) {
+          setAppealLink(`/appeal?uid=${encodeURIComponent(err.detail.appealUid)}&token=${encodeURIComponent(err.detail.appealToken)}`);
+        }
+        return;
+      }
       // wrong email/password — show a generic message AND red-border both fields
       // (mirrors the mobile app), since we can't tell which one was wrong. The
       // backend's generic message says "email/username" (it serves the mobile
       // customer app too); on this email-only web login, show the email-only
       // wording instead, while keeping any specific status message as-is.
       setCredsInvalid(true);
-      const msg = err.message || GENERIC_LOGIN_ERROR;
       setFormError(/invalid email\/username or password/i.test(msg) ? GENERIC_LOGIN_ERROR : msg);
     } finally {
       setIsSubmitting(false);
@@ -192,6 +203,11 @@ function LoginPage({ variant = 'supplier' }) {
           {/* login-failure message shown inline under the field (matches the
               mobile app + the per-field validation style), not a banner */}
           {formError && <div className="text-danger small mt-1">{formError}</div>}
+          {appealLink && (
+            <div className="small mt-1">
+              <a href={appealLink}>Appeal this suspension</a>
+            </div>
+          )}
         </div>
 
         <button type="submit" className="btn btn-primary w-100 text-center" disabled={isSubmitting}>
