@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getCommissionReport, getCommission, setCommission, getCourierFee, setCourierFee } from '../adminService';
+import { getCommissionReport, getCommission, setCommission } from '../adminService';
 import { useAuth } from '../../auth/AuthContext';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import Toast from '../../../components/Toast';
@@ -31,12 +31,6 @@ function AdminCommissionPage() {
   const [preview, setPreview] = useState(false);
   const [supplierSearch, setSupplierSearch] = useState('');
 
-  // in-house courier fee configuration (mirrors the commission rate card)
-  const [courierFee, setCourierFeeState] = useState(null);   // { current, active, default, history }
-  const [newFee, setNewFee] = useState('');
-  const [savingFee, setSavingFee] = useState(false);
-  const [confirmFee, setConfirmFee] = useState(false);
-
   // per-supplier table: search + sort + paginate (totals row stays the full sum)
   const bySupplier = data?.bySupplier ?? [];
   const filteredSuppliers = useMemo(() => {
@@ -52,17 +46,14 @@ function AdminCommissionPage() {
 
   function load(r = range) {
     setLoading(true);
-    Promise.all([getCommission(), getCommissionReport({ from: r.from, to: r.to }), getCourierFee()])
-      .then(([c, rep, fee]) => {
+    Promise.all([getCommission(), getCommissionReport({ from: r.from, to: r.to })])
+      .then(([c, rep]) => {
         setCommissionState(c);
         setData(rep);
-        setCourierFeeState(fee);
         // prefill the input with the current rate so the admin can nudge it with
         // the spinner (e.g. 10 → 11) instead of starting from an empty field
         const cur = c?.current?.commissionRateValue;
         if (cur != null) setNewRate(String(Number(cur)));
-        // prefill the fee input with the currently-active fee
-        if (fee?.active != null) setNewFee(String(Number(fee.active)));
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -96,30 +87,6 @@ function AdminCommissionPage() {
 
   const currentRate = commission?.current?.commissionRateValue != null
     ? Number(commission.current.commissionRateValue) : null;
-
-  const activeFee = courierFee?.active != null ? Number(courierFee.active) : null;
-  const feeIsConfigDefault = !courierFee?.current;   // no DB row yet → showing config default
-  const feeError = (() => {
-    if (newFee === '') return '';
-    const n = Number(newFee);
-    if (Number.isNaN(n)) return 'Enter a number.';
-    if (n < 0 || n > 1000) return 'Fee must be between 0 and 1000.';
-    return '';
-  })();
-
-  async function applyFee() {
-    setSavingFee(true);
-    setError('');
-    try {
-      await setCourierFee(Number(newFee));
-      setToast(`In-house courier fee set to ${rm(Number(newFee))} per delivery.`);
-      load();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSavingFee(false);
-    }
-  }
 
   const hasReport = !!data && data.summary.suppliers > 0;
   const growth = data?.period?.growthPct;
@@ -155,7 +122,7 @@ function AdminCommissionPage() {
   return (
     <div className="container py-4 text-start">
       <h1 className="mb-1">💰 Commission</h1>
-      <p className="text-muted">Set the platform commission rate and in-house courier fee, and review earnings across suppliers.</p>
+      <p className="text-muted">Set the platform commission rate and review earnings across suppliers.</p>
 
       {error && (
         <div className="alert alert-danger py-2 d-flex justify-content-between align-items-center">
@@ -219,75 +186,6 @@ function AdminCommissionPage() {
                           <td>
                             <span className={`badge text-bg-${h.commissionStatus === 'Active' ? 'success' : 'secondary'}`}>
                               {h.commissionStatus}
-                            </span>
-                          </td>
-                          <td>{h.setBy || <span className="text-muted">—</span>}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* in-house courier fee configuration */}
-          <div className="card mb-4">
-            <div className="card-header bg-white fw-semibold">In-house courier fee</div>
-            <div className="card-body">
-              <div className="row g-3 align-items-end">
-                <div className="col-auto">
-                  <div className="text-muted small text-uppercase">Current fee</div>
-                  <div className="fs-3 fw-bold text-success">
-                    {activeFee != null ? rm(activeFee) : <span className="text-muted fs-5">none set</span>}
-                    <span className="fs-6 fw-normal text-muted"> / delivery</span>
-                  </div>
-                  {feeIsConfigDefault && activeFee != null && (
-                    <div className="text-muted small">default — not yet set in-app</div>
-                  )}
-                </div>
-                <div className="col-sm-4">
-                  <label className="form-label small text-muted mb-1">New fee (RM per delivery)</label>
-                  <input type="number" min="0" max="1000" step="0.01" placeholder="e.g. 5.00"
-                    className={'form-control' + (feeError ? ' is-invalid' : '')}
-                    value={newFee} onChange={(e) => setNewFee(e.target.value)} />
-                  {feeError && <div className="invalid-feedback">{feeError}</div>}
-                </div>
-                <div className="col-auto">
-                  <button className="btn btn-primary"
-                    disabled={savingFee || newFee === '' || !!feeError || (Number(newFee) === activeFee && !feeIsConfigDefault)}
-                    onClick={() => setConfirmFee(true)}>
-                    {savingFee ? 'Saving…' : 'Update fee'}
-                  </button>
-                </div>
-              </div>
-              <p className="text-muted small mb-0 mt-2">
-                Charged per completed in-house delivery — paid to the courier and recovered from the
-                supplier. The fee is snapshotted on each delivery, so changing it never rewrites past
-                earnings. The previous fee is kept as history.
-              </p>
-
-              {courierFee?.history?.length > 0 && (
-                <>
-                  <hr />
-                  <h6 className="text-muted">Fee history</h6>
-                  <table className="table table-sm w-auto mb-0">
-                    <thead>
-                      <tr>
-                        <th style={{ width: 110 }}>Fee</th>
-                        <th style={{ width: 180 }}>Effective</th>
-                        <th style={{ width: 100 }}>Status</th>
-                        <th>Set by</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {courierFee.history.map((h) => (
-                        <tr key={h.courierFeeId}>
-                          <td className="fw-semibold">{rm(h.feeValue)}</td>
-                          <td>{new Date(h.effectiveDate).toLocaleDateString()}</td>
-                          <td>
-                            <span className={`badge text-bg-${h.feeStatus === 'Active' ? 'success' : 'secondary'}`}>
-                              {h.feeStatus}
                             </span>
                           </td>
                           <td>{h.setBy || <span className="text-muted">—</span>}</td>
@@ -410,16 +308,6 @@ function AdminCommissionPage() {
         confirmColor="primary"
         onCancel={() => setConfirm(false)}
         onConfirm={() => { setConfirm(false); applyRate(); }}
-      />
-
-      <ConfirmDialog
-        isOpen={confirmFee}
-        title="Update in-house courier fee?"
-        message={`Set the in-house courier fee to ${rm(Number(newFee || 0))} per delivery? It applies to deliveries completed from now on.`}
-        confirmText="Update"
-        confirmColor="primary"
-        onCancel={() => setConfirmFee(false)}
-        onConfirm={() => { setConfirmFee(false); applyFee(); }}
       />
 
       <Toast message={toast} onClose={() => setToast('')} />

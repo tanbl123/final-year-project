@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { getCourierPayouts, payCourier, getCourierPayoutHistory, remindCourierPayout } from '../adminService';
+import { getCourierPayouts, payCourier, getCourierPayoutHistory, remindCourierPayout, getCourierFee, setCourierFee } from '../adminService';
 import SortableTh from '../../../components/SortableTh';
 import Toast from '../../../components/Toast';
+import ConfirmDialog from '../../../components/ConfirmDialog';
 import { useTableSort } from '../../../hooks/useTableSort';
 
 // Courier payouts — each active courier's accrued per-delivery earnings, with a
@@ -16,10 +17,20 @@ function AdminCourierPayoutsPage() {
   const [openId, setOpenId] = useState('');          // courier whose history is expanded
   const [history, setHistory] = useState({});        // { [deliveryPersonnelId]: payouts[] | 'loading' }
 
+  // in-house courier fee configuration (the flat per-delivery fee)
+  const [courierFee, setCourierFeeState] = useState(null);   // { current, active, default, history }
+  const [newFee, setNewFee] = useState('');
+  const [savingFee, setSavingFee] = useState(false);
+  const [confirmFee, setConfirmFee] = useState(false);
+
   function load() {
     setLoading(true);
-    getCourierPayouts()
-      .then((data) => setCouriers(data.couriers))
+    Promise.all([getCourierPayouts(), getCourierFee()])
+      .then(([data, fee]) => {
+        setCouriers(data.couriers);
+        setCourierFeeState(fee);
+        if (fee?.active != null) setNewFee(String(Number(fee.active)));
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }
@@ -60,6 +71,30 @@ function AdminCourierPayoutsPage() {
   const fmt = (n) => `RM ${Number(n || 0).toFixed(2)}`;
   const notSetUp = couriers.filter((c) => !(c.connected && c.payoutsEnabled));
 
+  const activeFee = courierFee?.active != null ? Number(courierFee.active) : null;
+  const feeIsConfigDefault = !courierFee?.current;   // no DB row yet → showing config default
+  const feeError = (() => {
+    if (newFee === '') return '';
+    const n = Number(newFee);
+    if (Number.isNaN(n)) return 'Enter a number.';
+    if (n < 0 || n > 1000) return 'Fee must be between 0 and 1000.';
+    return '';
+  })();
+
+  async function applyFee() {
+    setSavingFee(true);
+    setError('');
+    try {
+      await setCourierFee(Number(newFee));
+      setNotice(`In-house courier fee set to ${fmt(Number(newFee))} per delivery.`);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingFee(false);
+    }
+  }
+
   async function toggleHistory(courierId) {
     if (openId === courierId) { setOpenId(''); return; }
     setOpenId(courierId);
@@ -98,6 +133,77 @@ function AdminCourierPayoutsPage() {
       {/* success confirmations are transient → toast (errors stay inline below) */}
       <Toast message={notice} onClose={() => setNotice('')} />
       {error && <div className="alert alert-danger py-2">{error}</div>}
+
+      {/* in-house courier fee configuration */}
+      {!loading && (
+        <div className="card mb-4">
+          <div className="card-header bg-white fw-semibold">In-house courier fee</div>
+          <div className="card-body">
+            <div className="row g-3 align-items-end">
+              <div className="col-auto">
+                <div className="text-muted small text-uppercase">Current fee</div>
+                <div className="fs-3 fw-bold text-success">
+                  {activeFee != null ? fmt(activeFee) : <span className="text-muted fs-5">none set</span>}
+                  <span className="fs-6 fw-normal text-muted"> / delivery</span>
+                </div>
+                {feeIsConfigDefault && activeFee != null && (
+                  <div className="text-muted small">default — not yet set in-app</div>
+                )}
+              </div>
+              <div className="col-sm-4">
+                <label className="form-label small text-muted mb-1">New fee (RM per delivery)</label>
+                <input type="number" min="0" max="1000" step="0.01" placeholder="e.g. 5.00"
+                  className={'form-control' + (feeError ? ' is-invalid' : '')}
+                  value={newFee} onChange={(e) => setNewFee(e.target.value)} />
+                {feeError && <div className="invalid-feedback">{feeError}</div>}
+              </div>
+              <div className="col-auto">
+                <button className="btn btn-primary"
+                  disabled={savingFee || newFee === '' || !!feeError || (Number(newFee) === activeFee && !feeIsConfigDefault)}
+                  onClick={() => setConfirmFee(true)}>
+                  {savingFee ? 'Saving…' : 'Update fee'}
+                </button>
+              </div>
+            </div>
+            <p className="text-muted small mb-0 mt-2">
+              Charged per completed in-house delivery — paid to the courier (their per-delivery
+              earning) and recovered from the supplier. The fee is snapshotted on each delivery, so
+              changing it never rewrites past earnings. The previous fee is kept as history.
+            </p>
+
+            {courierFee?.history?.length > 0 && (
+              <>
+                <hr />
+                <h6 className="text-muted">Fee history</h6>
+                <table className="table table-sm w-auto mb-0">
+                  <thead>
+                    <tr>
+                      <th style={{ width: 110 }}>Fee</th>
+                      <th style={{ width: 180 }}>Effective</th>
+                      <th style={{ width: 100 }}>Status</th>
+                      <th>Set by</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {courierFee.history.map((h) => (
+                      <tr key={h.courierFeeId}>
+                        <td className="fw-semibold">{fmt(h.feeValue)}</td>
+                        <td>{new Date(h.effectiveDate).toLocaleDateString()}</td>
+                        <td>
+                          <span className={`badge text-bg-${h.feeStatus === 'Active' ? 'success' : 'secondary'}`}>
+                            {h.feeStatus}
+                          </span>
+                        </td>
+                        <td>{h.setBy || <span className="text-muted">—</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {!loading && notSetUp.length > 0 && (
         <div className="alert alert-warning py-2">
@@ -222,6 +328,16 @@ function AdminCourierPayoutsPage() {
           </table>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={confirmFee}
+        title="Update in-house courier fee?"
+        message={`Set the in-house courier fee to ${fmt(Number(newFee || 0))} per delivery? It applies to deliveries completed from now on.`}
+        confirmText="Update"
+        confirmColor="primary"
+        onCancel={() => setConfirmFee(false)}
+        onConfirm={() => { setConfirmFee(false); applyFee(); }}
+      />
     </div>
   );
 }
