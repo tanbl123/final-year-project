@@ -524,6 +524,15 @@ function validateCourierKyc(array $body): array {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Full name is too long (max 120 characters).']);
   }
 
+  // Keep only the CHOSEN licence form; discard the other so a stale upload from a
+  // toggled-away mode is never stored (physical XOR digital, never both).
+  if ($licenseIsDigital) {
+    $licensePhotoUrl = '';
+    $licensePhotoBackUrl = '';
+  } else {
+    $eLicenseUrl = '';
+  }
+
   return [
     'fullName' => $fullName, 'phoneNumber' => normalizeMyPhone($phoneNumber),
     'vehicleType' => $vehicleType, 'vehicleBrand' => $vehicleBrand,
@@ -766,6 +775,15 @@ function handleRegisterCourier(PDO $pdo): void {
     $left = VERIFY_MAX_ATTEMPTS - ((int) $vrow['attempts'] + 1);
     $msg  = $left > 0 ? "Incorrect code. $left attempt(s) left." : 'Incorrect code. Please request a new one.';
     sendJson(400, false, null, ['code' => 'BAD_CODE', 'message' => $msg]);
+  }
+
+  // Keep only the chosen licence form (physical XOR digital), so a stale upload
+  // from a toggled-away mode is never stored.
+  if ($licenseIsDigital) {
+    $licensePhotoUrl = '';
+    $licensePhotoBackUrl = '';
+  } else {
+    $eLicenseUrl = '';
   }
 
   $pdo->beginTransaction();

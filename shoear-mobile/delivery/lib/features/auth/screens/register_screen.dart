@@ -870,7 +870,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ButtonSegment(value: true, label: Text('Digital (e-licence)'), icon: Icon(Icons.smartphone_outlined)),
             ],
             selected: {_licenseIsDigital},
-            onSelectionChanged: (s) => setState(() => _licenseIsDigital = s.first),
+            onSelectionChanged: (s) => setState(() {
+              _licenseIsDigital = s.first;
+              // discard the other mode's uploads so only the chosen form is kept
+              if (_licenseIsDigital) {
+                _licensePhotoUrl = null;
+                _licensePhotoBackUrl = null;
+              } else {
+                _eLicenseUrl = null;
+              }
+            }),
           ),
           const SizedBox(height: 8),
           if (_licenseIsDigital)
