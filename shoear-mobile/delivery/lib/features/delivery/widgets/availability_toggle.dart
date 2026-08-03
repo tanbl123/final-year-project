@@ -26,6 +26,8 @@ class _AvailabilityToggleState extends State<AvailabilityToggle> {
   bool _busy = false;
   bool _payoutBlocked = false;   // Stripe configured but this courier isn't payouts-enabled
   bool _detailsSubmitted = false; // onboarding submitted but Stripe still verifying
+  bool _pendingVerification = false; // Stripe is verifying submitted docs (just wait)
+  List<String> _requirementsDue = const []; // exact things Stripe still needs
 
   @override
   void initState() {
@@ -48,6 +50,8 @@ class _AvailabilityToggleState extends State<AvailabilityToggle> {
         _online = online;
         _payoutBlocked = blocked;
         _detailsSubmitted = status['detailsSubmitted'] == true;
+        _pendingVerification = status['pendingVerification'] == true;
+        _requirementsDue = (status['requirementsDue'] as List?)?.map((e) => e.toString()).toList() ?? const [];
       });
     } catch (_) {
       // if we can't load it, assume online + not blocked so the UI isn't stuck
@@ -60,6 +64,21 @@ class _AvailabilityToggleState extends State<AvailabilityToggle> {
       builder: (_) => RequirePayoutScreen(onDone: () => Navigator.of(context).pop()),
     ));
     if (mounted) _load();   // re-check once they return
+  }
+
+  // Explain the payout state as specifically as Stripe lets us: the exact
+  // outstanding requirement if any, else "verifying", else the initial prompt.
+  String _payoutSubtitle() {
+    if (_requirementsDue.isNotEmpty) {
+      return 'Stripe still needs: ${_requirementsDue.join('; ')}. Tap to finish.';
+    }
+    if (_pendingVerification) {
+      return 'Stripe is verifying your details — check back in a minute.';
+    }
+    if (_detailsSubmitted) {
+      return 'Stripe still needs to verify your identity before you can go online. Tap to finish.';
+    }
+    return 'Set up how you get paid before you can go online for deliveries.';
   }
 
   Future<void> _toggle(bool value) async {
@@ -98,11 +117,7 @@ class _AvailabilityToggleState extends State<AvailabilityToggle> {
                 children: [
                   Text(_detailsSubmitted ? 'Finish payout verification' : 'Connect your payout account',
                       style: TextStyle(fontWeight: FontWeight.bold, color: color)),
-                  Text(
-                      _detailsSubmitted
-                          ? 'Stripe still needs to verify your identity before you can go online. Tap to finish.'
-                          : 'Set up how you get paid before you can go online for deliveries.',
-                      style: const TextStyle(fontSize: 12)),
+                  Text(_payoutSubtitle(), style: const TextStyle(fontSize: 12)),
                 ],
               ),
             ),

@@ -146,16 +146,57 @@ function handleStripeReturnPage(): void {
   exit;
 }
 
+// Turn a Stripe Connect account's requirements into friendly, courier-facing
+// labels, so the app can tell the courier EXACTLY what Stripe is still waiting
+// for (Stripe surfaces requirements asynchronously — the ID document typically
+// only appears after it has processed the first submission).
+//   'due'     → things the courier must still provide/fix (act now)
+//   'pending' → Stripe is verifying what was submitted (just wait)
+function courierStripeRequirements(array $account): array {
+  $req = $account['requirements'] ?? [];
+  $due = array_values(array_unique(array_merge(
+    $req['currently_due'] ?? [],
+    $req['past_due'] ?? []
+  )));
+
+  // Map a dotted requirement code (e.g. 'individual.verification.document') to a
+  // plain-language instruction. Several sub-fields collapse to one label.
+  $labelFor = function (string $code): string {
+    $c = preg_replace('/^(individual|company|person|representative)\./', '', $code);
+    if (strpos($c, 'verification.additional_document') !== false) return 'Upload an additional identity document';
+    if (strpos($c, 'verification.document') !== false)            return 'Upload your identity document (photo ID)';
+    if ($c === 'id_number')                                        return 'Provide your identity/IC number';
+    if (strpos($c, 'dob.') === 0)                                  return 'Confirm your date of birth';
+    if ($c === 'first_name' || $c === 'last_name')                 return 'Confirm your legal name';
+    if (strpos($c, 'address.') === 0)                              return 'Confirm your address';
+    if ($c === 'phone')                                            return 'Confirm your phone number';
+    if ($c === 'email')                                            return 'Confirm your email address';
+    if ($c === 'external_account')                                 return 'Add your bank account for payouts';
+    if (strpos($c, 'tos_acceptance') === 0)                        return 'Accept the Stripe terms of service';
+    if (strpos($c, 'business_profile') === 0)                      return 'Complete your business profile';
+    return ucfirst(str_replace(['_', '.'], ' ', $c));   // readable fallback
+  };
+
+  $labels = [];
+  foreach ($due as $code) {
+    $l = $labelFor((string) $code);
+    if (!in_array($l, $labels, true)) { $labels[] = $l; }
+  }
+  return ['due' => $labels, 'pending' => !empty($req['pending_verification'])];
+}
+
 // GET /courier/stripe/status — report payout status, syncing payoutsEnabled
 // from Stripe when an account exists.
 function handleCourierStripeStatus(PDO $pdo, array $config, array $auth): void {
   $row = courierRowForAuth($pdo, $auth);
 
   if (!$row['stripeAccountId']) {
-    sendJson(200, true, ['connected' => false, 'payoutsEnabled' => false, 'configured' => stripeConfigured($config)]);
+    sendJson(200, true, ['connected' => false, 'payoutsEnabled' => false,
+      'requirementsDue' => [], 'pendingVerification' => false, 'configured' => stripeConfigured($config)]);
   }
   if (!stripeConfigured($config)) {
-    sendJson(200, true, ['connected' => true, 'payoutsEnabled' => (bool) $row['payoutsEnabled'], 'configured' => false]);
+    sendJson(200, true, ['connected' => true, 'payoutsEnabled' => (bool) $row['payoutsEnabled'],
+      'requirementsDue' => [], 'pendingVerification' => false, 'configured' => false]);
   }
 
   try {
@@ -165,11 +206,14 @@ function handleCourierStripeStatus(PDO $pdo, array $config, array $auth): void {
     $pdo->prepare('UPDATE delivery_personnel SET payoutsEnabled = :e WHERE deliveryPersonnelId = :id')
         ->execute(['e' => $enabled ? 1 : 0, 'id' => $row['deliveryPersonnelId']]);
 
+    $reqs = courierStripeRequirements($account);
     sendJson(200, true, [
-      'connected'        => true,
-      'payoutsEnabled'   => $enabled,
-      'detailsSubmitted' => !empty($account['details_submitted']),
-      'configured'       => true,
+      'connected'           => true,
+      'payoutsEnabled'      => $enabled,
+      'detailsSubmitted'    => !empty($account['details_submitted']),
+      'requirementsDue'     => $reqs['due'],
+      'pendingVerification' => $reqs['pending'],
+      'configured'          => true,
     ]);
   } catch (Throwable $e) {
     sendJson(502, false, null, ['code' => 'STRIPE_ERROR', 'message' => $e->getMessage()]);

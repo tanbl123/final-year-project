@@ -48,11 +48,21 @@ class _RequirePayoutScreenState extends State<RequirePayoutScreen> {
         widget.onDone();
         return;
       }
+      final due = (status['requirementsDue'] as List?)?.map((e) => e.toString()).toList() ?? const [];
+      final pending = status['pendingVerification'] == true;
       final submitted = status['detailsSubmitted'] == true;
-      context.showSnack(submitted
-          ? 'Stripe is still verifying your details. If it asked for a government ID, tap '
-              '"Set up bank account" to finish that step, then try again.'
-          : 'Payout setup isn\'t complete yet. Tap "Set up bank account" to finish it, then try again.');
+      String msg;
+      if (due.isNotEmpty) {
+        msg = 'Stripe still needs: ${due.join('; ')}. Tap "Set up bank account" to provide it, then try again.';
+      } else if (pending) {
+        msg = 'Stripe is verifying your details — this can take a minute. Check back shortly and tap continue again.';
+      } else if (submitted) {
+        msg = 'Stripe is still verifying your details. If it asked for a government ID, tap '
+            '"Set up bank account" to finish that step, then try again.';
+      } else {
+        msg = 'Payout setup isn\'t complete yet. Tap "Set up bank account" to finish it, then try again.';
+      }
+      context.showSnack(msg);
     } catch (e) {
       if (mounted) context.showSnack(e.toString());
     } finally {
