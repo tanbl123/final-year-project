@@ -44,6 +44,7 @@ require __DIR__ . '/../../controllers/EasyParcelController.php';
 require __DIR__ . '/../../controllers/CourierController.php';
 require __DIR__ . '/../../controllers/RecommendationController.php';
 require __DIR__ . '/../../controllers/AutofitController.php';
+require __DIR__ . '/../../controllers/AppealController.php';
 
 // ── Always answer with JSON, even on a PHP error ──
 // A stray warning/notice or an uncaught error would otherwise print into the
@@ -998,7 +999,31 @@ if ($method === 'PATCH' && preg_match('#^/admin/users/([^/]+)/status$#', $path, 
   $auth = requireAuth($secret);
   requireAdmin($auth);
   $pdo  = getPDO();
-  handleSetUserStatus($pdo, $auth, $m[1]);
+  handleSetUserStatus($pdo, $auth, $m[1], $config);
+}
+
+// ── suspension appeals ──
+// PUBLIC: a suspended user validates their emailed appeal link + submits an appeal.
+if ($method === 'GET' && $path === '/appeal') {
+  $pdo = getPDO();
+  handleGetAppealContext($pdo);
+}
+if ($method === 'POST' && $path === '/appeal') {
+  $pdo = getPDO();
+  handleSubmitAppeal($pdo);
+}
+// ADMIN: review + decide appeals.
+if ($method === 'GET' && $path === '/admin/appeals') {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleListAppeals($pdo);
+}
+if ($method === 'POST' && preg_match('#^/admin/appeals/([^/]+)/resolve$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleResolveAppeal($pdo, $auth, $m[1], $config);
 }
 
 // admin provisions an internal-staff account (currently AR Specialist only).

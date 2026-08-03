@@ -70,6 +70,8 @@ function AdminUsersPage() {
 
   const [busyId, setBusyId] = useState('');         // user being actioned
   const [confirm, setConfirm] = useState(null);     // { user, status, title, message, color }
+  const [suspendForm, setSuspendForm] = useState(null); // { user, reason } for the suspend-reason modal
+  const [suspendErr, setSuspendErr] = useState('');
   const [detail, setDetail] = useState(null);       // fetched user for the modal
   const [detailLoading, setDetailLoading] = useState(false);
 
@@ -260,11 +262,11 @@ function AdminUsersPage() {
     setPage(1);
   }
 
-  async function changeStatus(user, status) {
+  async function changeStatus(user, status, reason = '') {
     setBusyId(user.userId);
     setError('');
     try {
-      await setUserStatus(user.userId, status);
+      await setUserStatus(user.userId, status, reason);
       setToast(`${user.fullName} → ${status}.`);
       load();   // refresh so the row reflects (or leaves) the active filter
     } catch (err) {
@@ -272,6 +274,16 @@ function AdminUsersPage() {
     } finally {
       setBusyId('');
     }
+  }
+
+  // Suspending needs a reason (emailed to the user with an appeal link).
+  async function submitSuspend(e) {
+    e.preventDefault();
+    const reason = (suspendForm?.reason || '').trim();
+    if (reason === '') { setSuspendErr('A reason is required — the user is told this.'); return; }
+    const user = suspendForm.user;
+    setSuspendForm(null); setSuspendErr('');
+    await changeStatus(user, 'Suspended', reason);
   }
 
   // reversible actions act immediately; destructive ones confirm first
@@ -333,7 +345,7 @@ function AdminUsersPage() {
         onClick={() => askConfirm(u, 'Rejected', 'Reject')}>Reject</button>);
     } else if (u.status === 'Active') {
       btns.push(<button key="sp" className="btn btn-outline-secondary btn-sm" disabled={busy}
-        onClick={() => askConfirm(u, 'Suspended', 'Suspend')}>Suspend</button>);
+        onClick={() => { setSuspendErr(''); setSuspendForm({ user: u, reason: '' }); }}>Suspend</button>);
     } else if (u.status === 'Suspended') {
       // only a suspended account can be reactivated. A Rejected/Banned applicant
       // is a registration-review state — they resubmit (→ Pending) and are
@@ -658,6 +670,36 @@ function AdminUsersPage() {
                 <button type="submit" className="btn btn-primary" disabled={editing || editForm.loading}>
                   {editing ? 'Saving…' : 'Save changes'}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* suspend with a required reason (emailed to the user + appeal link) */}
+      {suspendForm && (
+        <div className="modal show d-block" tabIndex="-1" style={{ background: 'rgba(0,0,0,.5)' }}
+          onClick={() => (busyId ? null : setSuspendForm(null))}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <form className="modal-content" onSubmit={submitSuspend} noValidate>
+              <div className="modal-header">
+                <h5 className="modal-title">Suspend {suspendForm.user.fullName}?</h5>
+                <button type="button" className="btn-close" onClick={() => setSuspendForm(null)}></button>
+              </div>
+              <div className="modal-body">
+                <p className="text-muted small">
+                  They won't be able to sign in. We'll email them this reason and a link to appeal.
+                </p>
+                {suspendErr && <div className="alert alert-danger py-2">{suspendErr}</div>}
+                <label className="form-label small mb-1">Reason (shown to the user)</label>
+                <textarea className={`form-control ${suspendErr ? 'is-invalid' : ''}`} rows={3}
+                  value={suspendForm.reason}
+                  placeholder="e.g. Repeated policy violations in product reviews."
+                  onChange={(e) => { setSuspendForm((f) => ({ ...f, reason: e.target.value })); if (suspendErr) setSuspendErr(''); }} />
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-light" onClick={() => setSuspendForm(null)}>Cancel</button>
+                <button type="submit" className="btn btn-warning">Suspend &amp; notify</button>
               </div>
             </form>
           </div>

@@ -345,7 +345,7 @@ function handleGetUser(PDO $pdo, string $userId): void {
 }
 
 // PATCH /admin/users/{userId}/status — change a user's status. Body: { status }.
-function handleSetUserStatus(PDO $pdo, array $auth, string $userId): void {
+function handleSetUserStatus(PDO $pdo, array $auth, string $userId, array $config = []): void {
   $body   = getJsonBody();
   $status = trim($body['status'] ?? '');
   $allowed = ['Active', 'Suspended', 'Rejected', 'Deleted'];
@@ -357,7 +357,7 @@ function handleSetUserStatus(PDO $pdo, array $auth, string $userId): void {
     sendJson(409, false, null, ['code' => 'SELF', 'message' => 'You cannot change your own account status.']);
   }
 
-  $stmt = $pdo->prepare('SELECT role, status FROM `user` WHERE userId = :id');
+  $stmt = $pdo->prepare('SELECT role, status, email, fullName FROM `user` WHERE userId = :id');
   $stmt->execute(['id' => $userId]);
   $target = $stmt->fetch();
   if (!$target) {
@@ -379,6 +379,39 @@ function handleSetUserStatus(PDO $pdo, array $auth, string $userId): void {
   if (!in_array($current, $allowedFrom[$status] ?? [], true)) {
     sendJson(409, false, null, ['code' => 'INVALID_TRANSITION',
       'message' => "Can't change a {$current} account to {$status} here."]);
+  }
+
+  // Suspending: record WHY, issue a one-time appeal token, and email the person
+  // the reason + a link to appeal. (A reason is required so they know why.)
+  if ($status === 'Suspended') {
+    $reason = trim($body['reason'] ?? '');
+    if ($reason === '') {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A suspension reason is required — the user is told this.']);
+    }
+    if (mb_strlen($reason) > 255) { $reason = mb_substr($reason, 0, 255); }
+
+    $rawToken = bin2hex(random_bytes(32));
+    $pdo->prepare('UPDATE `user` SET status = :s, rejectionReason = :r, appealToken = :tok WHERE userId = :id')
+        ->execute(['s' => $status, 'r' => $reason,
+                   'tok' => password_hash($rawToken, PASSWORD_BCRYPT), 'id' => $userId]);
+
+    $emailSent = false;
+    if (function_exists('mailConfigured') && mailConfigured($config) && function_exists('sendAccountSuspendedEmail')) {
+      $appUrl    = rtrim((string) ($config['app_url'] ?? 'http://localhost:5173'), '/');
+      $appealUrl = $appUrl . '/appeal?uid=' . rawurlencode($userId) . '&token=' . $rawToken;
+      try {
+        sendAccountSuspendedEmail($config, (string) $target['email'], (string) ($target['fullName'] ?? ''), $reason, $appealUrl);
+        $emailSent = true;
+      } catch (Throwable $e) { /* account is still suspended; just report */ }
+    }
+    sendJson(200, true, ['userId' => $userId, 'status' => $status, 'notifyEmailSent' => $emailSent]);
+  }
+
+  // Reinstating (un-suspend / approve): clear the reason + any appeal token.
+  if ($status === 'Active') {
+    $pdo->prepare('UPDATE `user` SET status = :s, rejectionReason = NULL, appealToken = NULL WHERE userId = :id')
+        ->execute(['s' => $status, 'id' => $userId]);
+    sendJson(200, true, ['userId' => $userId, 'status' => $status]);
   }
 
   $upd = $pdo->prepare('UPDATE `user` SET status = :s WHERE userId = :id');
@@ -1138,6 +1171,7 @@ function adminBadgeCounts(PDO $pdo): array {
     'issues'     => "SELECT COUNT(*) FROM delivery_issue WHERE issueStatus = 'Open'",
     'refunds'    => "SELECT COUNT(*) FROM refund WHERE refundStatus = 'Pending'",
     'flags'      => "SELECT COUNT(*) FROM content_flag WHERE flagStatus = 'Open'",
+    'appeals'    => "SELECT COUNT(*) FROM account_appeal WHERE appealStatus = 'Open'",
     // Finance: approved couriers who still haven't set up a payout account
     'courierPayouts' => "SELECT COUNT(*) FROM delivery_personnel dp JOIN `user` u ON u.userId = dp.userId
                            WHERE u.role = 'DeliveryPersonnel' AND u.status = 'Active' AND dp.payoutsEnabled = 0",

@@ -287,8 +287,17 @@ export function getUser(userId) {
   return apiGet(`/admin/users/${userId}`, getToken());
 }
 
-export function setUserStatus(userId, status) {
-  return apiPatch(`/admin/users/${userId}/status`, { status }, getToken());
+// Suspending requires a reason (the user is emailed it + an appeal link).
+export function setUserStatus(userId, status, reason = '') {
+  return apiPatch(`/admin/users/${userId}/status`, { status, reason }, getToken());
+}
+
+// ── suspension appeals (admin review) ────────────────────────────────
+export function getAppeals() {
+  return apiGet('/admin/appeals', getToken());
+}
+export function resolveAppeal(appealId, action, note = '') {
+  return apiPost(`/admin/appeals/${appealId}/resolve`, { action, note }, getToken());
 }
 
 // ── delivery dispatch ────────────────────────────────────────────────

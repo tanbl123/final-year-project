@@ -7,6 +7,7 @@ import ProductsPage from './features/supplier/products/ProductsPage';
 import ReportsPage from './features/supplier/reports/ReportsPage';
 import LoginPage from './features/auth/pages/LoginPage';
 import SetPasswordPage from './features/auth/pages/SetPasswordPage';
+import AppealPage from './features/auth/pages/AppealPage';
 import ProtectedRoute, { homePathFor } from './features/auth/ProtectedRoute';
 import RegisterPage from './features/auth/pages/RegisterPage';
 import ForgotPasswordPage from './features/auth/pages/ForgotPasswordPage';
@@ -19,6 +20,7 @@ import SupplierOrdersPage from './features/supplier/orders/SupplierOrdersPage';
 import SupplierOrderDetailPage from './features/supplier/orders/SupplierOrderDetailPage';
 import AdminReviewsPage from './features/admin/reviews/AdminReviewsPage';
 import AdminFlagsPage from './features/admin/flags/AdminFlagsPage';
+import AdminAppealsPage from './features/admin/appeals/AdminAppealsPage';
 import AdminRefundsPage from './features/admin/refunds/AdminRefundsPage';
 import SupplierRefundsPage from './features/supplier/refunds/SupplierRefundsPage';
 import SupplierReviewsPage from './features/supplier/reviews/SupplierReviewsPage';
@@ -156,6 +158,8 @@ const router = createBrowserRouter(
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       {/* public one-time set-password page (staff invite link) */}
       <Route path="/set-password" element={<SetPasswordPage />} />
+      {/* public suspension-appeal page (token link from the suspension email) */}
+      <Route path="/appeal" element={<AppealPage />} />
 
       {/* rejected suppliers fix & resubmit their application here */}
       <Route path="/resubmit" element={
@@ -199,6 +203,9 @@ const router = createBrowserRouter(
       } />
       <Route path="/admin/reviews" element={
         <ProtectedRoute role="Admin"><AdminReviewsPage /></ProtectedRoute>
+      } />
+      <Route path="/admin/appeals" element={
+        <ProtectedRoute role="Admin"><AdminAppealsPage /></ProtectedRoute>
       } />
       <Route path="/admin/flags" element={
         <ProtectedRoute role="Admin"><AdminFlagsPage /></ProtectedRoute>

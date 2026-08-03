@@ -284,6 +284,50 @@ function sendSupplierRefundCompletedEmail(array $config, string $toEmail, string
   sendMail($config, $toEmail, $companyName, $subject, $text, $html);
 }
 
+// Tell a user their account was suspended, WHY, and how to appeal (a link to the
+// public, token-secured appeal page).
+function sendAccountSuspendedEmail(array $config, string $toEmail, string $fullName, string $reason, string $appealUrl): void {
+  $name = $fullName !== '' ? $fullName : 'there';
+
+  $subject  = 'ShoeAR — Your account has been suspended';
+  $textBody = "Your ShoeAR account has been suspended.\n\n"
+            . "Reason: $reason\n\n"
+            . "If you believe this was a mistake, you can appeal here:\n$appealUrl";
+  $bodyHtml = '<p>Your ShoeAR account has been <strong>suspended</strong>.</p>'
+            . '<p><strong>Reason:</strong> ' . htmlspecialchars($reason, ENT_QUOTES) . '</p>'
+            . '<p>If you believe this was a mistake, you can appeal:</p>'
+            . '<p><a href="' . htmlspecialchars($appealUrl, ENT_QUOTES) . '" '
+            . 'style="display:inline-block;padding:10px 18px;background:#4F46E5;color:#fff;'
+            . 'text-decoration:none;border-radius:6px">Appeal this suspension</a></p>'
+            . '<p style="color:#666;font-size:13px">Or paste this link into your browser:<br>'
+            . htmlspecialchars($appealUrl, ENT_QUOTES) . '</p>';
+
+  $text = "Dear $name,\n\n$textBody\n\nYours sincerely,\nThe ShoeAR Team";
+  $html = formalLetterHtml($name, $bodyHtml, '👟 ShoeAR');
+  sendMail($config, $toEmail, $fullName, $subject, $text, $html);
+}
+
+// Tell a user the outcome of their suspension appeal.
+function sendAppealDecisionEmail(array $config, string $toEmail, string $fullName, bool $approved, ?string $note): void {
+  $name = $fullName !== '' ? $fullName : 'there';
+  $noteText = ($note !== null && $note !== '') ? "\n\nNote from our team: $note" : '';
+  $noteHtml = ($note !== null && $note !== '') ? '<p><strong>Note from our team:</strong> ' . htmlspecialchars($note, ENT_QUOTES) . '</p>' : '';
+
+  if ($approved) {
+    $subject  = 'ShoeAR — Your account has been reinstated';
+    $textBody = "Good news — after reviewing your appeal, your ShoeAR account has been reinstated. You can sign in again as normal." . $noteText;
+    $bodyHtml = '<p>Good news — after reviewing your appeal, your ShoeAR account has been <strong>reinstated</strong>. You can sign in again as normal.</p>' . $noteHtml;
+  } else {
+    $subject  = 'ShoeAR — Update on your appeal';
+    $textBody = "We have reviewed your appeal. After careful consideration, your account will remain suspended." . $noteText;
+    $bodyHtml = '<p>We have reviewed your appeal. After careful consideration, your account will <strong>remain suspended</strong>.</p>' . $noteHtml;
+  }
+
+  $text = "Dear $name,\n\n$textBody\n\nYours sincerely,\nThe ShoeAR Team";
+  $html = formalLetterHtml($name, $bodyHtml, '👟 ShoeAR');
+  sendMail($config, $toEmail, $fullName, $subject, $text, $html);
+}
+
 // Nudge an approved supplier who has a payable balance but hasn't finished
 // connecting a Stripe payout account, so the platform can transfer their earnings.
 function sendSupplierPayoutSetupReminderEmail(array $config, string $toEmail, string $companyName): void {

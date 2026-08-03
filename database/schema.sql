@@ -76,8 +76,10 @@ CREATE TABLE `user` (
     -- link token + its expiry, both cleared once the password is set
     setPasswordToken   VARCHAR(255) NULL,
     setPasswordExpires DATETIME     NULL,
-    -- why a registration was rejected, shown to the supplier so they know what
-    -- to fix before resubmitting; cleared when they resubmit or are approved
+    -- one-time token (hash) authorising the public appeal page after a suspension
+    appealToken        VARCHAR(255) NULL,
+    -- why a registration was rejected (or an account suspended), shown to the
+    -- user so they know why; cleared when resubmitted / approved / reinstated
     rejectionReason VARCHAR(255) NULL,
     created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -519,6 +521,25 @@ CREATE TABLE content_flag (
         ON UPDATE CASCADE ON DELETE CASCADE,
     CONSTRAINT fk_flag_target FOREIGN KEY (targetUserId) REFERENCES `user`(userId)
         ON UPDATE CASCADE ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- Suspension appeals: a suspended user submits an appeal via a public,
+-- token-secured link (emailed on suspension); the admin approves (reinstate) or
+-- rejects it.
+CREATE TABLE account_appeal (
+    appealId     VARCHAR(12)  NOT NULL,                 -- APL0001
+    userId       VARCHAR(10)  NOT NULL,
+    message      VARCHAR(1000) NOT NULL,                -- the user's appeal text
+    appealStatus ENUM('Open','Approved','Rejected') NOT NULL DEFAULT 'Open',
+    adminNote    VARCHAR(255) NULL,                     -- admin's decision note (emailed to the user)
+    reviewedBy   VARCHAR(10)  NULL,
+    created_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at  DATETIME     NULL,
+    PRIMARY KEY (appealId),
+    KEY idx_appeal_user (userId),
+    KEY idx_appeal_status (appealStatus),
+    CONSTRAINT fk_appeal_user FOREIGN KEY (userId)
+        REFERENCES `user`(userId) ON UPDATE CASCADE ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- =====================================================================
