@@ -564,13 +564,49 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       ),
     );
     if (reason == null) return;
+    // "Other" → let the reporter describe the problem in their own words.
+    var finalReason = reason;
+    if (reason == 'Other') {
+      final detail = await _promptReportDetail();
+      if (detail == null) return;                 // cancelled
+      final t = detail.trim();
+      finalReason = t.isEmpty ? 'Other' : 'Other: $t';
+    }
     try {
-      await context.read<ReviewService>().flag(reviewId, reason);
+      await context.read<ReviewService>().flag(reviewId, finalReason);
       if (!mounted) return;
       context.showSnack('Thanks — our team will review this.');
     } catch (e) {
       if (mounted) context.showSnack(e.toString());
     }
+  }
+
+  // Free-text detail for an "Other" report. Returns the text, or null if the
+  // reporter cancelled.
+  Future<String?> _promptReportDetail() async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Tell us more'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 200,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: 'Briefly describe the problem with this review',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(controller.text), child: const Text('Submit')),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
   }
 
   Widget _addToCartBar(BuildContext context, ProductDetail p, bool hasStock) {

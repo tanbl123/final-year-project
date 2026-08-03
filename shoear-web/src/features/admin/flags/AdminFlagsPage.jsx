@@ -28,11 +28,16 @@ function AdminFlagsPage() {
     setError('');
     try {
       await resolveFlag(flag.flagId, action);
-      // remove_avatar/suspend clear every open flag for that user; dismiss clears one
-      setFlags((prev) => prev.filter((f) =>
-        action === 'dismiss' ? f.flagId !== flag.flagId : f.targetUserId !== flag.targetUserId));
+      // dismiss clears one flag; remove_review clears flags on that review;
+      // remove_avatar/suspend clear every open flag for that user.
+      setFlags((prev) => prev.filter((f) => {
+        if (action === 'dismiss') return f.flagId !== flag.flagId;
+        if (action === 'remove_review') return f.reviewId !== flag.reviewId;
+        return f.targetUserId !== flag.targetUserId;
+      }));
       setNotice(
         action === 'remove_avatar' ? `Removed ${flag.targetName}'s avatar.`
+        : action === 'remove_review' ? 'Review removed.'
         : action === 'suspend'     ? `${flag.targetName} suspended.`
         : 'Report dismissed.');
       refreshBadges();
@@ -65,8 +70,15 @@ function AdminFlagsPage() {
                     ? <a href={f.targetAvatar} target="_blank" rel="noreferrer">
                         <img src={f.targetAvatar} alt="Reported avatar" className="border rounded-circle"
                           style={{ width: 72, height: 72, objectFit: 'cover' }} /></a>
-                    : <div className="border rounded-circle bg-light d-flex align-items-center justify-content-center text-muted small"
-                        style={{ width: 72, height: 72 }}>no avatar</div>}
+                    // No uploaded photo → show the same generated initials the app
+                    // shows, not a bare "no avatar" label.
+                    : <div className="border rounded-circle bg-secondary-subtle d-flex align-items-center justify-content-center fw-semibold text-secondary"
+                        style={{ width: 72, height: 72, fontSize: 28 }}>
+                        {(f.targetName || '?').trim().charAt(0).toUpperCase()}
+                      </div>}
+                  <div className="text-muted mt-1" style={{ fontSize: 11 }}>
+                    {f.targetAvatar ? 'uploaded photo' : 'default (initials)'}
+                  </div>
                 </div>
                 <div className="flex-grow-1" style={{ minWidth: 260 }}>
                   {/* reported user */}
@@ -103,16 +115,28 @@ function AdminFlagsPage() {
                     {' · '}{new Date(f.created_at).toLocaleDateString()}
                   </div>
                 </div>
-                <div className="text-nowrap">
-                  <button className="btn btn-outline-danger btn-sm me-2" disabled={busyId === f.flagId}
-                    onClick={() => setConfirm({ flag: f, action: 'remove_avatar', title: 'Remove avatar?',
-                      message: `Remove ${f.targetName}'s profile photo? Their reviews will fall back to initials.`, color: 'danger' })}>
-                    Remove avatar
-                  </button>
-                  <button className="btn btn-danger btn-sm me-2" disabled={busyId === f.flagId || f.targetStatus === 'Suspended'}
+                <div className="d-flex flex-column gap-2" style={{ minWidth: 130 }}>
+                  {/* Remove the review itself — the proportionate action for a
+                      content report. Only when a still-published review is linked. */}
+                  {f.reviewId && f.reviewStatus === 'Published' && (
+                    <button className="btn btn-outline-danger btn-sm" disabled={busyId === f.flagId}
+                      onClick={() => setConfirm({ flag: f, action: 'remove_review', title: 'Remove review?',
+                        message: `Remove this review${f.productName ? ` of “${f.productName}”` : ''}? It won't be shown to customers.`, color: 'danger' })}>
+                      Remove review
+                    </button>
+                  )}
+                  {/* Only offer avatar removal when there's an uploaded photo. */}
+                  {f.targetAvatar && (
+                    <button className="btn btn-outline-danger btn-sm" disabled={busyId === f.flagId}
+                      onClick={() => setConfirm({ flag: f, action: 'remove_avatar', title: 'Remove avatar?',
+                        message: `Remove ${f.targetName}'s profile photo? Their reviews will fall back to initials.`, color: 'danger' })}>
+                      Remove avatar
+                    </button>
+                  )}
+                  <button className="btn btn-danger btn-sm" disabled={busyId === f.flagId || f.targetStatus === 'Suspended'}
                     onClick={() => setConfirm({ flag: f, action: 'suspend', title: 'Suspend user?',
-                      message: `Suspend ${f.targetName}? They won't be able to sign in until reactivated.`, color: 'danger' })}>
-                    Suspend
+                      message: `Suspend ${f.targetName}? They won't be able to sign in until reactivated. This is for repeat or serious abuse — to just take down this review, use “Remove review”.`, color: 'danger' })}>
+                    Suspend user
                   </button>
                   <button className="btn btn-outline-secondary btn-sm" disabled={busyId === f.flagId}
                     onClick={() => act(f, 'dismiss')}>Dismiss</button>

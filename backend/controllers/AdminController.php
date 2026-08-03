@@ -840,7 +840,7 @@ function handleResolveFlag(PDO $pdo, array $auth, string $flagId): void {
   $note   = trim($body['note'] ?? '');
   if (mb_strlen($note) > 255) { $note = mb_substr($note, 0, 255); }
 
-  $stmt = $pdo->prepare('SELECT flagStatus, targetUserId FROM content_flag WHERE flagId = :id');
+  $stmt = $pdo->prepare('SELECT flagStatus, targetUserId, reviewId FROM content_flag WHERE flagId = :id');
   $stmt->execute(['id' => $flagId]);
   $flag = $stmt->fetch();
   if (!$flag) {
@@ -876,6 +876,29 @@ function handleResolveFlag(PDO $pdo, array $auth, string $flagId): void {
       sendJson(500, false, null, ['code' => 'SERVER', 'message' => 'Could not resolve the flag.']);
     }
     sendJson(200, true, ['flagId' => $flagId, 'flagStatus' => 'Resolved', 'action' => $action]);
+  }
+
+  // Take down the flagged REVIEW itself (the proportionate action for a content
+  // report — abusive/spam text — vs suspending the whole account). Resolves
+  // every open flag on that same review so the queue clears.
+  if ($action === 'remove_review') {
+    if (empty($flag['reviewId'])) {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'This report is not linked to a review.']);
+    }
+    $pdo->beginTransaction();
+    try {
+      $pdo->prepare("UPDATE review SET reviewStatus = 'Removed' WHERE reviewId = :rid")
+          ->execute(['rid' => $flag['reviewId']]);
+      $pdo->prepare(
+        "UPDATE content_flag SET flagStatus='Resolved', resolutionNote=:n, reviewedBy=:by, reviewed_at=NOW()
+          WHERE reviewId = :rid AND flagStatus = 'Open'"
+      )->execute(['n' => $note !== '' ? $note : 'remove_review', 'by' => $auth['userId'], 'rid' => $flag['reviewId']]);
+      $pdo->commit();
+    } catch (Throwable $e) {
+      $pdo->rollBack();
+      sendJson(500, false, null, ['code' => 'SERVER', 'message' => 'Could not remove the review.']);
+    }
+    sendJson(200, true, ['flagId' => $flagId, 'flagStatus' => 'Resolved', 'action' => 'remove_review']);
   }
 
   sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Unknown action.']);
