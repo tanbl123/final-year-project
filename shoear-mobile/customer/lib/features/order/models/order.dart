@@ -225,6 +225,7 @@ class OrderRefund {
   final double refundAmount;
   final String? requestDate;
   final List<String> proofUrls; // supporting evidence photos
+  final String? adminNote; // admin's decision reason (esp. on rejection)
 
   OrderRefund({
     required this.refundId,
@@ -233,6 +234,7 @@ class OrderRefund {
     required this.refundAmount,
     this.requestDate,
     this.proofUrls = const [],
+    this.adminNote,
   });
 
   // refundProof is a single URL (legacy) or a JSON array of URLs.
@@ -257,6 +259,7 @@ class OrderRefund {
         refundAmount: (j['refundAmount'] as num?)?.toDouble() ?? 0,
         requestDate: j['requestDate'] as String?,
         proofUrls: _parseProof(j['refundProof']),
+        adminNote: (j['adminNote'] as String?)?.isNotEmpty == true ? j['adminNote'] as String : null,
       );
 }
 

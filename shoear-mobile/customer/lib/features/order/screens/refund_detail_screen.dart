@@ -100,6 +100,19 @@ class RefundDetailScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
+          // ── Admin's decision note (why it was approved/rejected) ────────
+          if ((refund.adminNote ?? '').isNotEmpty) ...[
+            _Card(
+              icon: _rejected ? Icons.info_outline : Icons.verified_outlined,
+              title: _rejected ? 'Why it was rejected' : 'Note from the team',
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(refund.adminNote!, style: const TextStyle(height: 1.4)),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
           // ── Evidence photos ────────────────────────────────────────────
           if (refund.proofUrls.isNotEmpty) ...[
             _Card(

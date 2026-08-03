@@ -150,7 +150,12 @@ export function OrderDetailBody({ order }) {
               <tbody>
                 {order.refunds.map((rf) => (
                   <tr key={rf.refundId}>
-                    <td style={{ overflowWrap: 'anywhere' }}>{rf.refundReason}</td>
+                    <td style={{ overflowWrap: 'anywhere' }}>
+                      {rf.refundReason}
+                      {rf.adminNote && (
+                        <div className="small text-muted mt-1"><span className="fw-semibold">Admin note:</span> {rf.adminNote}</div>
+                      )}
+                    </td>
                     <td className="text-end">{money(rf.refundAmount)}</td>
                     <td className="text-center"><span className={`badge text-bg-${REFUND_COLORS[rf.refundStatus] || 'secondary'}`}>{rf.refundStatus}</span></td>
                     <td className="text-muted small">{new Date(rf.requestDate).toLocaleDateString()}</td>
