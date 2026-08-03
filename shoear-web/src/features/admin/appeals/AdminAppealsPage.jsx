@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import Toast from '../../../components/Toast';
 import ConfirmDialog from '../../../components/ConfirmDialog';
-import { getAppeals, resolveAppeal, refreshBadges } from '../adminService';
+import UserDetailModal from '../users/UserDetailModal';
+import { getAppeals, getUser, resolveAppeal, refreshBadges } from '../adminService';
 
 const roleLabel = (r) => (r === 'DeliveryPersonnel' ? 'Delivery' : r === 'ArSpecialist' ? 'AR Specialist' : r);
 
@@ -18,6 +19,23 @@ function AdminAppealsPage() {
   const [approving, setApproving] = useState(null);   // appeal pending approve-confirm
   const [rejecting, setRejecting] = useState(null);   // { appeal } for the reject-note modal
   const [note, setNote] = useState('');
+  const [detail, setDetail] = useState(null);         // user shown in the in-place detail popup
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  // View the user's full details without leaving the appeals queue.
+  async function viewUser(userId) {
+    if (!userId) return;
+    setDetailLoading(true);
+    setDetail({});
+    try {
+      setDetail(await getUser(userId));
+    } catch (err) {
+      setError(err.message);
+      setDetail(null);
+    } finally {
+      setDetailLoading(false);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -65,7 +83,8 @@ function AdminAppealsPage() {
                 <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
                   <div>
                     <div className="fw-semibold">
-                      {a.fullName}
+                      <button type="button" className="btn btn-link p-0 fw-semibold align-baseline text-decoration-none"
+                        onClick={() => viewUser(a.userId)} title="View user details">{a.fullName}</button>
                       {a.role && <span className="text-muted small ms-2">{roleLabel(a.role)}</span>}
                       <span className="badge text-bg-secondary ms-2">Suspended</span>
                     </div>
@@ -130,6 +149,9 @@ function AdminAppealsPage() {
           </div>
         </div>
       )}
+
+      {/* in-place user detail — keeps the admin in the appeals queue */}
+      <UserDetailModal detail={detail} loading={detailLoading} onClose={() => setDetail(null)} />
     </div>
   );
 }
