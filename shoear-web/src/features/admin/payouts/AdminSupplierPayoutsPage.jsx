@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getSupplierPayouts, paySupplier, getSupplierPayoutHistory, remindSupplierPayout } from '../adminService';
+import { getSupplierPayouts, paySupplier, getSupplierPayoutHistory, remindSupplierPayout, adjustSupplier } from '../adminService';
 import SortableTh from '../../../components/SortableTh';
 import Toast from '../../../components/Toast';
 import ConfirmDialog from '../../../components/ConfirmDialog';
@@ -16,8 +16,13 @@ function AdminSupplierPayoutsPage() {
   const [notice, setNotice] = useState('');
   const [busyId, setBusyId] = useState('');
   const [openId, setOpenId] = useState('');       // supplier whose history is expanded
-  const [history, setHistory] = useState({});     // { [supplierId]: payouts[] | 'loading' }
+  const [history, setHistory] = useState({});     // { [supplierId]: { payouts, ledger } | 'loading' }
   const [confirm, setConfirm] = useState(null);   // { supplier }
+
+  // manual ledger adjustment: { supplier, direction: 'deduct'|'credit', amount, note } (null = closed)
+  const [adjustForm, setAdjustForm] = useState(null);
+  const [adjusting, setAdjusting] = useState(false);
+  const [adjustErr, setAdjustErr] = useState('');
 
   function load() {
     setLoading(true);
@@ -61,6 +66,30 @@ function AdminSupplierPayoutsPage() {
     }
   }
 
+  async function submitAdjust(e) {
+    e.preventDefault();
+    const amt = Number(adjustForm.amount);
+    if (!(amt > 0)) { setAdjustErr('Enter an amount greater than zero.'); return; }
+    if (!adjustForm.note.trim()) { setAdjustErr('A note is required so the adjustment is audited.'); return; }
+    // signed: deduct = negative (supplier owes), credit = positive (pay extra)
+    const signed = adjustForm.direction === 'deduct' ? -amt : amt;
+    setAdjusting(true);
+    setAdjustErr('');
+    try {
+      const supplier = adjustForm.supplier;
+      await adjustSupplier(supplier.supplierId, signed, adjustForm.note.trim());
+      setNotice(`${adjustForm.direction === 'deduct' ? 'Deducted' : 'Credited'} ${fmt(amt)} ${adjustForm.direction === 'deduct' ? 'from' : 'to'} ${supplier.companyName}.`);
+      setAdjustForm(null);
+      // drop cached history so the new ledger entry shows on next open
+      setHistory((h) => { const next = { ...h }; delete next[supplier.supplierId]; return next; });
+      load();
+    } catch (err) {
+      setAdjustErr(err.message || 'Could not post the adjustment.');
+    } finally {
+      setAdjusting(false);
+    }
+  }
+
   async function toggleHistory(supplierId) {
     if (openId === supplierId) { setOpenId(''); return; }
     setOpenId(supplierId);
@@ -68,9 +97,9 @@ function AdminSupplierPayoutsPage() {
       setHistory((h) => ({ ...h, [supplierId]: 'loading' }));
       try {
         const data = await getSupplierPayoutHistory(supplierId);
-        setHistory((h) => ({ ...h, [supplierId]: data.payouts }));
+        setHistory((h) => ({ ...h, [supplierId]: { payouts: data.payouts || [], ledger: data.ledger || [] } }));
       } catch (err) {
-        setHistory((h) => ({ ...h, [supplierId]: [] }));
+        setHistory((h) => ({ ...h, [supplierId]: { payouts: [], ledger: [] } }));
         setError(err.message);
       }
     }
@@ -156,6 +185,11 @@ function AdminSupplierPayoutsPage() {
                         onClick={() => toggleHistory(s.supplierId)}>
                         {openId === s.supplierId ? 'Hide' : 'History'}
                       </button>
+                      <button className="btn btn-outline-secondary btn-sm me-2"
+                        title="Post a manual credit or deduction to this supplier's balance"
+                        onClick={() => { setAdjustErr(''); setAdjustForm({ supplier: s, direction: 'deduct', amount: '', note: '' }); }}>
+                        Adjust
+                      </button>
                       {!ready && s.pendingBalance > 0 && (
                         <button className="btn btn-outline-warning btn-sm me-2"
                           disabled={busyId === s.supplierId}
@@ -187,33 +221,75 @@ function AdminSupplierPayoutsPage() {
                           <div className="fw-semibold small mb-2">Payout history — {s.companyName}</div>
                           {h === 'loading' ? (
                             <div className="text-muted small">Loading…</div>
-                          ) : !h || h.length === 0 ? (
-                            <div className="text-muted small">No payouts yet.</div>
                           ) : (
-                            <table className="table table-sm mb-0">
-                              <thead>
-                                <tr>
-                                  <th>Date</th>
-                                  <th className="text-end">Amount</th>
-                                  <th className="text-end">Orders</th>
-                                  <th>Type</th>
-                                  <th>Status</th>
-                                  <th>Stripe transfer</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {h.map((p) => (
-                                  <tr key={p.stripeTransferId || p.created_at}>
-                                    <td className="small">{new Date(p.created_at).toLocaleString()}</td>
-                                    <td className="text-end">{fmt(p.amount)}</td>
-                                    <td className="text-end">{p.orderCount}</td>
-                                    <td><span className="badge bg-light text-dark border">{p.isAuto ? 'Auto' : 'Manual'}</span></td>
-                                    <td>{statusBadge(p.payoutStatus)}</td>
-                                    <td className="small text-muted">{p.stripeTransferId || '—'}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                            <>
+                              {!h.payouts || h.payouts.length === 0 ? (
+                                <div className="text-muted small">No payouts yet.</div>
+                              ) : (
+                                <table className="table table-sm mb-0">
+                                  <thead>
+                                    <tr>
+                                      <th>Date</th>
+                                      <th className="text-end">Amount</th>
+                                      <th className="text-end">Orders</th>
+                                      <th>Type</th>
+                                      <th>Status</th>
+                                      <th>Stripe transfer</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {h.payouts.map((p) => (
+                                      <tr key={p.stripeTransferId || p.created_at}>
+                                        <td className="small">{new Date(p.created_at).toLocaleString()}</td>
+                                        <td className="text-end">{fmt(p.amount)}</td>
+                                        <td className="text-end">{p.orderCount}</td>
+                                        <td><span className="badge bg-light text-dark border">{p.isAuto ? 'Auto' : 'Manual'}</span></td>
+                                        <td>{statusBadge(p.payoutStatus)}</td>
+                                        <td className="small text-muted">{p.stripeTransferId || '—'}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+
+                              {h.ledger && h.ledger.length > 0 && (
+                                <>
+                                  <div className="fw-semibold small mt-3 mb-2">Adjustments &amp; clawbacks</div>
+                                  <table className="table table-sm mb-0">
+                                    <thead>
+                                      <tr>
+                                        <th>Date</th>
+                                        <th className="text-end">Amount</th>
+                                        <th>Type</th>
+                                        <th>Note</th>
+                                        <th>Settled</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {h.ledger.map((l) => (
+                                        <tr key={l.ledgerId}>
+                                          <td className="small">{new Date(l.created_at).toLocaleString()}</td>
+                                          <td className={'text-end fw-semibold ' + (l.amount < 0 ? 'text-danger' : 'text-success')}>
+                                            {l.amount < 0 ? '−' : '+'}{fmt(Math.abs(l.amount))}
+                                          </td>
+                                          <td>
+                                            <span className="badge bg-light text-dark border">
+                                              {l.entryType === 'RefundClawback' ? 'Refund clawback' : 'Adjustment'}
+                                            </span>
+                                          </td>
+                                          <td className="small">{l.note || '—'}{l.orderId ? <span className="text-muted"> ({l.orderId})</span> : null}</td>
+                                          <td className="small">
+                                            {l.settled
+                                              ? <span className="text-muted">✓ settled</span>
+                                              : <span className="text-warning">pending</span>}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
@@ -224,6 +300,66 @@ function AdminSupplierPayoutsPage() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* manual balance adjustment */}
+      {adjustForm && (
+        <div className="modal show d-block" tabIndex="-1" style={{ background: 'rgba(0,0,0,.5)' }}
+          onClick={() => !adjusting && setAdjustForm(null)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <form className="modal-content" onSubmit={submitAdjust} noValidate>
+              <div className="modal-header">
+                <h5 className="modal-title">Adjust balance — {adjustForm.supplier.companyName}</h5>
+                <button type="button" className="btn-close" onClick={() => setAdjustForm(null)} disabled={adjusting}></button>
+              </div>
+              <div className="modal-body">
+                <p className="text-muted small">
+                  Post a manual credit or deduction that nets against this supplier's next payout — for
+                  anything the automatic order/refund math doesn't cover (a penalty, a goodwill credit,
+                  a reimbursement, or correcting an over/underpayment). It's recorded in the ledger with
+                  your note.
+                </p>
+                {adjustErr && <div className="alert alert-danger py-2">{adjustErr}</div>}
+
+                <div className="mb-2">
+                  <label className="form-label small mb-1">Direction</label>
+                  <select className="form-select" value={adjustForm.direction} disabled={adjusting}
+                    onChange={(e) => setAdjustForm((f) => ({ ...f, direction: e.target.value }))}>
+                    <option value="deduct">Deduct — supplier owes (−)</option>
+                    <option value="credit">Credit — pay extra (+)</option>
+                  </select>
+                </div>
+                <div className="mb-2">
+                  <label className="form-label small mb-1">Amount (RM)</label>
+                  <input type="number" min="0.01" step="0.01" className="form-control" placeholder="e.g. 50.00"
+                    value={adjustForm.amount} disabled={adjusting}
+                    onChange={(e) => setAdjustForm((f) => ({ ...f, amount: e.target.value }))} />
+                </div>
+                <div className="mb-2">
+                  <label className="form-label small mb-1">Note (required — shown in the ledger)</label>
+                  <input type="text" maxLength={255} className="form-control" placeholder="e.g. Late-shipping penalty — ORD0042"
+                    value={adjustForm.note} disabled={adjusting}
+                    onChange={(e) => setAdjustForm((f) => ({ ...f, note: e.target.value }))} />
+                </div>
+
+                {Number(adjustForm.amount) > 0 && (
+                  <div className="small text-muted">
+                    Balance {fmt(adjustForm.supplier.pendingBalance)} →{' '}
+                    <span className="fw-semibold">
+                      {fmt(adjustForm.supplier.pendingBalance + (adjustForm.direction === 'deduct' ? -1 : 1) * Number(adjustForm.amount))}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-light" onClick={() => setAdjustForm(null)} disabled={adjusting}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={adjusting}>
+                  {adjusting ? 'Posting…' : 'Post adjustment'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

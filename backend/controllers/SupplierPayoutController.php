@@ -399,7 +399,23 @@ function handleSupplierPayoutHistory(PDO $pdo, string $supplierId): void {
     $p['isAuto'] = (bool) (int) $p['isAuto'];
     return $p;
   }, $stmt->fetchAll());
-  sendJson(200, true, ['payouts' => $payouts]);
+
+  // ledger entries (manual adjustments + automatic refund clawbacks) so the admin
+  // can see exactly what has nudged this supplier's balance, and whether each has
+  // been settled by a payout yet.
+  $led = $pdo->prepare(
+    "SELECT ledgerId, orderId, entryType, amount, note, settledByPayoutId, created_at
+       FROM supplier_ledger WHERE supplierId = :sid
+      ORDER BY created_at DESC, ledgerId DESC"
+  );
+  $led->execute(['sid' => $supplierId]);
+  $ledger = array_map(function ($l) {
+    $l['amount']  = round((float) $l['amount'], 2);
+    $l['settled'] = $l['settledByPayoutId'] !== null;
+    return $l;
+  }, $led->fetchAll());
+
+  sendJson(200, true, ['payouts' => $payouts, 'ledger' => $ledger]);
 }
 
 // POST /admin/suppliers/{supplierId}/remind-payout — email an approved supplier
@@ -509,4 +525,54 @@ function handlePaySupplier(PDO $pdo, array $config, string $supplierId): void {
     sendJson(502, false, null, ['code' => 'STRIPE_ERROR', 'message' => $e->getMessage()]);
   }
   sendJson(201, true, $res);
+}
+
+// POST /admin/suppliers/{supplierId}/adjustment — an admin posts a MANUAL ledger
+// adjustment that nets against the supplier's next payout. It covers money the
+// automated order/refund math can't: a positive amount CREDITS the supplier (a
+// goodwill bonus, a reimbursement, correcting an underpayment); a negative amount
+// DEDUCTS (a penalty, a chargeback the platform absorbed, an off-Stripe refund,
+// correcting an overpayment). A note is required so every adjustment is audited.
+// Body: { amount (signed), note }.
+function handleAdjustSupplier(PDO $pdo, string $supplierId): void {
+  $body   = getJsonBody();
+  $amount = $body['amount'] ?? null;
+  $note   = trim($body['note'] ?? '');
+
+  $stmt = $pdo->prepare('SELECT supplierId, companyName FROM supplier WHERE supplierId = :id');
+  $stmt->execute(['id' => $supplierId]);
+  $supplier = $stmt->fetch();
+  if (!$supplier) {
+    sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Supplier not found.']);
+  }
+  if (!is_numeric($amount)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A numeric amount is required.']);
+  }
+  $amount = round((float) $amount, 2);
+  if ($amount === 0.0) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Amount cannot be zero.']);
+  }
+  if (abs($amount) > 1000000) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Amount is out of range.']);
+  }
+  if ($note === '') {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A note is required for the adjustment.']);
+  }
+  if (mb_strlen($note) > 255) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Note must be 255 characters or fewer.']);
+  }
+
+  $ledgerId = nextId($pdo, 'supplier_ledger', 'ledgerId', 'SLG');
+  $pdo->prepare(
+    "INSERT INTO supplier_ledger (ledgerId, supplierId, orderId, entryType, amount, note)
+     VALUES (:id, :sid, NULL, 'Adjustment', :amt, :note)"
+  )->execute(['id' => $ledgerId, 'sid' => $supplierId, 'amt' => $amount, 'note' => $note]);
+
+  sendJson(201, true, [
+    'ledgerId'   => $ledgerId,
+    'supplierId' => $supplierId,
+    'amount'     => $amount,
+    'note'       => $note,
+    'balance'    => supplierBalance($pdo, $supplierId)['balance'],   // new payable balance
+  ]);
 }

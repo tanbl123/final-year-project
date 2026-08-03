@@ -103,6 +103,12 @@ export function remindSupplierPayout(supplierId) {
   return apiPost(`/admin/suppliers/${supplierId}/remind-payout`, {}, getToken());
 }
 
+// Post a manual ledger adjustment against a supplier's balance. `amount` is signed:
+// positive credits the supplier, negative deducts. `note` is required (audit trail).
+export function adjustSupplier(supplierId, amount, note) {
+  return apiPost(`/admin/suppliers/${supplierId}/adjustment`, { amount, note }, getToken());
+}
+
 // Products awaiting approval.
 export function getPendingProducts() {
   return apiGet('/admin/products/pending', getToken());

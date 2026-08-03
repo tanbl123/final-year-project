@@ -1060,6 +1060,12 @@ if ($method === 'POST' && preg_match('#^/admin/suppliers/([^/]+)/remind-payout$#
   $pdo  = getPDO();
   handleRemindSupplierPayout($pdo, $config, $m[1]);
 }
+if ($method === 'POST' && preg_match('#^/admin/suppliers/([^/]+)/adjustment$#', $path, $m)) {
+  $auth = requireAuth($secret);
+  requireAdmin($auth);
+  $pdo  = getPDO();
+  handleAdjustSupplier($pdo, $m[1]);
+}
 
 if ($method === 'POST' && preg_match('#^/admin/deliveries/([^/]+)/assign$#', $path, $m)) {
   $auth = requireAuth($secret);
