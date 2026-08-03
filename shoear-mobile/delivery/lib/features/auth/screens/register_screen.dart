@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 
 import 'package:delivery/core/utils/snackbar.dart';
@@ -54,7 +55,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
   // KYC photos (uploaded as soon as they're picked → store the returned URL)
   final _picker = ImagePicker();
   String? _avatarUrl, _licensePhotoUrl, _icPhotoUrl;
+  String? _icPhotoBackUrl, _licensePhotoBackUrl, _eLicenseUrl;
   bool _upAvatar = false, _upLicense = false, _upIc = false;
+  bool _upIcBack = false, _upLicenseBack = false, _upELicense = false;
+  // Driving licence can be a physical card (front + back photos) or a digital
+  // e-licence (MyJPJ), uploaded as an image or PDF file.
+  bool _licenseIsDigital = false;
   // Malaysian/PR licence no. is the IC no., so default to "same as IC" (the
   // courier can untick it for the rare case where they differ).
   bool _licenseSameAsIc = true;
@@ -147,7 +153,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _icNumber.text      = p['icNumber']?.toString() ?? '';
     _avatarUrl         = (me['avatarUrl']?.toString().isNotEmpty ?? false) ? me['avatarUrl'].toString() : null;
     _licensePhotoUrl   = (p['licensePhotoUrl']?.toString().isNotEmpty ?? false) ? p['licensePhotoUrl'].toString() : null;
+    _licensePhotoBackUrl = (p['licensePhotoBackUrl']?.toString().isNotEmpty ?? false) ? p['licensePhotoBackUrl'].toString() : null;
+    _eLicenseUrl       = (p['eLicenseUrl']?.toString().isNotEmpty ?? false) ? p['eLicenseUrl'].toString() : null;
+    _licenseIsDigital  = (p['licenseIsDigital']?.toString() == '1') || (p['licenseIsDigital'] == 1) || (p['licenseIsDigital'] == true);
     _icPhotoUrl        = (p['icPhotoUrl']?.toString().isNotEmpty ?? false) ? p['icPhotoUrl'].toString() : null;
+    _icPhotoBackUrl    = (p['icPhotoBackUrl']?.toString().isNotEmpty ?? false) ? p['icPhotoBackUrl'].toString() : null;
     _licenseClasses..clear()..addAll(csv(p['licenseClass']));
     _coverageZones..clear()..addAll(csv(p['coverageZones']));
     _licenseExpiry     = parse(p['licenseExpiry']?.toString());
@@ -273,7 +283,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _fmtDate(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  bool get _photosUploaded => _avatarUrl != null && _licensePhotoUrl != null && _icPhotoUrl != null;
+  // profile + both IC sides, and either the e-licence file (digital) or both
+  // sides of the physical licence.
+  bool get _photosUploaded =>
+      _avatarUrl != null &&
+      _icPhotoUrl != null && _icPhotoBackUrl != null &&
+      (_licenseIsDigital
+          ? _eLicenseUrl != null
+          : (_licensePhotoUrl != null && _licensePhotoBackUrl != null));
 
   // Let the courier take a fresh photo (preferred for KYC) or pick an existing
   // one from the gallery.
@@ -298,27 +315,65 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       );
 
+  // Set/clear the per-target "uploading" flag so the right tile shows a spinner.
+  void _setUploading(String which, bool v) {
+    switch (which) {
+      case 'avatar': _upAvatar = v; break;
+      case 'license': _upLicense = v; break;
+      case 'license_back': _upLicenseBack = v; break;
+      case 'ic': _upIc = v; break;
+      case 'ic_back': _upIcBack = v; break;
+      case 'elicense': _upELicense = v; break;
+    }
+  }
+
+  // Store the uploaded URL against the right target.
+  void _setUploadedUrl(String which, String url) {
+    switch (which) {
+      case 'avatar': _avatarUrl = url; break;
+      case 'license': _licensePhotoUrl = url; break;
+      case 'license_back': _licensePhotoBackUrl = url; break;
+      case 'ic': _icPhotoUrl = url; break;
+      case 'ic_back': _icPhotoBackUrl = url; break;
+      case 'elicense': _eLicenseUrl = url; break;
+    }
+  }
+
   // Pick an image and upload it immediately (pre-login public upload). which ∈
-  // {'avatar','license','ic'}.
+  // {'avatar','license','license_back','ic','ic_back'}.
   Future<void> _pickPhoto(String which) async {
     final source = await _choosePhotoSource();
     if (source == null) return;
     final XFile? x = await _picker.pickImage(source: source, maxWidth: 1600, imageQuality: 85);
     if (x == null) return;
-    setState(() {
-      if (which == 'avatar') _upAvatar = true; else if (which == 'license') _upLicense = true; else _upIc = true;
-    });
+    await _uploadDoc(which, File(x.path));
+  }
+
+  // Pick the digital e-licence — an image OR a PDF (MyJPJ export) — and upload it.
+  Future<void> _pickELicense() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'jpg', 'jpeg', 'png', 'webp'],
+    );
+    final path = result?.files.single.path;
+    if (path == null) return;
+    await _uploadDoc('elicense', File(path));
+  }
+
+  // Shared upload → store URL against [which], with per-tile spinner + errors.
+  Future<void> _uploadDoc(String which, File file) async {
+    setState(() => _setUploading(which, true));
     try {
-      final url = await context.read<AuthProvider>().authService.uploadRegistrationDoc(File(x.path));
+      final url = await context.read<AuthProvider>().authService.uploadRegistrationDoc(file);
       if (!mounted) return;
       setState(() {
-        if (which == 'avatar') _avatarUrl = url; else if (which == 'license') _licensePhotoUrl = url; else _icPhotoUrl = url;
+        _setUploadedUrl(which, url);
         _docsError = null;
       });
     } catch (e) {
       if (mounted) context.showSnack(e.toString());
     } finally {
-      if (mounted) setState(() { _upAvatar = false; _upLicense = false; _upIc = false; });
+      if (mounted) setState(() => _setUploading(which, false));
     }
   }
 
@@ -342,7 +397,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _dobError           = _validateDob();
       _termsError         = _termsAccepted ? null : 'Please agree to the Terms and PDPA notice.';
       _coverageError      = _coverageZones.isEmpty ? 'Select at least one delivery area.' : null;
-      _docsError = _photosUploaded ? null : 'Please add your profile photo, licence photo and IC photo.';
+      _docsError = _photosUploaded ? null : 'Please add your profile photo, both sides of your IC, and your driving licence.';
     });
     if (_fullNameError != null || _emailError != null || _phoneError != null ||
         _vehicleBrandError != null || _vehicleModelError != null ||
@@ -383,7 +438,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _dobError           = _validateDob();
       _termsError         = _termsAccepted ? null : 'Please agree to the Terms and PDPA notice.';
       _coverageError      = _coverageZones.isEmpty ? 'Select at least one delivery area.' : null;
-      _docsError = _photosUploaded ? null : 'Please add your profile photo, licence photo and IC photo.';
+      _docsError = _photosUploaded ? null : 'Please add your profile photo, both sides of your IC, and your driving licence.';
     });
     if (_fullNameError != null || _phoneError != null ||
         _vehicleBrandError != null || _vehicleModelError != null || _vehiclePlateError != null ||
@@ -402,10 +457,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
             vehiclePlate:     _vehiclePlate.text.trim(),
             licenseNumber:    _licenseSameAsIc ? _icNumber.text.trim() : _licenseNumber.text.trim(),
             licensePhotoUrl:  _licensePhotoUrl ?? '',
+            licensePhotoBackUrl: _licensePhotoBackUrl ?? '',
+            licenseIsDigital: _licenseIsDigital,
+            eLicenseUrl:      _eLicenseUrl ?? '',
             licenseClasses:   _licenseClasses.toList(),
             licenseExpiry:    _licenseExpiry != null ? _fmtDate(_licenseExpiry!) : '',
             icNumber:         _icNumber.text.trim(),
             icPhotoUrl:       _icPhotoUrl ?? '',
+            icPhotoBackUrl:   _icPhotoBackUrl ?? '',
             dateOfBirth:      _dateOfBirth != null ? _fmtDate(_dateOfBirth!) : '',
             termsAccepted:    _termsAccepted,
             coverageZones:    _coverageZones.toList(),
@@ -444,10 +503,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
             verificationCode: code,
             licenseNumber:    _licenseSameAsIc ? _icNumber.text.trim() : _licenseNumber.text.trim(),
             licensePhotoUrl:  _licensePhotoUrl ?? '',
+            licensePhotoBackUrl: _licensePhotoBackUrl ?? '',
+            licenseIsDigital: _licenseIsDigital,
+            eLicenseUrl:      _eLicenseUrl ?? '',
             licenseClasses:   _licenseClasses.toList(),
             licenseExpiry:    _licenseExpiry != null ? _fmtDate(_licenseExpiry!) : '',
             icNumber:         _icNumber.text.trim(),
             icPhotoUrl:       _icPhotoUrl ?? '',
+            icPhotoBackUrl:   _icPhotoBackUrl ?? '',
             dateOfBirth:      _dateOfBirth != null ? _fmtDate(_dateOfBirth!) : '',
             termsAccepted:    _termsAccepted,
             coverageZones:    _coverageZones.toList(),
@@ -716,6 +779,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
           _sectionHeader('Identity & licence'),
           _photoTile(label: 'Profile photo', url: _avatarUrl, uploading: _upAvatar,
               error: _docsError != null && _avatarUrl == null, onPick: () => _pickPhoto('avatar')),
+          const Padding(
+            padding: EdgeInsets.only(top: 4, left: 4),
+            child: Text('A clear photo of your face for identity verification — not a logo or avatar.',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+          ),
           const SizedBox(height: 12),
           _field(
             controller: _icNumber, focusNode: null,
@@ -733,8 +801,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
               }
             }),
           ),
-          _photoTile(label: 'IC photo', url: _icPhotoUrl, uploading: _upIc,
+          _photoTile(label: 'IC photo (front)', url: _icPhotoUrl, uploading: _upIc,
               error: _docsError != null && _icPhotoUrl == null, onPick: () => _pickPhoto('ic')),
+          const SizedBox(height: 8),
+          _photoTile(label: 'IC photo (back)', url: _icPhotoBackUrl, uploading: _upIcBack,
+              error: _docsError != null && _icPhotoBackUrl == null, onPick: () => _pickPhoto('ic_back')),
           const SizedBox(height: 12),
           _field(
             controller: _licenseNumber, focusNode: null,
@@ -792,8 +863,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
             error: _licenseExpiryError,
             onTap: _pickLicenseExpiry,
           ),
-          _photoTile(label: 'Driving licence photo', url: _licensePhotoUrl, uploading: _upLicense,
-              error: _docsError != null && _licensePhotoUrl == null, onPick: () => _pickPhoto('license')),
+          // Physical card (front + back) OR a digital e-licence (MyJPJ) file.
+          SegmentedButton<bool>(
+            segments: const [
+              ButtonSegment(value: false, label: Text('Physical card'), icon: Icon(Icons.badge_outlined)),
+              ButtonSegment(value: true, label: Text('Digital (e-licence)'), icon: Icon(Icons.smartphone_outlined)),
+            ],
+            selected: {_licenseIsDigital},
+            onSelectionChanged: (s) => setState(() => _licenseIsDigital = s.first),
+          ),
+          const SizedBox(height: 8),
+          if (_licenseIsDigital)
+            _photoTile(label: 'Digital licence file (image or PDF)', url: _eLicenseUrl, uploading: _upELicense,
+                error: _docsError != null && _eLicenseUrl == null, onPick: () => _pickELicense())
+          else ...[
+            _photoTile(label: 'Driving licence (front)', url: _licensePhotoUrl, uploading: _upLicense,
+                error: _docsError != null && _licensePhotoUrl == null, onPick: () => _pickPhoto('license')),
+            const SizedBox(height: 8),
+            _photoTile(label: 'Driving licence (back)', url: _licensePhotoBackUrl, uploading: _upLicenseBack,
+                error: _docsError != null && _licensePhotoBackUrl == null, onPick: () => _pickPhoto('license_back')),
+          ],
           if (_docsError != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),

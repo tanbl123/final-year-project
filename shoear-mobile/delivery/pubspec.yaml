@@ -14,6 +14,7 @@ dependencies:
   provider: ^6.1.2           # simple state management (auth session)
   shared_preferences: ^2.3.2 # persists the JWT + basic user across launches
   image_picker: ^1.1.2       # take/pick the proof-of-delivery photo
+  file_picker: ^8.1.2        # pick an e-licence file (image or PDF) at registration
   firebase_core: ^3.6.0      # Firebase initialisation (FCM push)
   firebase_messaging: ^15.1.3 # FCM background push notifications
   url_launcher: ^6.3.0       # open the Stripe payout onboarding link
