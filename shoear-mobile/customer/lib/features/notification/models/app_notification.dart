@@ -5,7 +5,8 @@ class AppNotification {
   final String type; // 'order' | 'refund' | 'system'
   final String title;
   final String body;
-  final String? orderId; // deep-link target, when present
+  final String? orderId;   // deep-link target: an order, when present
+  final String? productId; // deep-link target: a product (e.g. review reply)
   final bool isRead;
   final DateTime? createdAt;
 
@@ -15,6 +16,7 @@ class AppNotification {
     required this.title,
     required this.body,
     required this.orderId,
+    required this.productId,
     required this.isRead,
     required this.createdAt,
   });
@@ -25,6 +27,7 @@ class AppNotification {
         title: j['title']?.toString() ?? '',
         body: j['body']?.toString() ?? '',
         orderId: (j['orderId'] as String?)?.isNotEmpty == true ? j['orderId'] as String : null,
+        productId: (j['productId'] as String?)?.isNotEmpty == true ? j['productId'] as String : null,
         isRead: j['isRead'] == true,
         createdAt: DateTime.tryParse(j['createdAt']?.toString() ?? ''),
       );

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:customer/features/notification/models/app_notification.dart';
 import 'package:customer/features/notification/state/notification_provider.dart';
 import 'package:customer/features/order/screens/order_detail_screen.dart';
+import 'package:customer/features/catalog/screens/product_detail_screen.dart';
 
 /// The bell: lists the customer's notifications, lets them mark all read, and
 /// deep-links order/refund notifications to the relevant order.
@@ -94,7 +95,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           : Container(width: 10, height: 10, decoration: BoxDecoration(color: theme.colorScheme.primary, shape: BoxShape.circle)),
       onTap: () {
         context.read<NotificationProvider>().markRead(n.id);
-        if (n.orderId != null) {
+        if (n.productId != null) {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => ProductDetailScreen(productId: n.productId!)),
+          );
+        } else if (n.orderId != null) {
           Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => OrderDetailScreen(orderId: n.orderId!)),
           );

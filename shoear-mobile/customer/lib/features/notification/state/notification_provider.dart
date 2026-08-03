@@ -67,6 +67,7 @@ class NotificationProvider extends ChangeNotifier {
       title: _items[i].title,
       body: _items[i].body,
       orderId: _items[i].orderId,
+      productId: _items[i].productId,
       isRead: true,
       createdAt: _items[i].createdAt,
     );
@@ -95,6 +96,7 @@ class NotificationProvider extends ChangeNotifier {
         title: n.title,
         body: n.body,
         orderId: n.orderId,
+        productId: n.productId,
         isRead: true,
         createdAt: n.createdAt,
       );

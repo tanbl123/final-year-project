@@ -11,7 +11,7 @@ function handleListNotifications(PDO $pdo, array $auth): void {
     sendJson(401, false, null, ['code' => 'NO_TOKEN', 'message' => 'Authentication required.']);
   }
   $stmt = $pdo->prepare(
-    "SELECT notificationId, type, title, body, orderId, isRead, createdAt
+    "SELECT notificationId, type, title, body, orderId, productId, isRead, createdAt
        FROM notification
       WHERE userId = :uid
       ORDER BY createdAt DESC, notificationId DESC

@@ -717,7 +717,8 @@ CREATE TABLE notification (
     type           VARCHAR(40)  NOT NULL,                  -- 'order' | 'refund' | 'system'
     title          VARCHAR(120) NOT NULL,
     body           VARCHAR(255) NOT NULL,
-    orderId        VARCHAR(10)  NULL,                       -- deep-link target (optional)
+    orderId        VARCHAR(10)  NULL,                       -- deep-link target: an order (optional)
+    productId      VARCHAR(10)  NULL,                       -- deep-link target: a product (e.g. review reply)
     isRead         TINYINT(1)   NOT NULL DEFAULT 0,
     createdAt      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (notificationId),

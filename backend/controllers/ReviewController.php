@@ -130,7 +130,7 @@ function handleReplyToReview(PDO $pdo, array $auth, string $reviewId): void {
   // Only on a first reply, so editing the reply doesn't re-ping the customer.
   if ($isNewReply && function_exists('createNotification')) {
     $who = $pdo->prepare(
-      "SELECT u.userId, p.productName
+      "SELECT u.userId, p.productId, p.productName
          FROM review r
          JOIN customer c   ON c.customerId = r.customerId
          JOIN `user` u     ON u.userId = c.userId
@@ -144,7 +144,8 @@ function handleReplyToReview(PDO $pdo, array $auth, string $reviewId): void {
       createNotification(
         $pdo, (string) $info['userId'], 'ReviewReply',
         'The seller replied to your review 💬',
-        'On "' . $info['productName'] . '": ' . $snippet
+        'On "' . $info['productName'] . '": ' . $snippet,
+        null, (string) $info['productId']   // deep-link to the product
       );
     }
   }

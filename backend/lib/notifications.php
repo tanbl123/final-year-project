@@ -20,13 +20,13 @@ function notifConfig(): array {
 }
 
 // Insert one notification for a user, then try a background push.
-function createNotification(PDO $pdo, string $userId, string $type, string $title, string $body, ?string $orderId = null): void {
+function createNotification(PDO $pdo, string $userId, string $type, string $title, string $body, ?string $orderId = null, ?string $productId = null): void {
   if ($userId === '') { return; }
   try {
     $id = nextId($pdo, 'notification', 'notificationId', 'NTF');
     $pdo->prepare(
-      "INSERT INTO notification (notificationId, userId, type, title, body, orderId, isRead, createdAt)
-       VALUES (:id, :uid, :type, :title, :body, :oid, 0, NOW())"
+      "INSERT INTO notification (notificationId, userId, type, title, body, orderId, productId, isRead, createdAt)
+       VALUES (:id, :uid, :type, :title, :body, :oid, :pid, 0, NOW())"
     )->execute([
       'id'    => $id,
       'uid'   => $userId,
@@ -34,6 +34,7 @@ function createNotification(PDO $pdo, string $userId, string $type, string $titl
       'title' => mb_substr($title, 0, 120),
       'body'  => mb_substr($body, 0, 255),
       'oid'   => $orderId,
+      'pid'   => $productId,
     ]);
   } catch (Throwable $e) {
     return; // never block the caller
