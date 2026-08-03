@@ -888,13 +888,11 @@ function handleListCourierChangeRequests(PDO $pdo): void {
             r.licenseClass AS newLicenseClass, r.licenseExpiry AS newLicenseExpiry,
             r.licensePhotoUrl AS newLicensePhotoUrl, r.licensePhotoBackUrl AS newLicensePhotoBackUrl,
             r.licenseIsDigital AS newLicenseIsDigital, r.eLicenseUrl AS newELicenseUrl,
-            r.icPhotoUrl AS newIcPhotoUrl, r.icPhotoBackUrl AS newIcPhotoBackUrl,
             dp.deliveryPersonnelId, u.fullName, u.email, u.username,
             dp.vehiclePlate AS curPlate, dp.licenseNumber AS curLicenseNumber,
             dp.licenseClass AS curLicenseClass, dp.licenseExpiry AS curLicenseExpiry,
             dp.licensePhotoUrl AS curLicensePhotoUrl, dp.licensePhotoBackUrl AS curLicensePhotoBackUrl,
-            dp.licenseIsDigital AS curLicenseIsDigital, dp.eLicenseUrl AS curELicenseUrl,
-            dp.icPhotoUrl AS curIcPhotoUrl, dp.icPhotoBackUrl AS curIcPhotoBackUrl
+            dp.licenseIsDigital AS curLicenseIsDigital, dp.eLicenseUrl AS curELicenseUrl
        FROM courier_change_request r
        JOIN delivery_personnel dp ON dp.deliveryPersonnelId = r.deliveryPersonnelId
        JOIN `user` u              ON u.userId = dp.userId
@@ -925,14 +923,15 @@ function handleApproveCourierChangeRequest(PDO $pdo, array $auth, string $reques
 
   $pdo->beginTransaction();
   try {
-    // Copy the full proposed doc set onto the live courier row. Resetting the
-    // licence-expiry reminder bookkeeping re-arms the reminders for the (possibly
-    // new) expiry date, so a renewed licence starts its reminder cycle afresh.
+    // Copy the proposed plate + licence values onto the live courier row. The IC
+    // is a fixed identity document and is never part of a change request, so it's
+    // left untouched. Resetting the licence-expiry reminder bookkeeping re-arms
+    // the reminders for the (possibly new) expiry date.
     $pdo->prepare(
       'UPDATE delivery_personnel
           SET vehiclePlate = :plate, licenseNumber = :ln, licenseClass = :lc,
               licenseExpiry = :le, licensePhotoUrl = :lp, licensePhotoBackUrl = :lpb,
-              licenseIsDigital = :lid, eLicenseUrl = :el, icPhotoUrl = :ip, icPhotoBackUrl = :ipb,
+              licenseIsDigital = :lid, eLicenseUrl = :el,
               licenceReminderStage = NULL, licenceReminderFor = NULL
         WHERE deliveryPersonnelId = :id'
     )->execute([
@@ -940,7 +939,6 @@ function handleApproveCourierChangeRequest(PDO $pdo, array $auth, string $reques
       'lc' => $req['licenseClass'], 'le' => $req['licenseExpiry'],
       'lp' => $req['licensePhotoUrl'], 'lpb' => $req['licensePhotoBackUrl'],
       'lid' => (int) ($req['licenseIsDigital'] ?? 0), 'el' => $req['eLicenseUrl'],
-      'ip' => $req['icPhotoUrl'], 'ipb' => $req['icPhotoBackUrl'],
       'id' => $req['deliveryPersonnelId'],
     ]);
 

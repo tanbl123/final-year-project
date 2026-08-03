@@ -49,11 +49,13 @@ class _VehicleLicenceScreenState extends State<VehicleLicenceScreen> {
   final Set<String> _licenseClasses = {};
   DateTime? _licenseExpiry;
 
-  // KYC docs (uploaded as soon as they're picked → store the returned URL)
+  // Licence docs (uploaded as soon as they're picked → store the returned URL).
+  // IC is a fixed identity document and isn't editable here — it's shown
+  // read-only on the Profile screen instead.
   final _picker = ImagePicker();
-  String? _licensePhotoUrl, _licensePhotoBackUrl, _eLicenseUrl, _icPhotoUrl, _icPhotoBackUrl;
+  String? _licensePhotoUrl, _licensePhotoBackUrl, _eLicenseUrl;
   bool _licenseIsDigital = false;
-  bool _upLicense = false, _upLicenseBack = false, _upELicense = false, _upIc = false, _upIcBack = false;
+  bool _upLicense = false, _upLicenseBack = false, _upELicense = false;
   String? _plateError, _licenseNumberError, _licenseClassError, _licenseExpiryError, _docsError;
 
   @override
@@ -107,8 +109,6 @@ class _VehicleLicenceScreenState extends State<VehicleLicenceScreen> {
     _licensePhotoUrl     = _nonEmpty(c['licensePhotoUrl']);
     _licensePhotoBackUrl = _nonEmpty(c['licensePhotoBackUrl']);
     _eLicenseUrl         = _nonEmpty(c['eLicenseUrl']);
-    _icPhotoUrl          = _nonEmpty(c['icPhotoUrl']);
-    _icPhotoBackUrl      = _nonEmpty(c['icPhotoBackUrl']);
     _plateError = _licenseNumberError = _licenseClassError = _licenseExpiryError = _docsError = null;
     setState(() => _editing = true);
   }
@@ -119,20 +119,16 @@ class _VehicleLicenceScreenState extends State<VehicleLicenceScreen> {
   String _fmtDate(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  // Have all required docs been uploaded for the chosen licence form?
-  bool get _docsUploaded =>
-      _icPhotoUrl != null && _icPhotoBackUrl != null &&
-      (_licenseIsDigital
-          ? _eLicenseUrl != null
-          : (_licensePhotoUrl != null && _licensePhotoBackUrl != null));
+  // Have the required licence docs been uploaded for the chosen form?
+  bool get _docsUploaded => _licenseIsDigital
+      ? _eLicenseUrl != null
+      : (_licensePhotoUrl != null && _licensePhotoBackUrl != null);
 
   void _setUploading(String which, bool v) {
     switch (which) {
       case 'license': _upLicense = v; break;
       case 'license_back': _upLicenseBack = v; break;
       case 'elicense': _upELicense = v; break;
-      case 'ic': _upIc = v; break;
-      case 'ic_back': _upIcBack = v; break;
     }
   }
 
@@ -141,8 +137,6 @@ class _VehicleLicenceScreenState extends State<VehicleLicenceScreen> {
       case 'license': _licensePhotoUrl = url; break;
       case 'license_back': _licensePhotoBackUrl = url; break;
       case 'elicense': _eLicenseUrl = url; break;
-      case 'ic': _icPhotoUrl = url; break;
-      case 'ic_back': _icPhotoBackUrl = url; break;
     }
   }
 
@@ -264,8 +258,8 @@ class _VehicleLicenceScreenState extends State<VehicleLicenceScreen> {
       _docsError = _docsUploaded
           ? null
           : (_licenseIsDigital
-              ? 'Upload both sides of your IC and your digital licence file.'
-              : 'Upload both sides of your IC and both sides of your driving licence.');
+              ? 'Upload your digital licence (e-licence) file.'
+              : 'Upload both the front and back of your driving licence.');
     });
     if (_plateError != null || _licenseNumberError != null || _licenseClassError != null ||
         _licenseExpiryError != null || _docsError != null) {
@@ -283,8 +277,6 @@ class _VehicleLicenceScreenState extends State<VehicleLicenceScreen> {
             licensePhotoUrl: _licenseIsDigital ? '' : (_licensePhotoUrl ?? ''),
             licensePhotoBackUrl: _licenseIsDigital ? '' : (_licensePhotoBackUrl ?? ''),
             eLicenseUrl: _licenseIsDigital ? (_eLicenseUrl ?? '') : '',
-            icPhotoUrl: _icPhotoUrl ?? '',
-            icPhotoBackUrl: _icPhotoBackUrl ?? '',
           );
       if (!mounted) return;
       context.showSnack('Submitted for admin review. Your account stays active while we review it.');
@@ -301,8 +293,7 @@ class _VehicleLicenceScreenState extends State<VehicleLicenceScreen> {
             _licenseExpiryError = msg;
           } else if (lower.contains('class')) {
             _licenseClassError = msg;
-          } else if (lower.contains('ic') || lower.contains('photo') ||
-              lower.contains('licence') || lower.contains('license')) {
+          } else if (lower.contains('photo') || lower.contains('licence') || lower.contains('license')) {
             _docsError = msg;
           } else {
             context.showSnack(msg);
@@ -366,16 +357,14 @@ class _VehicleLicenceScreenState extends State<VehicleLicenceScreen> {
         _viewRow('Licence expiry', expiry != null ? _fmtDate(expiry) : null),
         _viewRow('Licence type', digital ? 'Digital (e-licence)' : 'Physical card'),
         const SizedBox(height: 12),
-        // Uploaded documents — physical front+back OR the digital e-licence file,
-        // plus both sides of the IC.
+        // Uploaded licence documents — physical front+back OR the e-licence file.
+        // (The IC is shown read-only on the Profile screen, not here.)
         if (digital)
           _docThumb('Digital licence (e-licence)', c['eLicenseUrl']?.toString())
         else ...[
           _docThumb('Driving licence (front)', c['licensePhotoUrl']?.toString()),
           _docThumb('Driving licence (back)', c['licensePhotoBackUrl']?.toString()),
         ],
-        _docThumb('IC (front)', c['icPhotoUrl']?.toString()),
-        _docThumb('IC (back)', c['icPhotoBackUrl']?.toString()),
         const SizedBox(height: 8),
         FilledButton.icon(
           onPressed: _pending ? null : _startEdit,
@@ -386,8 +375,9 @@ class _VehicleLicenceScreenState extends State<VehicleLicenceScreen> {
     );
   }
 
-  // A labelled document preview. Images render as a thumbnail; anything that
-  // isn't an image (e.g. a PDF e-licence) falls back to a "file on record" card.
+  // A labelled document preview. Images render as a thumbnail (tap to open
+  // full-screen and zoom); anything that isn't an image (e.g. a PDF e-licence)
+  // falls back to a "file on record" card.
   Widget _docThumb(String label, String? url) {
     if (url == null || url.isEmpty) return const SizedBox.shrink();
     return Padding(
@@ -397,30 +387,91 @@ class _VehicleLicenceScreenState extends State<VehicleLicenceScreen> {
         children: [
           Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
           const SizedBox(height: 4),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Image.network(
-              url,
-              height: 150,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                height: 90,
-                width: double.infinity,
-                color: Colors.grey.shade200,
-                child: const Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.description_outlined, color: Colors.grey),
-                    SizedBox(height: 4),
-                    Text('File on record', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                  ],
-                ),
+          GestureDetector(
+            onTap: () => _openFullScreen(label, url),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Stack(
+                children: [
+                  Image.network(
+                    url,
+                    height: 150,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      height: 90,
+                      width: double.infinity,
+                      color: Colors.grey.shade200,
+                      child: const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.description_outlined, color: Colors.grey),
+                          SizedBox(height: 4),
+                          Text('File on record', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // subtle "tap to enlarge" affordance
+                  Positioned(
+                    right: 6,
+                    bottom: 6,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(Icons.zoom_in, color: Colors.white, size: 18),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  // Open a document full-screen with pinch/double-tap zoom + pan. Handles
+  // non-image files (e.g. a PDF e-licence) gracefully with a fallback message.
+  void _openFullScreen(String label, String url) {
+    Navigator.of(context).push(MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          foregroundColor: Colors.white,
+          title: Text(label, style: const TextStyle(color: Colors.white, fontSize: 16)),
+        ),
+        body: Center(
+          child: InteractiveViewer(
+            minScale: 0.8,
+            maxScale: 5,
+            child: Image.network(
+              url,
+              fit: BoxFit.contain,
+              loadingBuilder: (_, child, progress) =>
+                  progress == null ? child : const CircularProgressIndicator(color: Colors.white),
+              errorBuilder: (_, __, ___) => const Padding(
+                padding: EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.description_outlined, color: Colors.white70, size: 48),
+                    SizedBox(height: 12),
+                    Text("This file can't be previewed here (e.g. a PDF).",
+                        style: TextStyle(color: Colors.white70), textAlign: TextAlign.center),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ));
   }
 
   // ── edit form: propose new plate + licence values (+ full KYC docs) ──
@@ -527,12 +578,6 @@ class _VehicleLicenceScreenState extends State<VehicleLicenceScreen> {
           _photoTile(label: 'Driving licence (back)', url: _licensePhotoBackUrl, uploading: _upLicenseBack,
               error: _docsError != null && _licensePhotoBackUrl == null, onPick: () => _pickPhoto('license_back')),
         ],
-        const SizedBox(height: 8),
-        _photoTile(label: 'IC (front)', url: _icPhotoUrl, uploading: _upIc,
-            error: _docsError != null && _icPhotoUrl == null, onPick: () => _pickPhoto('ic')),
-        const SizedBox(height: 8),
-        _photoTile(label: 'IC (back)', url: _icPhotoBackUrl, uploading: _upIcBack,
-            error: _docsError != null && _icPhotoBackUrl == null, onPick: () => _pickPhoto('ic_back')),
         if (_docsError != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
@@ -562,7 +607,7 @@ class _VehicleLicenceScreenState extends State<VehicleLicenceScreen> {
     );
   }
 
-  bool get _anyUploading => _upLicense || _upLicenseBack || _upELicense || _upIc || _upIcBack;
+  bool get _anyUploading => _upLicense || _upLicenseBack || _upELicense;
 
   String _fmtCreated(dynamic raw) {
     final d = _parseDate(raw?.toString());

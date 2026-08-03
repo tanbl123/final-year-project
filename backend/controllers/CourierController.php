@@ -22,10 +22,10 @@ function courierIdForAuth(PDO $pdo, array $auth): string {
 }
 
 // Validate the proposed plate + licence values. Returns an error message or null.
-// $docs carries the full KYC set the courier can re-submit:
-//   icPhotoUrl, icPhotoBackUrl (always required),
-//   and EITHER a physical licence (licensePhotoUrl + licensePhotoBackUrl)
-//   OR a digital e-licence (licenseIsDigital = true + eLicenseUrl).
+// $docs carries the licence documents the courier can re-submit: EITHER a
+// physical licence (licensePhotoUrl + licensePhotoBackUrl) OR a digital
+// e-licence (licenseIsDigital = true + eLicenseUrl). The IC is a fixed identity
+// document verified at approval, so it is NOT part of a change request.
 function courierVerificationError(string $plate, string $licenseNumber, array $classes, string $licenseExpiry, array $docs): ?string {
   if (mb_strlen($plate) < 3 || !preg_match('/^[A-Za-z0-9 \-]+$/', $plate)) {
     return 'Enter a valid plate number (letters, numbers, spaces or hyphens).';
@@ -51,9 +51,6 @@ function courierVerificationError(string $plate, string $licenseNumber, array $c
   if ($exp <= new DateTime('today')) {
     return 'Your driving licence has expired — please renew it before updating.';
   }
-  if (($docs['icPhotoUrl'] ?? '') === '' || ($docs['icPhotoBackUrl'] ?? '') === '') {
-    return 'Please upload both the front and back of your IC.';
-  }
   if (!empty($docs['licenseIsDigital'])) {
     if (($docs['eLicenseUrl'] ?? '') === '') {
       return 'Please upload your digital licence (e-licence) file.';
@@ -72,8 +69,7 @@ function handleGetCourierVerification(PDO $pdo, array $auth): void {
 
   $cur = $pdo->prepare(
     'SELECT vehiclePlate, licenseNumber, licenseClass, licenseExpiry,
-            licensePhotoUrl, licensePhotoBackUrl, licenseIsDigital, eLicenseUrl,
-            icPhotoUrl, icPhotoBackUrl
+            licensePhotoUrl, licensePhotoBackUrl, licenseIsDigital, eLicenseUrl
        FROM delivery_personnel WHERE deliveryPersonnelId = :id'
   );
   $cur->execute(['id' => $courierId]);
@@ -82,7 +78,6 @@ function handleGetCourierVerification(PDO $pdo, array $auth): void {
   $req = $pdo->prepare(
     'SELECT requestId, vehiclePlate, licenseNumber, licenseClass, licenseExpiry,
             licensePhotoUrl, licensePhotoBackUrl, licenseIsDigital, eLicenseUrl,
-            icPhotoUrl, icPhotoBackUrl,
             requestStatus, reviewNote, created_at, reviewed_at
        FROM courier_change_request
       WHERE deliveryPersonnelId = :id
@@ -113,8 +108,6 @@ function handleSubmitCourierChangeRequest(PDO $pdo, array $auth): void {
     'licensePhotoBackUrl' => trim((string) ($body['licensePhotoBackUrl'] ?? '')),
     'licenseIsDigital'    => $isDigital,
     'eLicenseUrl'         => trim((string) ($body['eLicenseUrl'] ?? '')),
-    'icPhotoUrl'          => trim((string) ($body['icPhotoUrl'] ?? '')),
-    'icPhotoBackUrl'      => trim((string) ($body['icPhotoBackUrl'] ?? '')),
   ];
 
   $err = courierVerificationError($plate, $licNo, $classes, $licExp, $docs);
@@ -144,8 +137,8 @@ function handleSubmitCourierChangeRequest(PDO $pdo, array $auth): void {
   $pdo->prepare(
     'INSERT INTO courier_change_request
        (requestId, deliveryPersonnelId, vehiclePlate, licenseNumber, licenseClass, licenseExpiry,
-        licensePhotoUrl, licensePhotoBackUrl, licenseIsDigital, eLicenseUrl, icPhotoUrl, icPhotoBackUrl)
-     VALUES (:rid, :id, :plate, :ln, :lc, :le, :lp, :lpb, :lid, :el, :ip, :ipb)'
+        licensePhotoUrl, licensePhotoBackUrl, licenseIsDigital, eLicenseUrl)
+     VALUES (:rid, :id, :plate, :ln, :lc, :le, :lp, :lpb, :lid, :el)'
   )->execute([
     'rid' => $requestId, 'id' => $courierId, 'plate' => $plate,
     'ln' => $licNo, 'lc' => implode(',', $classes), 'le' => $licExp,
@@ -153,8 +146,6 @@ function handleSubmitCourierChangeRequest(PDO $pdo, array $auth): void {
     'lpb' => $docs['licensePhotoBackUrl'] !== '' ? $docs['licensePhotoBackUrl'] : null,
     'lid' => $isDigital ? 1 : 0,
     'el'  => $docs['eLicenseUrl'] !== '' ? $docs['eLicenseUrl'] : null,
-    'ip'  => $docs['icPhotoUrl'] !== '' ? $docs['icPhotoUrl'] : null,
-    'ipb' => $docs['icPhotoBackUrl'] !== '' ? $docs['icPhotoBackUrl'] : null,
   ]);
 
   sendJson(201, true, ['requestId' => $requestId, 'status' => 'Pending',

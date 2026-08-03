@@ -34,8 +34,6 @@ function docsChanged(r) {
     [r.curLicensePhotoUrl, r.newLicensePhotoUrl],
     [r.curLicensePhotoBackUrl, r.newLicensePhotoBackUrl],
     [r.curELicenseUrl, r.newELicenseUrl],
-    [r.curIcPhotoUrl, r.newIcPhotoUrl],
-    [r.curIcPhotoBackUrl, r.newIcPhotoBackUrl],
   ];
   return pairs.some(([a, b]) => String(a ?? '') !== String(b ?? ''));
 }
@@ -160,8 +158,6 @@ function AdminCourierChangesPage() {
                     <DiffRow label="Licence (back)" from={r.curLicensePhotoBackUrl} to={r.newLicensePhotoBackUrl} isDoc />
                   </>
                 )}
-                <DiffRow label="IC (front)" from={r.curIcPhotoUrl} to={r.newIcPhotoUrl} isDoc />
-                <DiffRow label="IC (back)" from={r.curIcPhotoBackUrl} to={r.newIcPhotoBackUrl} isDoc />
               </div>
             </div>
           ))}

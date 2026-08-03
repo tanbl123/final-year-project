@@ -37,9 +37,10 @@ class AccountService {
       await api.get('/courier/verification') as Map<String, dynamic>;
 
   /// POST /courier/verification/change-request — propose new plate/licence
-  /// values (with the full KYC doc set) for admin re-approval. The account stays
-  /// active while pending. Supply EITHER the physical licence (front + back) or a
-  /// digital e-licence file, matching [licenseIsDigital].
+  /// values for admin re-approval. The account stays active while pending. The
+  /// IC is a fixed identity document (verified at approval) so it isn't part of
+  /// this — only the plate and driving licence can change. Supply EITHER the
+  /// physical licence (front + back) or a digital e-licence file.
   Future<void> submitVerificationChange({
     required String vehiclePlate,
     required String licenseNumber,
@@ -49,8 +50,6 @@ class AccountService {
     required String licensePhotoBackUrl,
     required bool licenseIsDigital,
     required String eLicenseUrl,
-    required String icPhotoUrl,
-    required String icPhotoBackUrl,
   }) async {
     await api.post('/courier/verification/change-request', {
       'vehiclePlate': vehiclePlate,
@@ -61,8 +60,6 @@ class AccountService {
       'licensePhotoBackUrl': licensePhotoBackUrl,
       'licenseIsDigital': licenseIsDigital,
       'eLicenseUrl': eLicenseUrl,
-      'icPhotoUrl': icPhotoUrl,
-      'icPhotoBackUrl': icPhotoBackUrl,
     });
   }
 
