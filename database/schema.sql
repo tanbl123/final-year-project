@@ -99,8 +99,11 @@ CREATE TABLE admin (
 -- AR Specialist: internal staff who prepare products for AR (auto-fit QC + set
 -- the Camera Kit lens). Admin-provisioned, mirrors the `admin` extension table.
 CREATE TABLE ar_specialist (
-    arSpecialistId VARCHAR(10) NOT NULL,                    -- ARS0001
-    userId         VARCHAR(10) NOT NULL,
+    arSpecialistId VARCHAR(10)  NOT NULL,                   -- ARS0001
+    userId         VARCHAR(10)  NOT NULL,
+    icNumber       VARCHAR(20)  NULL,                       -- IC / NRIC — ties the account to a real person
+    position       VARCHAR(80)  NULL,                       -- job title, e.g. "AR Content Specialist"
+    department     VARCHAR(80)  NULL,                       -- team, e.g. "AR Studio"
     PRIMARY KEY (arSpecialistId),
     UNIQUE KEY uq_ar_specialist_user (userId),
     CONSTRAINT fk_ar_specialist_user FOREIGN KEY (userId) REFERENCES `user`(userId)

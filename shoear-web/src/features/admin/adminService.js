@@ -127,10 +127,10 @@ export function getArCompleted() {
 
 // Admin provisions an internal-staff account (currently AR Specialist only).
 // No credential is set here — the system emails a one-time link for the staff
-// member to set their own password. { fullName, email } → the created account
-// (username, inviteEmailSent).
-export function createStaff({ fullName, email, role = 'ArSpecialist' }) {
-  return apiPost('/admin/staff', { fullName, email, role }, getToken());
+// member to set their own password. Identity fields (phone, IC, position,
+// department) are optional. Returns the created account (username, inviteEmailSent).
+export function createStaff({ fullName, email, phoneNumber = '', icNumber = '', position = '', department = '', role = 'ArSpecialist' }) {
+  return apiPost('/admin/staff', { fullName, email, phoneNumber, icNumber, position, department, role }, getToken());
 }
 
 // Re-send a pending staff invite, optionally correcting the email/name first

@@ -326,7 +326,7 @@ function handleGetUser(PDO $pdo, string $userId): void {
   } elseif ($u['role'] === 'DeliveryPersonnel') {
     $p = $pdo->prepare('SELECT deliveryPersonnelId, vehicleType, vehicleBrand, vehicleModel, vehiclePlate FROM delivery_personnel WHERE userId = :id');
   } elseif ($u['role'] === 'ArSpecialist') {
-    $p = $pdo->prepare('SELECT arSpecialistId FROM ar_specialist WHERE userId = :id');
+    $p = $pdo->prepare('SELECT arSpecialistId, icNumber, position, department FROM ar_specialist WHERE userId = :id');
   } else {
     $p = null;
   }
@@ -396,6 +396,11 @@ function handleCreateStaff(PDO $pdo, array $config): void {
   $email    = trim($body['email'] ?? '');
   $fullName = trim($body['fullName'] ?? '');
   $role     = trim($body['role'] ?? 'ArSpecialist');
+  // optional identity fields (make the account clearly a real person)
+  $phone      = trim($body['phoneNumber'] ?? '');
+  $icNumber   = trim($body['icNumber'] ?? '');
+  $position   = trim($body['position'] ?? '');
+  $department = trim($body['department'] ?? '');
 
   // Only AR Specialist is provisionable here for now (guard against creating
   // Admins or anything else through this endpoint).
@@ -407,6 +412,16 @@ function handleCreateStaff(PDO $pdo, array $config): void {
   }
   if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'A valid email is required.']);
+  }
+  // light bounds on the optional fields (all may be left blank)
+  if ($phone !== '' && mb_strlen($phone) > 20) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Phone number must be 20 characters or fewer.']);
+  }
+  if ($icNumber !== '' && mb_strlen($icNumber) > 20) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'IC / NRIC number must be 20 characters or fewer.']);
+  }
+  if (mb_strlen($position) > 80 || mb_strlen($department) > 80) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Position and department must be 80 characters or fewer.']);
   }
   // We email the set-password link, so email must be configured.
   if (!mailConfigured($config)) {
@@ -436,13 +451,21 @@ function handleCreateStaff(PDO $pdo, array $config): void {
     // Store the token HASH + a 48h expiry on the user row (isolated from the
     // forgot-password flow); the raw token travels only in the emailed link.
     $pdo->prepare(
-      "INSERT INTO `user` (userId, username, password, email, fullName, role, status, setPasswordToken, setPasswordExpires)
-       VALUES (:id, :u, :pw, :e, :fn, 'ArSpecialist', 'Active', :tok, DATE_ADD(NOW(), INTERVAL 48 HOUR))"
+      "INSERT INTO `user` (userId, username, password, email, fullName, phoneNumber, role, status, setPasswordToken, setPasswordExpires)
+       VALUES (:id, :u, :pw, :e, :fn, :ph, 'ArSpecialist', 'Active', :tok, DATE_ADD(NOW(), INTERVAL 48 HOUR))"
     )->execute(['id' => $userId, 'u' => $username, 'pw' => $hash, 'e' => $email, 'fn' => $fullName,
+                'ph' => $phone !== '' ? $phone : null,
                 'tok' => password_hash($token, PASSWORD_BCRYPT)]);
 
-    $pdo->prepare('INSERT INTO ar_specialist (arSpecialistId, userId) VALUES (:aid, :uid)')
-        ->execute(['aid' => $arsId, 'uid' => $userId]);
+    $pdo->prepare(
+      'INSERT INTO ar_specialist (arSpecialistId, userId, icNumber, position, department)
+       VALUES (:aid, :uid, :ic, :pos, :dep)'
+    )->execute([
+      'aid' => $arsId, 'uid' => $userId,
+      'ic'  => $icNumber !== '' ? $icNumber : null,
+      'pos' => $position !== '' ? $position : null,
+      'dep' => $department !== '' ? $department : null,
+    ]);
 
     $pdo->commit();
   } catch (Throwable $e) {

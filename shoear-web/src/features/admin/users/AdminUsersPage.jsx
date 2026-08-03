@@ -18,7 +18,9 @@ const STATUS_COLORS = {
 };
 const roleLabel = (r) => (r === 'DeliveryPersonnel' ? 'Delivery' : r === 'ArSpecialist' ? 'AR Specialist' : r);
 
-const EMPTY_STAFF = { fullName: '', email: '' };  // username auto-generated; password set by the staff member via link
+// username auto-generated; password set by the staff member via link. Phone / IC
+// / position / department are optional identity fields.
+const EMPTY_STAFF = { fullName: '', email: '', phoneNumber: '', icNumber: '', position: '', department: '' };
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const NAME_MAX = 120;                       // user.fullName VARCHAR(120)
 
@@ -390,7 +392,7 @@ function AdminUsersPage() {
                     <dt className="col-4">Name</dt><dd className="col-8">{detail.fullName}</dd>
                     <dt className="col-4">Username</dt><dd className="col-8">@{detail.username}</dd>
                     <dt className="col-4">Email</dt><dd className="col-8" style={{ overflowWrap: 'anywhere' }}>{detail.email}</dd>
-                    <dt className="col-4">Phone</dt><dd className="col-8">{detail.phoneNumber}</dd>
+                    <dt className="col-4">Phone</dt><dd className="col-8">{detail.phoneNumber || <span className="text-muted">—</span>}</dd>
                     <dt className="col-4">Role</dt><dd className="col-8">{roleLabel(detail.role)}</dd>
                     <dt className="col-4">Status</dt>
                     <dd className="col-8">
@@ -429,6 +431,12 @@ function AdminUsersPage() {
                       <>
                         <dt className="col-4">Staff ID</dt>
                         <dd className="col-8">{detail.profile.arSpecialistId}</dd>
+                        <dt className="col-4">IC / NRIC</dt>
+                        <dd className="col-8">{detail.profile.icNumber || <span className="text-muted">—</span>}</dd>
+                        <dt className="col-4">Position</dt>
+                        <dd className="col-8">{detail.profile.position || <span className="text-muted">—</span>}</dd>
+                        <dt className="col-4">Department</dt>
+                        <dd className="col-8">{detail.profile.department || <span className="text-muted">—</span>}</dd>
                       </>
                     )}
                     <dt className="col-4">Joined</dt>
@@ -470,7 +478,7 @@ function AdminUsersPage() {
                     onClear={() => setStaffField('fullName', '')} />
                   {staffErrors.fullName && <div className="invalid-feedback d-block">{staffErrors.fullName}</div>}
                 </div>
-                <div className="mb-1">
+                <div className="mb-2">
                   <label className="form-label small mb-1">Email</label>
                   <ClearableInput type="email" className={staffErrors.email ? 'is-invalid' : ''}
                     value={createForm.email}
@@ -478,6 +486,36 @@ function AdminUsersPage() {
                     onBlur={() => blurStaffField('email')}
                     onClear={() => setStaffField('email', '')} />
                   {staffErrors.email && <div className="invalid-feedback d-block">{staffErrors.email}</div>}
+                </div>
+
+                <p className="text-muted small mb-2 mt-3">
+                  Optional — helps identify the person behind the account.
+                </p>
+                <div className="row g-2">
+                  <div className="col-sm-6 mb-1">
+                    <label className="form-label small mb-1">Phone number</label>
+                    <ClearableInput value={createForm.phoneNumber} placeholder="e.g. 012-345 6789"
+                      onChange={(e) => setStaffField('phoneNumber', e.target.value)}
+                      onClear={() => setStaffField('phoneNumber', '')} />
+                  </div>
+                  <div className="col-sm-6 mb-1">
+                    <label className="form-label small mb-1">IC / NRIC number</label>
+                    <ClearableInput value={createForm.icNumber} placeholder="e.g. 990101-14-5678"
+                      onChange={(e) => setStaffField('icNumber', e.target.value)}
+                      onClear={() => setStaffField('icNumber', '')} />
+                  </div>
+                  <div className="col-sm-6 mb-1">
+                    <label className="form-label small mb-1">Position / title</label>
+                    <ClearableInput value={createForm.position} placeholder="e.g. AR Content Specialist"
+                      onChange={(e) => setStaffField('position', e.target.value)}
+                      onClear={() => setStaffField('position', '')} />
+                  </div>
+                  <div className="col-sm-6 mb-1">
+                    <label className="form-label small mb-1">Department</label>
+                    <ClearableInput value={createForm.department} placeholder="e.g. AR Studio"
+                      onChange={(e) => setStaffField('department', e.target.value)}
+                      onClear={() => setStaffField('department', '')} />
+                  </div>
                 </div>
               </div>
               <div className="modal-footer">
