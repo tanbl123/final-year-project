@@ -14,8 +14,8 @@ function AdminCourierPayoutsPage() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [busyId, setBusyId] = useState('');
-  const [openId, setOpenId] = useState('');          // courier whose history is expanded
-  const [history, setHistory] = useState({});        // { [deliveryPersonnelId]: payouts[] | 'loading' }
+  const [historyFor, setHistoryFor] = useState(null); // courier whose history modal is open (null = closed)
+  const [history, setHistory] = useState({});         // { [deliveryPersonnelId]: payouts[] | 'loading' } cache
 
   // in-house courier fee configuration (the flat per-delivery fee)
   const [courierFee, setCourierFeeState] = useState(null);   // { current, active, default, history }
@@ -46,7 +46,6 @@ function AdminCourierPayoutsPage() {
       setNotice(`Paid ${courier.fullName} RM ${Number(res.amount).toFixed(2)} (${res.deliveryCount} deliveries).`);
       // drop any cached history for this courier so it reflects the new payout
       setHistory((h) => { const next = { ...h }; delete next[courier.deliveryPersonnelId]; return next; });
-      if (openId === courier.deliveryPersonnelId) setOpenId('');
       load();
     } catch (err) {
       setError(err.message);
@@ -95,14 +94,14 @@ function AdminCourierPayoutsPage() {
     }
   }
 
-  async function toggleHistory(courierId) {
-    if (openId === courierId) { setOpenId(''); return; }
-    setOpenId(courierId);
+  async function openHistory(courier) {
+    setHistoryFor(courier);
+    const courierId = courier.deliveryPersonnelId;
     if (!history[courierId]) {
       setHistory((h) => ({ ...h, [courierId]: 'loading' }));
       try {
         const data = await getCourierPayoutHistory(courierId);
-        setHistory((h) => ({ ...h, [courierId]: data.payouts }));
+        setHistory((h) => ({ ...h, [courierId]: data.payouts || [] }));
       } catch (err) {
         setHistory((h) => ({ ...h, [courierId]: [] }));
         setError(err.message);
@@ -250,9 +249,9 @@ function AdminCourierPayoutsPage() {
                     <td className="text-end text-nowrap">
                       <button
                         className="btn btn-outline-secondary btn-sm me-2"
-                        onClick={() => toggleHistory(c.deliveryPersonnelId)}
+                        onClick={() => openHistory(c)}
                       >
-                        {openId === c.deliveryPersonnelId ? 'Hide' : 'History'}
+                        History
                       </button>
                       {!ready && (
                         <button
@@ -277,57 +276,64 @@ function AdminCourierPayoutsPage() {
                     </td>
                   </tr>
                 );
-              }).flatMap((row, i) => {
-                const c = sort.sorted[i];
-                const out = [row];
-                if (openId === c.deliveryPersonnelId) {
-                  const h = history[c.deliveryPersonnelId];
-                  out.push(
-                    <tr key={`${c.deliveryPersonnelId}-history`}>
-                      <td colSpan={5} className="bg-light">
-                        <div className="px-2 py-1">
-                          <div className="fw-semibold small mb-2">Payout history — {c.fullName}</div>
-                          {h === 'loading' ? (
-                            <div className="text-muted small">Loading…</div>
-                          ) : !h || h.length === 0 ? (
-                            <div className="text-muted small">No payouts yet.</div>
-                          ) : (
-                            <table className="table table-sm mb-0">
-                              <thead>
-                                <tr>
-                                  <th>Date</th>
-                                  <th className="text-end">Amount</th>
-                                  <th className="text-end">Deliveries</th>
-                                  <th>Type</th>
-                                  <th>Status</th>
-                                  <th>Stripe transfer</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {h.map((p) => (
-                                  <tr key={p.payoutId}>
-                                    <td className="small">{new Date(p.created_at).toLocaleString()}</td>
-                                    <td className="text-end">{fmt(p.amount)}</td>
-                                    <td className="text-end">{p.deliveryCount}</td>
-                                    <td><span className="badge bg-light text-dark border">{p.isAuto ? 'Auto' : 'Manual'}</span></td>
-                                    <td>{statusBadge(p.payoutStatus)}</td>
-                                    <td className="small text-muted">{p.stripeTransferId || '—'}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                }
-                return out;
               })}
             </tbody>
           </table>
         </div>
       )}
+
+      {/* payout history (modal — keeps the table clean as history grows) */}
+      {historyFor && (() => {
+        const h = history[historyFor.deliveryPersonnelId];
+        return (
+          <div className="modal show d-block" tabIndex="-1" style={{ background: 'rgba(0,0,0,.5)' }}
+            onClick={() => setHistoryFor(null)}>
+            <div className="modal-dialog modal-lg modal-dialog-scrollable" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">Payout history — {historyFor.fullName}</h5>
+                  <button type="button" className="btn-close" onClick={() => setHistoryFor(null)}></button>
+                </div>
+                <div className="modal-body">
+                  {h === 'loading' || !h ? (
+                    <p className="text-muted mb-0">Loading…</p>
+                  ) : h.length === 0 ? (
+                    <p className="text-muted mb-0">No payouts yet.</p>
+                  ) : (
+                    <table className="table table-sm mb-0">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th className="text-end">Amount</th>
+                          <th className="text-end">Deliveries</th>
+                          <th>Type</th>
+                          <th>Status</th>
+                          <th>Stripe transfer</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {h.map((p) => (
+                          <tr key={p.payoutId}>
+                            <td className="small">{new Date(p.created_at).toLocaleString()}</td>
+                            <td className="text-end">{fmt(p.amount)}</td>
+                            <td className="text-end">{p.deliveryCount}</td>
+                            <td><span className="badge bg-light text-dark border">{p.isAuto ? 'Auto' : 'Manual'}</span></td>
+                            <td>{statusBadge(p.payoutStatus)}</td>
+                            <td className="small text-muted">{p.stripeTransferId || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setHistoryFor(null)}>Close</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <ConfirmDialog
         isOpen={confirmFee}
