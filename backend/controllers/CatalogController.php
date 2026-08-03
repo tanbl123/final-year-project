@@ -76,7 +76,8 @@ function handleGetCatalogProduct(PDO $pdo, string $id): void {
             p.productDescription AS description, p.productPrice AS price,
             p.virtualTryOnEnable AS virtualTryOnEnable,
             p.categoryId AS categoryId, c.categoryName AS categoryName,
-            s.supplierId, COALESCE(NULLIF(s.displayName, ''), s.companyName) AS supplierName
+            s.supplierId, COALESCE(NULLIF(s.displayName, ''), s.companyName) AS supplierName,
+            s.companyPhotoUrl AS supplierLogoUrl
        FROM product p
        JOIN category c ON c.categoryId = p.categoryId
        JOIN supplier s ON s.supplierId = p.supplierId

@@ -112,6 +112,7 @@ class ProductDetail {
   final bool virtualTryOnEnable;
   final String? categoryName;
   final String? supplierName;
+  final String? supplierLogoUrl; // approved company logo, shown as the seller's brand image
   final List<String> images;
   final String? modelUrl;
   final String? arLensId; // Snapchat Camera Kit lens id — AR try-on is available when set
@@ -139,6 +140,7 @@ class ProductDetail {
     required this.virtualTryOnEnable,
     this.categoryName,
     this.supplierName,
+    this.supplierLogoUrl,
     required this.images,
     this.modelUrl,
     this.arLensId,
@@ -158,6 +160,7 @@ class ProductDetail {
         virtualTryOnEnable: j['virtualTryOnEnable'] == true,
         categoryName: j['categoryName'] as String?,
         supplierName: j['supplierName'] as String?,
+        supplierLogoUrl: (j['supplierLogoUrl'] as String?)?.isNotEmpty == true ? j['supplierLogoUrl'] as String : null,
         images: ((j['images'] as List?) ?? []).map((e) => e.toString()).toList(),
         modelUrl: j['modelUrl'] as String?,
         arLensId: (j['arLensId'] as String?)?.isNotEmpty == true ? j['arLensId'] as String : null,

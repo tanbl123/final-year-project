@@ -337,15 +337,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                         child: Row(
                           children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.primaryContainer,
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(Icons.storefront_outlined,
-                                  color: theme.colorScheme.primary, size: 20),
+                            _SupplierAvatar(
+                              logoUrl: p.supplierLogoUrl,
+                              size: 40,
+                              iconSize: 20,
                             ),
                             const SizedBox(width: 12),
                             Column(
@@ -394,6 +389,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             for (final r in _orderedReviews(p.reviews))
                               _ReviewTile(
                                 review: r,
+                                supplierLogoUrl: p.supplierLogoUrl,
                                 isMine: r.reviewId.isNotEmpty && r.reviewId == _myStatus?.myReview?.reviewId,
                                 onEdit: () => _openReviewEditor(existing: _myStatus!.myReview),
                                 onDelete: () => _deleteReview(r.reviewId),
@@ -728,11 +724,12 @@ class _SizeChip extends StatelessWidget {
 
 class _ReviewTile extends StatelessWidget {
   final ProductReview review;
+  final String? supplierLogoUrl;  // approved company logo, shown on the seller's reply
   final bool isMine;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
   final VoidCallback? onReport;   // report someone else's review (null = hidden)
-  const _ReviewTile({required this.review, this.isMine = false, this.onEdit, this.onDelete, this.onReport});
+  const _ReviewTile({required this.review, this.supplierLogoUrl, this.isMine = false, this.onEdit, this.onDelete, this.onReport});
 
   @override
   Widget build(BuildContext context) {
@@ -810,7 +807,7 @@ class _ReviewTile extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.storefront_outlined, size: 14, color: Colors.grey.shade500),
+                  _SupplierAvatar(logoUrl: supplierLogoUrl, size: 18, iconSize: 12),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text('Seller: ${review.supplierReply}',
@@ -871,6 +868,40 @@ class _ReviewTile extends StatelessWidget {
       );
     }
     return Padding(padding: const EdgeInsets.only(bottom: 16), child: body);
+  }
+}
+
+/// The seller's brand image: the approved company logo when available,
+/// otherwise a storefront icon on a tinted circle.
+class _SupplierAvatar extends StatelessWidget {
+  final String? logoUrl;
+  final double size;
+  final double iconSize;
+  const _SupplierAvatar({this.logoUrl, this.size = 40, this.iconSize = 20});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final fallback = Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primaryContainer,
+        shape: BoxShape.circle,
+      ),
+      child: Icon(Icons.storefront_outlined,
+          color: theme.colorScheme.primary, size: iconSize),
+    );
+    if (logoUrl == null || logoUrl!.isEmpty) return fallback;
+    return ClipOval(
+      child: Image.network(
+        logoUrl!,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => fallback,
+      ),
+    );
   }
 }
 

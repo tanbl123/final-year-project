@@ -231,7 +231,11 @@ function ProfilePage() {
         <div className="card-body">
           {/* header: big avatar + name (suppliers show their customer-facing store name) */}
           <div className="d-flex align-items-center gap-3 mb-4">
-            <Avatar name={headerName} size={72} />
+            <Avatar
+              name={headerName}
+              size={72}
+              url={me.role === 'Supplier' ? (me.profile?.companyPhotoUrl || null) : null}
+            />
             <div>
               <h4 className="mb-0">{headerName}</h4>
               <div className="text-muted">
