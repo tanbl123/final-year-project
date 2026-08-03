@@ -222,6 +222,36 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  // Delete the review this customer left for an item (with confirmation).
+  Future<void> _deleteItemReview(OrderItem item) async {
+    if (item.reviewId == null) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete your review?'),
+        content: const Text('This removes your rating and comment for this item. You can review it again later.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Keep')),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade400),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await context.read<ReviewService>().delete(item.reviewId!);
+      if (!mounted) return;
+      context.showSnack('Your review has been deleted.');
+      bumpRefresh();    // product rating changed elsewhere (catalog/product page)
+      await _refresh(); // flips the item back to a "Rate" button
+    } catch (e) {
+      if (mounted) context.showSnack(e.toString());
+    }
+  }
+
   Future<void> _requestRefund() async {
     // The dialog owns its controller/image and validates inline; it returns the
     // reason + an optional proof photo only once valid.
@@ -414,6 +444,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   canReview: o.canReview,
                   onRate: () => _rateItem(o.items[i]),
                   onEdit: () => _editItem(o.items[i]),
+                  onDelete: () => _deleteItemReview(o.items[i]),
                 ),
               ],
               const Padding(padding: EdgeInsets.symmetric(vertical: 10), child: Divider(height: 1)),
@@ -648,8 +679,9 @@ class _ItemRow extends StatelessWidget {
   final Color primary;
   final bool canReview;       // order is purchased → items can be rated
   final VoidCallback? onRate;
-  final VoidCallback? onEdit; // edit the customer's own existing review
-  const _ItemRow({required this.item, required this.primary, this.canReview = false, this.onRate, this.onEdit});
+  final VoidCallback? onEdit;   // edit the customer's own existing review
+  final VoidCallback? onDelete; // delete the customer's own existing review
+  const _ItemRow({required this.item, required this.primary, this.canReview = false, this.onRate, this.onEdit, this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -683,7 +715,7 @@ class _ItemRow extends StatelessWidget {
         if (canReview) ...[
           const SizedBox(height: 8),
           if (item.reviewed)
-            _MyReview(item: item, onEdit: onEdit)
+            _MyReview(item: item, onEdit: onEdit, onDelete: onDelete)
           else
             Align(
               alignment: Alignment.centerRight,
@@ -706,11 +738,12 @@ class _ItemRow extends StatelessWidget {
 }
 
 // The customer's OWN review of an item, shown inline once they've rated it:
-// their stars + comment, with an Edit shortcut. Only they see this here.
+// their stars + comment, with Edit / Delete shortcuts. Only they see this here.
 class _MyReview extends StatelessWidget {
   final OrderItem item;
   final VoidCallback? onEdit;
-  const _MyReview({required this.item, this.onEdit});
+  final VoidCallback? onDelete;
+  const _MyReview({required this.item, this.onEdit, this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -739,6 +772,16 @@ class _MyReview extends StatelessWidget {
                   icon: const Icon(Icons.edit_outlined, size: 15),
                   label: const Text('Edit'),
                   style: TextButton.styleFrom(visualDensity: VisualDensity.compact, padding: const EdgeInsets.symmetric(horizontal: 6)),
+                ),
+              if (onDelete != null)
+                TextButton.icon(
+                  onPressed: onDelete,
+                  icon: const Icon(Icons.delete_outline, size: 15),
+                  label: const Text('Delete'),
+                  style: TextButton.styleFrom(
+                      foregroundColor: Colors.red.shade400,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 6)),
                 ),
             ],
           ),
