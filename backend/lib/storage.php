@@ -162,8 +162,19 @@ function storeUploadedFile(array $file, string $kind): string {
     $allowed = implode(', ', $rules['exts']);
     sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => "Allowed file types: {$allowed}."]);
   }
-  if ($kind === 'image' && getimagesize($file['tmp_name']) === false) {
-    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'That file is not a valid image.']);
+  // Verify the file's ACTUAL type, not just its name, so a non-image/non-PDF
+  // renamed to .jpg/.pdf is rejected. Applies to every kind (incl. the public
+  // registration-doc endpoint). Models (.glb) are validated by extension only.
+  if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+    if (getimagesize($file['tmp_name']) === false) {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'That file is not a valid image.']);
+    }
+  } elseif ($ext === 'pdf') {
+    // Real PDFs begin with the "%PDF-" magic bytes.
+    $head = @file_get_contents($file['tmp_name'], false, null, 0, 5);
+    if ($head === false || strncmp($head, '%PDF-', 5) !== 0) {
+      sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'That file is not a valid PDF.']);
+    }
   }
 
   // Random, collision-proof filename; never trust the client's name.
