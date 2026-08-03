@@ -488,9 +488,9 @@ function AdminUsersPage() {
                       <hr />
                       <div className="fw-semibold small mb-2">Documents</div>
                       <div className="row g-2">
-                        <UserDoc label="Profile photo" url={detail.avatarUrl} />
                         {detail.role === 'DeliveryPersonnel' && (
                           <>
+                            <UserDoc label="Profile photo" url={detail.avatarUrl} />
                             <UserDoc label="IC (front)" url={detail.profile.icPhotoUrl} />
                             <UserDoc label="IC (back)" url={detail.profile.icPhotoBackUrl} />
                             {Number(detail.profile.licenseIsDigital) === 1 ? (
@@ -504,7 +504,10 @@ function AdminUsersPage() {
                           </>
                         )}
                         {detail.role === 'Supplier' && (
-                          <UserDoc label="Business licence" url={detail.profile.businessLicenseUrl} />
+                          <>
+                            <UserDoc label="Company logo" url={detail.profile.companyPhotoUrl} />
+                            <UserDoc label="Business licence" url={detail.profile.businessLicenseUrl} />
+                          </>
                         )}
                       </div>
                     </>
