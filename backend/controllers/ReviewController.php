@@ -81,6 +81,28 @@ function requireOwnReview(PDO $pdo, string $supplierId, string $reviewId): array
   return $row;
 }
 
+// GET /supplier/reviews — every published review on this supplier's products,
+// with product + reviewer info and the supplier's reply. Unreplied first, then
+// newest, so the ones needing attention surface at the top.
+function handleListSupplierReviews(PDO $pdo, array $auth): void {
+  $supplierId = requireSupplierId($pdo, $auth);
+  $stmt = $pdo->prepare(
+    "SELECT r.reviewId, r.productId, p.productName, r.ratingScore, r.reviewComment, r.reviewDate,
+            r.supplierReply, r.supplierReplyDate,
+            buyer.fullName AS customerName, buyer.avatarUrl AS customerAvatar
+       FROM review r
+       JOIN product p    ON p.productId = r.productId
+       JOIN customer c   ON c.customerId = r.customerId
+       JOIN `user` buyer ON buyer.userId = c.userId
+      WHERE p.supplierId = :sid AND r.reviewStatus = 'Published'
+      ORDER BY (r.supplierReply IS NULL OR r.supplierReply = '') DESC, r.reviewDate DESC"
+  );
+  $stmt->execute(['sid' => $supplierId]);
+  $rows = $stmt->fetchAll();
+  foreach ($rows as &$rv) { $rv['ratingScore'] = (int) $rv['ratingScore']; }
+  sendJson(200, true, ['reviews' => $rows]);
+}
+
 // PUT /supplier/reviews/{reviewId}/reply — add or edit the supplier's own reply
 // (one per review). Body: { reply }. Only on a Published review on the
 // supplier's product. The supplier can never touch the customer's review text.

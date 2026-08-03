@@ -53,11 +53,12 @@ const SUPPLIER_NAV = [
     { to: '/dashboard', label: 'Dashboard', icon: '📊', end: true },
   ] },
   { group: 'Catalog', items: [
-    { to: '/products', label: 'Products', icon: '👟', badge: 'reviews' },
+    { to: '/products', label: 'Products', icon: '👟' },
     { to: '/inventory', label: 'Inventory', icon: '📦', badge: 'inventory' },
   ] },
   { group: 'Sales', items: [
     { to: '/orders', label: 'Orders', icon: '🧾', badge: 'orders' },
+    { to: '/reviews', label: 'Reviews', icon: '⭐', badge: 'reviews' },
     { to: '/refunds', label: 'Refunds', icon: '💸' },
     { to: '/reports', label: 'Reports', icon: '📊' },
   ] },

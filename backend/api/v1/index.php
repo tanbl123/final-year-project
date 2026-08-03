@@ -1266,6 +1266,13 @@ if ($method === 'PATCH' && preg_match('#^/admin/reviews/([^/]+)/status$#', $path
   handleSetReviewStatus($pdo, $m[1]);
 }
 
+// supplier: list all reviews across their products (reply queue)
+if ($method === 'GET' && $path === '/supplier/reviews') {
+  $auth = requireAuth($secret);
+  $pdo  = getPDO();
+  handleListSupplierReviews($pdo, $auth);
+}
+
 // supplier reply to a review on their own product (create/update + delete)
 if ($method === 'PUT' && preg_match('#^/supplier/reviews/([^/]+)/reply$#', $path, $m)) {
   $auth = requireAuth($secret);

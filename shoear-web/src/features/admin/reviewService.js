@@ -10,6 +10,11 @@ export function deleteReviewReply(reviewId) {
   return apiDelete(`/supplier/reviews/${reviewId}/reply`, getToken());
 }
 
+// Supplier: all reviews across their products (unreplied first). { reviews: [...] }.
+export function getSupplierReviews() {
+  return apiGet('/supplier/reviews', getToken());
+}
+
 // Admin: all reviews. filters: { status, rating, search }.
 export function getAdminReviews(filters = {}) {
   const qs = new URLSearchParams();
