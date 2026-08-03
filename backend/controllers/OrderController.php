@@ -526,7 +526,11 @@ function handleListCustomerOrders(PDO $pdo, array $auth): void {
 
   $where = 'o.customerId = :cid';
   $params = ['cid' => $customerId];
-  if ($statuses !== null) {
+  if ($group === 'refunded') {
+    // Orders the customer has raised a refund on (any stage — so they can track
+    // pending / approved / completed / rejected requests here).
+    $where .= ' AND EXISTS (SELECT 1 FROM refund rf WHERE rf.orderId = o.orderId)';
+  } elseif ($statuses !== null) {
     $in = [];
     foreach ($statuses as $i => $s) { $k = ":st$i"; $in[] = $k; $params[$k] = $s; }
     $where .= ' AND o.orderStatus IN (' . implode(',', $in) . ')';
@@ -566,7 +570,9 @@ function handleListCustomerOrders(PDO $pdo, array $auth): void {
                FROM order_item oi
                JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
                JOIN product p ON p.productId = pv.productId
-              WHERE oi.orderId = o.orderId ORDER BY oi.orderItemId LIMIT 1) AS previewImage
+              WHERE oi.orderId = o.orderId ORDER BY oi.orderItemId LIMIT 1) AS previewImage,
+            (SELECT rf.refundStatus FROM refund rf WHERE rf.orderId = o.orderId
+               ORDER BY rf.requestDate DESC LIMIT 1) AS refundStatus
        FROM `order` o
        LEFT JOIN payment pay ON pay.orderId = o.orderId
       WHERE $where

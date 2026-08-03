@@ -100,6 +100,7 @@ class CustomerOrderSummary {
   final String? previewName; // first item's product name (list preview)
   final String? previewBrand; // first item's brand
   final String? previewImage; // first item's image URL
+  final String? refundStatus; // latest refund on the order (null = none)
 
   CustomerOrderSummary({
     required this.orderId,
@@ -114,6 +115,7 @@ class CustomerOrderSummary {
     this.previewName,
     this.previewBrand,
     this.previewImage,
+    this.refundStatus,
   });
 
   /// An order still awaiting payment (created but not yet paid).
@@ -132,6 +134,7 @@ class CustomerOrderSummary {
         previewName: j['previewName'] as String?,
         previewBrand: j['previewBrand'] as String?,
         previewImage: (j['previewImage'] as String?)?.isNotEmpty == true ? j['previewImage'] as String : null,
+        refundStatus: (j['refundStatus'] as String?)?.isNotEmpty == true ? j['refundStatus'] as String : null,
       );
 }
 

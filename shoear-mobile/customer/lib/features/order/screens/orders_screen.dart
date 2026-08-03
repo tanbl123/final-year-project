@@ -24,6 +24,13 @@ const Map<String, Color> kOrderStatusColors = {
   'Cancelled': Colors.red,
 };
 
+const Map<String, Color> _kRefundColors = {
+  'Pending': Colors.orange,
+  'Approved': Colors.indigo,
+  'Completed': Colors.green,
+  'Rejected': Colors.red,
+};
+
 String prettyStatus(String s) => s.replaceAllMapped(RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}');
 
 /// The customer's order history.
@@ -37,8 +44,8 @@ class OrdersScreen extends StatefulWidget {
 class _OrdersScreenState extends State<OrdersScreen> {
   // Status tabs, Shopee-style. Each tab loads its OWN paginated list — the
   // server filters by group, so tabs scroll independently and lazy-load.
-  static const _tabs = ['All', 'To Pay', 'Paid', 'Completed', 'Cancelled'];
-  static const _groups = [null, 'topay', 'paid', 'completed', 'cancelled'];
+  static const _tabs = ['All', 'To Pay', 'Paid', 'Completed', 'Cancelled', 'Refunds'];
+  static const _groups = [null, 'topay', 'paid', 'completed', 'cancelled', 'refunded'];
 
   @override
   Widget build(BuildContext context) {
@@ -344,6 +351,13 @@ class _OrderCard extends StatelessWidget {
                   _Chip(
                       label: 'Parcel: ${prettyStatus(order.deliveryStatus!)}',
                       color: Colors.teal,
+                      outlined: true),
+                ],
+                if (order.refundStatus != null) ...[
+                  const SizedBox(height: 10),
+                  _Chip(
+                      label: 'Refund: ${order.refundStatus}',
+                      color: _kRefundColors[order.refundStatus] ?? Colors.grey,
                       outlined: true),
                 ],
                 const Padding(
