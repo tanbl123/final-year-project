@@ -157,8 +157,7 @@ function AdminRefundsPage() {
                 <SortableTh label="Reason" columnKey="refundReason" sort={sort} />
                 <SortableTh label="Amount" columnKey="refundAmount" sort={sort} className="text-end" style={{ width: 110 }} />
                 <SortableTh label="Status" columnKey="refundStatus" sort={sort} className="text-center" style={{ width: 110 }} />
-                <th style={{ width: 90 }}>Proof</th>
-                <th className="text-center" style={{ width: 240 }}>Action</th>
+                <th className="text-center" style={{ width: 260 }}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -188,18 +187,6 @@ function AdminRefundsPage() {
                   </td>
                   <td className="text-center">
                     <span className={`badge text-bg-${STATUS_COLORS[r.refundStatus] || 'secondary'}`}>{r.refundStatus}</span>
-                  </td>
-                  <td>
-                    {(() => {
-                      const urls = refundProofUrls(r.refundProof);
-                      if (urls.length === 0) return <span className="text-muted">—</span>;
-                      if (urls.length === 1) {
-                        return <a href={urls[0]} target="_blank" rel="noreferrer" className="btn btn-outline-secondary btn-sm">View</a>;
-                      }
-                      return urls.map((u, i) => (
-                        <a key={i} href={u} target="_blank" rel="noreferrer" className="btn btn-outline-secondary btn-sm me-1">#{i + 1}</a>
-                      ));
-                    })()}
                   </td>
                   <td className="text-center">{renderActions(r)}</td>
                 </tr>
