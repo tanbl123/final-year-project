@@ -107,7 +107,7 @@ function AdminRefundsPage() {
         <button className="btn btn-outline-secondary btn-sm" onClick={() => setDetail(r)}>Details</button>
         {r.refundStatus === 'Pending' && (
           <>
-            <button className="btn btn-success btn-sm" disabled={busy} onClick={() => openDecision(r, 'Approved')}>Approve</button>
+            <button className="btn btn-success btn-sm" disabled={busy} onClick={() => openDecision(r, 'Completed')}>Approve &amp; refund</button>
             <button className="btn btn-outline-danger btn-sm" disabled={busy} onClick={() => openDecision(r, 'Rejected')}>Reject</button>
           </>
         )}
@@ -217,14 +217,15 @@ function AdminRefundsPage() {
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">
-                  {decision.status === 'Rejected' ? 'Reject refund?' : 'Approve refund?'}
+                  {decision.status === 'Rejected' ? 'Reject refund?' : 'Approve & refund?'}
                 </h5>
                 <button type="button" className="btn-close" onClick={() => setDecision(null)}></button>
               </div>
               <div className="modal-body">
                 <p className="mb-3">
-                  {decision.status === 'Rejected' ? 'Reject' : 'Approve'} the refund of{' '}
-                  <strong>{money(decision.refund.refundAmount)}</strong> for {decision.refund.orderId}?
+                  {decision.status === 'Rejected'
+                    ? <>Reject the refund of <strong>{money(decision.refund.refundAmount)}</strong> for {decision.refund.orderId}?</>
+                    : <>Refund <strong>{money(decision.refund.refundAmount)}</strong> for {decision.refund.orderId} now? The money is returned to the customer immediately{decision.refund.refundAmount < decision.refund.orderTotalAmount ? ' (partial refund — the rest of the payment stays active)' : ''}.</>}
                 </p>
                 <label className="form-label small mb-1">
                   {decision.requireReason ? 'Reason (sent to the customer)' : 'Note to the customer (optional)'}
@@ -244,7 +245,7 @@ function AdminRefundsPage() {
                 <button type="button"
                   className={'btn ' + (decision.status === 'Rejected' ? 'btn-danger' : 'btn-success')}
                   onClick={submitDecision}>
-                  {decision.status === 'Rejected' ? 'Reject' : 'Approve'}
+                  {decision.status === 'Rejected' ? 'Reject' : 'Approve & refund'}
                 </button>
               </div>
             </div>
@@ -315,7 +316,7 @@ function AdminRefundsPage() {
                       <button type="button" className="btn btn-outline-danger"
                         onClick={() => { setDetail(null); openDecision(r, 'Rejected'); }}>Reject</button>
                       <button type="button" className="btn btn-success"
-                        onClick={() => { setDetail(null); openDecision(r, 'Approved'); }}>Approve</button>
+                        onClick={() => { setDetail(null); openDecision(r, 'Completed'); }}>Approve &amp; refund</button>
                     </>
                   )}
                   {r.refundStatus === 'Approved' && (

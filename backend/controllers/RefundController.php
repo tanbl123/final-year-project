@@ -100,7 +100,9 @@ function handleSetRefundStatus(PDO $pdo, string $refundId, array $config = []): 
 
   $current = $refund['refundStatus'];
   $okTransitions = [
-    'Pending'  => ['Approved', 'Rejected'],
+    // One-step: approving a refund processes it immediately (Pending → Completed).
+    // 'Approved' → 'Completed' is kept so any legacy Approved rows can still finish.
+    'Pending'  => ['Completed', 'Rejected'],
     'Approved' => ['Completed'],
   ];
   if (!in_array($status, $okTransitions[$current] ?? [], true)) {
@@ -130,10 +132,11 @@ function handleSetRefundStatus(PDO $pdo, string $refundId, array $config = []): 
     $pdo->beginTransaction();
     // Record the admin's note alongside the decision (Approve/Reject). Leave it
     // untouched on 'Completed' (that step carries no new note).
-    if (in_array($status, ['Approved', 'Rejected'], true)) {
+    if ($adminNote !== '') {
       $pdo->prepare('UPDATE refund SET refundStatus = :s, adminNote = :note WHERE refundId = :id')
-          ->execute(['s' => $status, 'note' => ($adminNote !== '' ? $adminNote : null), 'id' => $refundId]);
+          ->execute(['s' => $status, 'note' => $adminNote, 'id' => $refundId]);
     } else {
+      // No new note — keep any note already recorded (don't null it).
       $pdo->prepare('UPDATE refund SET refundStatus = :s WHERE refundId = :id')
           ->execute(['s' => $status, 'id' => $refundId]);
     }
