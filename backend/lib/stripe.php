@@ -6,6 +6,17 @@
 // secret key in config ('stripe_secret'). With no key, stripeConfigured()
 // returns false and callers should respond with STRIPE_NOT_CONFIGURED.
 
+// Carries Stripe's machine-readable error code (e.g. 'charge_already_refunded')
+// so callers can react to a specific failure. Extends RuntimeException, so
+// existing `catch (RuntimeException ...)` callers keep working unchanged.
+class StripeApiError extends RuntimeException {
+  public string $stripeCode;
+  public function __construct(string $message, string $stripeCode = '') {
+    parent::__construct($message);
+    $this->stripeCode = $stripeCode;
+  }
+}
+
 function stripeConfigured(array $config): bool {
   return !empty($config['stripe_secret']);
 }
@@ -44,7 +55,10 @@ function stripeApi(string $secret, string $method, string $path, array $params =
     throw new RuntimeException('Unexpected response from Stripe.');
   }
   if ($code >= 400) {
-    throw new RuntimeException($data['error']['message'] ?? 'Stripe request failed.');
+    throw new StripeApiError(
+      $data['error']['message'] ?? 'Stripe request failed.',
+      (string) ($data['error']['code'] ?? '')
+    );
   }
   return $data;
 }
@@ -90,7 +104,15 @@ function refundOrderPayment(PDO $pdo, string $orderId, array $config, string $re
   if (($pay['paymentMethod'] ?? '') !== 'Stripe' || strncmp($intent, 'pi_', 3) !== 0) {
     return false;
   }
-  stripeRefund($config['stripe_secret'], $intent, $reason, $amount);
+  try {
+    stripeRefund($config['stripe_secret'], $intent, $reason, $amount);
+  } catch (StripeApiError $e) {
+    // Idempotent: if Stripe says the charge is already fully refunded, the money
+    // is back — treat it as success and let the caller reconcile our records,
+    // instead of getting stuck unable to complete the refund.
+    if ($e->stripeCode === 'charge_already_refunded') { return true; }
+    throw $e;
+  }
   return true;
 }
 
