@@ -92,8 +92,7 @@ function SupplierRefundsPage() {
                 <SortableTh label="Amount" columnKey="refundAmount" sort={sort} className="text-end" style={{ width: 120 }} />
                 <SortableTh label="Status" columnKey="refundStatus" sort={sort} className="text-center" style={{ width: 120 }} />
                 <SortableTh label="Requested" columnKey="requestDate" sort={sort} style={{ width: 120 }} />
-                <th className="text-center" style={{ width: 90 }}>Proof</th>
-                <th className="text-center" style={{ width: 90 }}>Details</th>
+                <th className="text-center" style={{ width: 100 }}>Details</th>
               </tr>
             </thead>
             <tbody>
@@ -110,18 +109,6 @@ function SupplierRefundsPage() {
                     <span className={`badge text-bg-${STATUS_COLORS[r.refundStatus] || 'secondary'}`}>{r.refundStatus}</span>
                   </td>
                   <td className="text-muted small">{new Date(r.requestDate).toLocaleDateString()}</td>
-                  <td className="text-center">
-                    {(() => {
-                      const urls = refundProofUrls(r.refundProof);
-                      if (urls.length === 0) return <span className="text-muted">—</span>;
-                      if (urls.length === 1) {
-                        return <a href={urls[0]} target="_blank" rel="noreferrer" className="btn btn-outline-secondary btn-sm">View</a>;
-                      }
-                      return urls.map((u, i) => (
-                        <a key={i} href={u} target="_blank" rel="noreferrer" className="btn btn-outline-secondary btn-sm me-1">#{i + 1}</a>
-                      ));
-                    })()}
-                  </td>
                   <td className="text-center">
                     <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setDetail(r)}>Details</button>
                   </td>
