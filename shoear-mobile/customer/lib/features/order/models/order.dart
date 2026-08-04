@@ -152,8 +152,9 @@ class OrderItem {
   final String? reviewId;     // this customer's own review id (when reviewed)
   final int? rating;          // the stars they gave (1–5)
   final String? reviewComment; // the comment they left (may be empty/null)
+  final String? reviewStatus;  // 'Published' | 'Removed' (admin-removed)
 
-  OrderItem({required this.productId, required this.productName, required this.brand, required this.size, required this.qty, required this.unitPrice, required this.subtotal, this.imageUrl, this.reviewed = false, this.reviewId, this.rating, this.reviewComment});
+  OrderItem({required this.productId, required this.productName, required this.brand, required this.size, required this.qty, required this.unitPrice, required this.subtotal, this.imageUrl, this.reviewed = false, this.reviewId, this.rating, this.reviewComment, this.reviewStatus});
 
   factory OrderItem.fromJson(Map<String, dynamic> j) => OrderItem(
         productId: j['productId'] as String? ?? '',
@@ -168,6 +169,7 @@ class OrderItem {
         reviewId: (j['reviewId'] as String?)?.isNotEmpty == true ? j['reviewId'] as String : null,
         rating: (j['rating'] as num?)?.toInt(),
         reviewComment: (j['reviewComment'] as String?)?.isNotEmpty == true ? j['reviewComment'] as String : null,
+        reviewStatus: j['reviewStatus'] as String?,
       );
 }
 

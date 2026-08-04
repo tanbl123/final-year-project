@@ -617,7 +617,8 @@ function handleGetCustomerOrder(PDO $pdo, array $auth, string $orderId): void {
             oi.orderUnitPrice AS unitPrice, oi.orderSubtotal AS subtotal,
             (SELECT pi.productImageUrl FROM product_image pi
               WHERE pi.productId = p.productId ORDER BY pi.productImageId LIMIT 1) AS imageUrl,
-            r.reviewId AS reviewId, r.ratingScore AS rating, r.reviewComment AS reviewComment
+            r.reviewId AS reviewId, r.ratingScore AS rating, r.reviewComment AS reviewComment,
+            r.reviewStatus AS reviewStatus
        FROM order_item oi
        JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
        JOIN product p          ON p.productId = pv.productId

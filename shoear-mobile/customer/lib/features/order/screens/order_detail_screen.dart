@@ -729,7 +729,18 @@ class _ItemRow extends StatelessWidget {
         // Rate this item (Shopee-style) once the order is purchased.
         if (canReview) ...[
           const SizedBox(height: 8),
-          if (item.reviewed)
+          if (item.reviewed && item.reviewStatus == 'Removed')
+            Row(
+              children: [
+                Icon(Icons.info_outline, size: 15, color: Colors.red.shade400),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text('Your review was removed by an admin.',
+                      style: TextStyle(fontSize: 12, color: Colors.red.shade400)),
+                ),
+              ],
+            )
+          else if (item.reviewed)
             _MyReview(item: item, onEdit: onEdit, onDelete: onDelete)
           else
             Align(
