@@ -316,13 +316,19 @@ function handleUpdateReview(PDO $pdo, array $auth, string $reviewId): void {
   $customerId = requireCustomerId($pdo, $auth);
   [$rating, $comment] = validatedReviewInput();
 
-  $stmt = $pdo->prepare('SELECT 1 FROM review WHERE reviewId = :id AND customerId = :cid');
+  $stmt = $pdo->prepare('SELECT reviewStatus FROM review WHERE reviewId = :id AND customerId = :cid');
   $stmt->execute(['id' => $reviewId, 'cid' => $customerId]);
-  if (!$stmt->fetch()) {
+  $row = $stmt->fetch();
+  if (!$row) {
     sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Review not found.']);
   }
+  // A review an admin removed can't be edited — editing it would be pointless
+  // since it never gets re-published (it stays Removed by design).
+  if ($row['reviewStatus'] === 'Removed') {
+    sendJson(409, false, null, ['code' => 'REVIEW_REMOVED',
+      'message' => 'This review was removed by an admin and can no longer be edited.']);
+  }
 
-  // status is left as-is (an admin-removed review stays removed)
   $pdo->prepare('UPDATE review SET ratingScore = :rating, reviewComment = :comment, reviewDate = NOW() WHERE reviewId = :id')
       ->execute(['rating' => $rating, 'comment' => $comment, 'id' => $reviewId]);
 
