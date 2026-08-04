@@ -125,11 +125,20 @@ function SupplierOrderDetailPage() {
           <div className="text-muted">{new Date(order.orderDate).toLocaleString()}</div>
         </div>
         <div className="d-flex gap-2">
-          {order.partiallyDelivered
-            ? <span className="badge fs-6" style={{ backgroundColor: '#4f46e5', color: '#fff' }}>Partially delivered</span>
-            : <span className={`badge text-bg-${STATUS_COLORS[order.orderStatus] || 'secondary'} fs-6`}>
-                {label(order.orderStatus)}
-              </span>}
+          {/* Show the supplier's OWN parcel status as the headline — not the
+              order-level "Partially delivered" (that's about other suppliers'
+              parcels). Order-level Cancelled/Completed still win (they affect
+              payout). The full order picture lives in the "Your parcel" card. */}
+          {(() => {
+            const parcel = order.myDelivery?.deliveryStatus;
+            const orderLevel = order.orderStatus === 'Cancelled' || order.orderStatus === 'Completed';
+            const s = orderLevel ? order.orderStatus : (parcel || order.orderStatus);
+            const color = orderLevel
+              ? (STATUS_COLORS[order.orderStatus] || 'secondary')
+              : (parcel ? (DELIV_COLORS[parcel] || 'secondary')
+                        : (STATUS_COLORS[order.orderStatus] || 'secondary'));
+            return <span className={`badge text-bg-${color} fs-6`}>{label(s)}</span>;
+          })()}
           {order.paymentStatus && (
             <span className={`badge text-bg-${PAY_COLORS[order.paymentStatus] || 'secondary'} fs-6`}>
               {order.paymentStatus}

@@ -162,18 +162,20 @@ function SupplierOrdersPage() {
                   </td>
                   <td>{o.customerName}</td>
                   <td className="text-center">
-                    {o.partiallyDelivered
-                      ? <span className="badge" style={{ backgroundColor: '#4f46e5', color: '#fff' }}>Partially delivered</span>
-                      : <span className={`badge text-bg-${STATUS_COLORS[o.orderStatus] || 'secondary'}`}>
-                          {label(o.orderStatus)}
-                        </span>}
-                    {o.myDeliveryStatus && (
-                      <div className="mt-1">
-                        <span className={`badge text-bg-${DELIV_COLORS[o.myDeliveryStatus] || 'secondary'}`}>
-                          Your parcel: {label(o.myDeliveryStatus)}
-                        </span>
-                      </div>
-                    )}
+                    {/* The supplier only fulfils their OWN parcel, so the headline
+                        status is that parcel's status — not the order-level
+                        "Partially delivered" (which is about other suppliers'
+                        parcels the seller can't see or act on). Order-level
+                        Cancelled/Completed still win, as they affect payout. */}
+                    {(() => {
+                      const orderLevel = o.orderStatus === 'Cancelled' || o.orderStatus === 'Completed';
+                      const s = orderLevel ? o.orderStatus : (o.myDeliveryStatus || o.orderStatus);
+                      const color = orderLevel
+                        ? (STATUS_COLORS[o.orderStatus] || 'secondary')
+                        : (o.myDeliveryStatus ? (DELIV_COLORS[o.myDeliveryStatus] || 'secondary')
+                                              : (STATUS_COLORS[o.orderStatus] || 'secondary'));
+                      return <span className={`badge text-bg-${color}`}>{label(s)}</span>;
+                    })()}
                     {o.myDeliveryMethod === 'Standard' && o.myDeliveryStatus === 'Pending' && (
                       <div className="mt-1">
                         <span className="badge text-bg-warning" title="This parcel ships via standard (3PL) shipping — book a courier or enter a tracking number to ship it.">
