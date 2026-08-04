@@ -641,7 +641,9 @@ function handleListDeliveryIssues(PDO $pdo): void {
 // Body: { action?: 'resolve' | 'reassign' | 'cancel_refund', note?: string }
 //   * resolve       — just mark it handled (optional resolution note)
 //   * reassign      — hand the parcel back to dispatch (Pending, no courier) to retry
-//   * cancel_refund — cancel the order and refund the customer in full
+//   * cancel_refund — refund the FAILED PARCEL only (its supplier's items) and, if
+//                     every other parcel is delivered, complete the order. If this
+//                     is the order's only parcel, the whole order is cancelled.
 function handleResolveDeliveryIssue(PDO $pdo, array $auth, string $issueId, array $config = []): void {
   $body   = getJsonBody();
   $action = trim($body['action'] ?? 'resolve');
@@ -652,8 +654,11 @@ function handleResolveDeliveryIssue(PDO $pdo, array $auth, string $issueId, arra
   }
 
   $iss = $pdo->prepare(
-    'SELECT i.issueId, i.deliveryId, i.orderId, i.issueStatus, o.customerId, o.orderTotalAmount
-       FROM delivery_issue i JOIN `order` o ON o.orderId = i.orderId
+    'SELECT i.issueId, i.deliveryId, i.orderId, i.issueStatus, d.supplierId,
+            o.customerId, o.orderTotalAmount
+       FROM delivery_issue i
+       JOIN delivery d ON d.deliveryId = i.deliveryId
+       JOIN `order` o  ON o.orderId = i.orderId
       WHERE i.issueId = :id'
   );
   $iss->execute(['id' => $issueId]);
@@ -663,11 +668,37 @@ function handleResolveDeliveryIssue(PDO $pdo, array $auth, string $issueId, arra
   }
   $orderId = (string) $issue['orderId'];
 
-  // ── Cancel & refund: return the money first (Stripe), then cancel the order ──
+  // ── Work out the cancel_refund shape (whole order vs one parcel) up front ──
+  $whole = false; $amount = 0.0; $othersAllDelivered = false;
   if ($action === 'cancel_refund') {
-    $amount = round((float) $issue['orderTotalAmount'], 2);
+    $parcelCount = (int) $pdo->query(
+      "SELECT COUNT(*) FROM delivery WHERE orderId = " . $pdo->quote($orderId)
+    )->fetchColumn();
+    // this parcel's own items (its supplier's share of the order)
+    $ps = $pdo->prepare(
+      "SELECT COALESCE(SUM(oi.orderSubtotal), 0)
+         FROM order_item oi
+         JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+         JOIN product p          ON p.productId = pv.productId
+        WHERE oi.orderId = :oid AND p.supplierId = :sid"
+    );
+    $ps->execute(['oid' => $orderId, 'sid' => $issue['supplierId']]);
+    $parcelSubtotal = round((float) $ps->fetchColumn(), 2);
+
+    $whole = $parcelCount <= 1;
+    $amount = $whole ? round((float) $issue['orderTotalAmount'], 2) : $parcelSubtotal;
+
+    // are all the OTHER parcels already delivered? (then the order is done)
+    $od = $pdo->prepare(
+      "SELECT COUNT(*) FROM delivery
+        WHERE orderId = :oid AND deliveryId <> :did AND deliveryStatus <> 'Delivered'"
+    );
+    $od->execute(['oid' => $orderId, 'did' => $issue['deliveryId']]);
+    $othersAllDelivered = ((int) $od->fetchColumn()) === 0;
+
+    // return the money first (Stripe) — abort if it fails
     try {
-      if (function_exists('refundOrderPayment')) {
+      if ($amount > 0 && function_exists('refundOrderPayment')) {
         refundOrderPayment($pdo, $orderId, $config, 'requested_by_customer', $amount);
       }
     } catch (Throwable $e) {
@@ -686,19 +717,21 @@ function handleResolveDeliveryIssue(PDO $pdo, array $auth, string $issueId, arra
     }
 
     if ($action === 'cancel_refund') {
-      // reflect the refund on the payment + record a payout clawback if needed
+      // reflect the refund on the payment (accumulate; only flip to Refunded when
+      // the whole payment has been returned)
       $pStmt = $pdo->prepare('SELECT paymentAmount, refundedAmount FROM payment WHERE orderId = :oid FOR UPDATE');
       $pStmt->execute(['oid' => $orderId]);
       if ($pay = $pStmt->fetch()) {
-        $paid = round((float) $pay['paymentAmount'], 2);
-        $pdo->prepare("UPDATE payment SET refundedAmount = :r, paymentStatus = 'Refunded' WHERE orderId = :oid")
-            ->execute(['r' => $paid, 'oid' => $orderId]);
+        $paid        = round((float) $pay['paymentAmount'], 2);
+        $newRefunded = min($paid, round((float) $pay['refundedAmount'] + $amount, 2));
+        $fully       = $newRefunded >= $paid;
+        $pdo->prepare(
+          "UPDATE payment SET refundedAmount = :r" . ($fully ? ", paymentStatus = 'Refunded'" : "") . " WHERE orderId = :oid"
+        )->execute(['r' => $newRefunded, 'oid' => $orderId]);
       }
       if (function_exists('recordPostPayoutRefundClawback')) {
-        recordPostPayoutRefundClawback($pdo, $orderId, round((float) $issue['orderTotalAmount'], 2));
+        recordPostPayoutRefundClawback($pdo, $orderId, $amount);
       }
-      $pdo->prepare("UPDATE `order` SET orderStatus = 'Cancelled' WHERE orderId = :oid")
-          ->execute(['oid' => $orderId]);
       // record a Completed refund so it shows in the Refunds queue/history
       $rid = nextId($pdo, 'refund', 'refundId', 'REF');
       $pdo->prepare(
@@ -706,10 +739,20 @@ function handleResolveDeliveryIssue(PDO $pdo, array $auth, string $issueId, arra
          VALUES (:id, :oid, :cid, :reason, :amt, 'Completed', NOW(), :note)"
       )->execute([
         'id' => $rid, 'oid' => $orderId, 'cid' => $issue['customerId'],
-        'reason' => 'Undeliverable — cancelled by admin',
-        'amt' => round((float) $issue['orderTotalAmount'], 2),
+        'reason' => $whole ? 'Undeliverable — order cancelled by admin'
+                           : 'Undeliverable parcel — refunded by admin',
+        'amt' => $amount,
         'note' => $note !== '' ? $note : null,
       ]);
+      // order outcome: whole order → Cancelled; otherwise complete it once the
+      // rest is delivered (this failed parcel is now settled by the refund).
+      if ($whole) {
+        $pdo->prepare("UPDATE `order` SET orderStatus = 'Cancelled' WHERE orderId = :oid")
+            ->execute(['oid' => $orderId]);
+      } elseif ($othersAllDelivered) {
+        $pdo->prepare("UPDATE `order` SET orderStatus = 'Delivered' WHERE orderId = :oid")
+            ->execute(['oid' => $orderId]);
+      }
     }
 
     // close the issue (all actions end here)
@@ -729,13 +772,17 @@ function handleResolveDeliveryIssue(PDO $pdo, array $auth, string $issueId, arra
 
   // notify the customer of the outcome (best-effort)
   if (function_exists('notifyOrderCustomer')) {
+    $rm = 'RM ' . number_format($amount, 2);
     if ($action === 'reassign') {
       notifyOrderCustomer($pdo, $orderId, 'delivery', 'Redelivery arranged',
         "We're arranging another delivery attempt for order {$orderId}.");
     } elseif ($action === 'cancel_refund') {
-      notifyOrderCustomer($pdo, $orderId, 'refund', 'Order cancelled & refunded',
-        "Order {$orderId} couldn't be delivered, so it was cancelled and refunded in full."
-        . ($note !== '' ? " Note: {$note}" : ''));
+      $msg = $whole
+        ? "Order {$orderId} couldn't be delivered, so it was cancelled and refunded in full ({$rm})."
+        : "Part of order {$orderId} couldn't be delivered, so we refunded that part ({$rm}). The rest was delivered.";
+      notifyOrderCustomer($pdo, $orderId, 'refund',
+        $whole ? 'Order cancelled & refunded' : 'Partial refund issued',
+        $msg . ($note !== '' ? " Note: {$note}" : ''));
     }
   }
 

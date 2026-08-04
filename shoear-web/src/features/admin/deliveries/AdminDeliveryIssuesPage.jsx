@@ -56,7 +56,7 @@ function AdminDeliveryIssuesPage() {
   const ACTION_META = {
     resolve:       { title: 'Resolve issue', verb: 'Resolve', color: 'success', prompt: 'Mark this issue as handled.' },
     reassign:      { title: 'Reassign for delivery', verb: 'Reassign', color: 'primary', prompt: 'Send the parcel back to dispatch so another courier can retry the delivery.' },
-    cancel_refund: { title: 'Cancel order & refund', verb: 'Cancel & refund', color: 'danger', prompt: 'Cancel this order and refund the customer in full. This cannot be undone.' },
+    cancel_refund: { title: 'Refund undelivered parcel', verb: 'Refund & close', color: 'danger', prompt: 'Refund this failed parcel to the customer and close the issue. If the rest of the order is delivered, the order is completed. If this is the order’s only parcel, the whole order is cancelled & refunded. This cannot be undone.' },
   };
 
   function openAction(issue, action) {
@@ -173,7 +173,7 @@ function AdminDeliveryIssuesPage() {
                         <button className="btn btn-sm btn-outline-primary" disabled={resolving === i.issueId}
                           onClick={() => openAction(i, 'reassign')}>Reassign</button>
                         <button className="btn btn-sm btn-outline-danger" disabled={resolving === i.issueId}
-                          onClick={() => openAction(i, 'cancel_refund')}>Cancel &amp; refund</button>
+                          onClick={() => openAction(i, 'cancel_refund')}>Refund &amp; close</button>
                         <button className="btn btn-sm btn-outline-success" disabled={resolving === i.issueId}
                           onClick={() => openAction(i, 'resolve')}>Resolve</button>
                       </div>
