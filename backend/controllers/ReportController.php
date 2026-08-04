@@ -950,6 +950,104 @@ function handleAdminRefundReport(PDO $pdo): void {
   $gmv = grossInWindow($pdo, $supplierId, $fromDt, $toDt);
   $refundValuePct = $gmv > 0 ? round($totalRefunded / $gmv * 100, 1) : null;
 
+  $dateClause = $fromDt !== null;   // whether a period filter applies
+
+  // ── By supplier (platform view only) — who drives refunds ──────────────────
+  // refunds = distinct refunds on orders containing the supplier's products;
+  // value = the supplier's item subtotal within those (approved/completed) refunds;
+  // rate  = refunds ÷ the supplier's paid orders.
+  $bySupplier = [];
+  if ($supplierId === null) {
+    $poSql = "SELECT p.supplierId AS sid, COALESCE(NULLIF(s.displayName,''), s.companyName) AS name,
+                     COUNT(DISTINCT o.orderId) AS paidOrders
+                FROM `order` o
+                JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus IN ('Successful','Refunded')
+                JOIN order_item oi ON oi.orderId = o.orderId
+                JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+                JOIN product p ON p.productId = pv.productId
+                JOIN supplier s ON s.supplierId = p.supplierId"
+            . ($dateClause ? " WHERE pay.paymentDate BETWEEN :from AND :to" : "")
+            . " GROUP BY p.supplierId, name";
+    $poStmt = $pdo->prepare($poSql);
+    $poStmt->execute($dateClause ? ['from' => $fromDt, 'to' => $toDt] : []);
+    $supMap = [];
+    foreach ($poStmt->fetchAll() as $r) {
+      $supMap[$r['sid']] = ['supplierId' => $r['sid'], 'name' => $r['name'],
+                            'paidOrders' => (int) $r['paidOrders'], 'refunds' => 0, 'refundedValue' => 0.0];
+    }
+    $rsSql = "SELECT p.supplierId AS sid, COUNT(DISTINCT r.refundId) AS refunds,
+                     COALESCE(SUM(oi.orderSubtotal),0) AS value
+                FROM refund r
+                JOIN order_item oi ON oi.orderId = r.orderId
+                JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+                JOIN product p ON p.productId = pv.productId
+               WHERE r.refundStatus IN ('Approved','Completed')"
+            . ($dateClause ? " AND r.requestDate BETWEEN :from AND :to" : "")
+            . " GROUP BY p.supplierId";
+    $rsStmt = $pdo->prepare($rsSql);
+    $rsStmt->execute($dateClause ? ['from' => $fromDt, 'to' => $toDt] : []);
+    foreach ($rsStmt->fetchAll() as $r) {
+      $sid = $r['sid'];
+      if (!isset($supMap[$sid])) { $supMap[$sid] = ['supplierId' => $sid, 'name' => $sid, 'paidOrders' => 0, 'refunds' => 0, 'refundedValue' => 0.0]; }
+      $supMap[$sid]['refunds']       = (int) $r['refunds'];
+      $supMap[$sid]['refundedValue'] = round((float) $r['value'], 2);
+    }
+    foreach ($supMap as $row) {
+      if ($row['refunds'] === 0) { continue; }   // only sellers that actually had refunds
+      $row['refundRate'] = $row['paidOrders'] > 0 ? round($row['refunds'] / $row['paidOrders'] * 100, 1) : null;
+      $bySupplier[] = $row;
+    }
+    usort($bySupplier, fn($a, $b) => $b['refundedValue'] <=> $a['refundedValue']);
+    $bySupplier = array_slice($bySupplier, 0, 12);
+  }
+
+  // ── Top refunded products ──────────────────────────────────────────────────
+  $tpSql = "SELECT p.productId AS pid, p.productName AS name, p.productBrand AS brand,
+                   COUNT(DISTINCT r.refundId) AS refunds, COALESCE(SUM(oi.orderSubtotal),0) AS value
+              FROM refund r
+              JOIN order_item oi ON oi.orderId = r.orderId
+              JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+              JOIN product p ON p.productId = pv.productId
+             WHERE r.refundStatus IN ('Approved','Completed')"
+          . ($supplierId !== null ? " AND p.supplierId = :sid" : "")
+          . ($dateClause ? " AND r.requestDate BETWEEN :from AND :to" : "")
+          . " GROUP BY p.productId, name, brand ORDER BY refunds DESC, value DESC LIMIT 10";
+  $tpParams = [];
+  if ($supplierId !== null) { $tpParams['sid'] = $supplierId; }
+  if ($dateClause) { $tpParams['from'] = $fromDt; $tpParams['to'] = $toDt; }
+  $tpStmt = $pdo->prepare($tpSql); $tpStmt->execute($tpParams);
+  $topProducts = array_map(fn($r) => [
+    'productId' => $r['pid'], 'name' => $r['name'], 'brand' => $r['brand'],
+    'refunds' => (int) $r['refunds'], 'value' => round((float) $r['value'], 2),
+  ], $tpStmt->fetchAll());
+
+  // ── Trend over time (by day) ───────────────────────────────────────────────
+  if ($supplierId !== null) {
+    $trSql = "SELECT DATE(x.requestDate) AS d, COUNT(*) AS n,
+                     COALESCE(SUM(CASE WHEN x.refundStatus IN ('Approved','Completed') THEN x.refundAmount ELSE 0 END),0) AS amt
+                FROM (SELECT DISTINCT r.refundId, r.requestDate, r.refundStatus, r.refundAmount
+                        FROM refund r
+                        JOIN order_item oi ON oi.orderId = r.orderId
+                        JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
+                        JOIN product p ON p.productId = pv.productId
+                       WHERE p.supplierId = :sid"
+            . ($dateClause ? " AND r.requestDate BETWEEN :from AND :to" : "")
+            . ") x GROUP BY DATE(x.requestDate) ORDER BY d";
+    $trParams = ['sid' => $supplierId];
+    if ($dateClause) { $trParams['from'] = $fromDt; $trParams['to'] = $toDt; }
+  } else {
+    $trSql = "SELECT DATE(requestDate) AS d, COUNT(*) AS n,
+                     COALESCE(SUM(CASE WHEN refundStatus IN ('Approved','Completed') THEN refundAmount ELSE 0 END),0) AS amt
+                FROM refund"
+            . ($dateClause ? " WHERE requestDate BETWEEN :from AND :to" : "")
+            . " GROUP BY DATE(requestDate) ORDER BY d";
+    $trParams = $dateClause ? ['from' => $fromDt, 'to' => $toDt] : [];
+  }
+  $trStmt = $pdo->prepare($trSql); $trStmt->execute($trParams);
+  $trend = array_map(fn($r) => [
+    'date' => $r['d'], 'count' => (int) $r['n'], 'amount' => round((float) $r['amt'], 2),
+  ], $trStmt->fetchAll());
+
   sendJson(200, true, [
     'summary' => [
       'refunds'        => $totalRefunds,
@@ -960,8 +1058,11 @@ function handleAdminRefundReport(PDO $pdo): void {
       'grossSales'     => round($gmv, 2),
       'refundValuePct' => $refundValuePct,   // refunded RM as % of GMV
     ],
-    'byStatus' => $byStatus,
-    'byReason' => $byReason,   // [{ reason, count, amount }], most common first
+    'byStatus'    => $byStatus,
+    'byReason'    => $byReason,     // [{ reason, count, amount }], most common first
+    'bySupplier'  => $bySupplier,   // [{ supplierId, name, refunds, refundedValue, paidOrders, refundRate }]
+    'topProducts' => $topProducts,  // [{ productId, name, brand, refunds, value }]
+    'trend'       => $trend,        // [{ date, count, amount }] over the period
     'period' => [
       'from' => $fromDt !== null ? substr($fromDt, 0, 10) : null,
       'to'   => $toDt   !== null ? substr($toDt, 0, 10)   : null,

@@ -32,7 +32,33 @@ function AdminRefundReport({ company = { id: '', name: '' }, setCompany }) {
   const valuePctStr = data?.summary?.refundValuePct != null ? `${data.summary.refundValuePct}%` : '—';
 
   function buildReportOpts() {
+    const extraTables = [];
+    if (data.bySupplier?.length) {
+      extraTables.push({
+        title: 'Refunds by supplier',
+        head: ['Supplier', 'Refunds', 'Refund rate', 'Refunded value'],
+        body: data.bySupplier.map((s) => [s.name, s.refunds, s.refundRate != null ? `${s.refundRate}%` : '—', rm(s.refundedValue)]),
+        columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
+      });
+    }
+    if (data.topProducts?.length) {
+      extraTables.push({
+        title: 'Most-refunded products',
+        head: ['Product', 'Refunds', 'Value'],
+        body: data.topProducts.map((p) => [`${p.brand} ${p.name}`.trim(), p.refunds, rm(p.value)]),
+        columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' } },
+      });
+    }
+    if (data.trend?.length) {
+      extraTables.push({
+        title: 'Refunds over time',
+        head: ['Date', 'Refunds', 'Value'],
+        body: data.trend.map((t) => [t.date, t.count, rm(t.amount)]),
+        columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' } },
+      });
+    }
     return {
+      extraTables,
       title: company.id ? `Refund Report — ${company.name}` : 'Refund Report (Platform)',
       generatedBy: user?.fullName,
       period: range.label,
@@ -85,23 +111,110 @@ function AdminRefundReport({ company = { id: '', name: '' }, setCompany }) {
             <StatCard label="Refund value" value={valuePctStr} sub="of GMV" color="danger" />
           </div>
 
-          {data.byReason?.length > 0 && (
+          <div className="row g-4 mb-2">
+            {data.byReason?.length > 0 && (
+              <div className="col-lg-6">
+                <h6 className="text-muted">Top refund reasons</h6>
+                <table className="table table-sm align-middle">
+                  <thead><tr><th>Reason</th><th className="text-end" style={{ width: 90 }}>Count</th><th className="text-end" style={{ width: 130 }}>Amount</th></tr></thead>
+                  <tbody>
+                    {data.byReason.map((r) => (
+                      <tr key={r.reason}>
+                        <td>{r.reason}</td>
+                        <td className="text-end">{r.count}</td>
+                        <td className="text-end">{rm(r.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {data.topProducts?.length > 0 && (
+              <div className="col-lg-6">
+                <h6 className="text-muted">Most-refunded products</h6>
+                <table className="table table-sm align-middle">
+                  <thead><tr><th>Product</th><th className="text-end" style={{ width: 90 }}>Refunds</th><th className="text-end" style={{ width: 130 }}>Value</th></tr></thead>
+                  <tbody>
+                    {data.topProducts.map((p) => (
+                      <tr key={p.productId}>
+                        <td>
+                          {p.brand && <span className="text-muted">{p.brand} </span>}{p.name}
+                        </td>
+                        <td className="text-end">{p.refunds}</td>
+                        <td className="text-end">{rm(p.value)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {!company.id && data.bySupplier?.length > 0 && (
             <div className="mb-4">
-              <h6 className="text-muted">Top refund reasons</h6>
-              <table className="table table-sm w-auto">
-                <thead><tr><th>Reason</th><th className="text-end" style={{ width: 90 }}>Count</th><th className="text-end" style={{ width: 140 }}>Amount</th></tr></thead>
-                <tbody>
-                  {data.byReason.map((r) => (
-                    <tr key={r.reason}>
-                      <td>{r.reason}</td>
-                      <td className="text-end">{r.count}</td>
-                      <td className="text-end">{rm(r.amount)}</td>
+              <h6 className="text-muted">Refunds by supplier</h6>
+              <p className="text-muted small mb-2">Suppliers with the most refunded value. Refund rate is refunds ÷ their paid orders.</p>
+              <div className="table-responsive">
+                <table className="table table-sm align-middle">
+                  <thead>
+                    <tr>
+                      <th>Supplier</th>
+                      <th className="text-end" style={{ width: 90 }}>Refunds</th>
+                      <th className="text-end" style={{ width: 120 }}>Refund rate</th>
+                      <th className="text-end" style={{ width: 140 }}>Refunded value</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {data.bySupplier.map((s) => (
+                      <tr key={s.supplierId}>
+                        <td>{s.name}</td>
+                        <td className="text-end">{s.refunds}</td>
+                        <td className="text-end">{s.refundRate != null ? `${s.refundRate}%` : '—'}</td>
+                        <td className="text-end">{rm(s.refundedValue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
+
+          {data.trend?.length > 0 && (() => {
+            const maxCount = Math.max(...data.trend.map((t) => t.count), 1);
+            return (
+              <div className="mb-4">
+                <h6 className="text-muted">Refunds over time</h6>
+                <div className="table-responsive">
+                  <table className="table table-sm align-middle">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 130 }}>Date</th>
+                        <th>Refunds</th>
+                        <th className="text-end" style={{ width: 90 }}>Count</th>
+                        <th className="text-end" style={{ width: 140 }}>Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.trend.map((t) => (
+                        <tr key={t.date}>
+                          <td className="small">{t.date}</td>
+                          <td>
+                            <div className="progress" style={{ height: 8, minWidth: 60 }} role="img"
+                              aria-label={`${t.count} refunds`}>
+                              <div className="progress-bar bg-danger" style={{ width: `${(t.count / maxCount) * 100}%` }}></div>
+                            </div>
+                          </td>
+                          <td className="text-end">{t.count}</td>
+                          <td className="text-end">{rm(t.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
 
           <h5 className="mb-3">By refund status</h5>
           <div className="table-responsive">
