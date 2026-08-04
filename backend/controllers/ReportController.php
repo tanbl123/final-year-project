@@ -901,10 +901,13 @@ function handleAdminRefundReport(PDO $pdo): void {
     }
   }
 
-  // paid orders (for the refund rate) — platform-wide, or this supplier's
+  // paid orders (for the refund rate) — platform-wide, or this supplier's.
+  // A refunded order was still a paid order, so its payment (now 'Refunded')
+  // must stay in the denominator; count 'Successful' OR 'Refunded' payments.
+  // (This matches the "Refunds by supplier" table below.)
   if ($supplierId !== null) {
     $paidSql = "SELECT COUNT(DISTINCT o.orderId) FROM `order` o
-                  JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus = 'Successful'
+                  JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus IN ('Successful','Refunded')
                   JOIN order_item oi ON oi.orderId = o.orderId
                   JOIN product_variant pv ON pv.productVariantId = oi.productVariantId
                   JOIN product p ON p.productId = pv.productId
@@ -913,7 +916,7 @@ function handleAdminRefundReport(PDO $pdo): void {
     if ($fromDt !== null) { $paidSql .= ' AND pay.paymentDate BETWEEN :from AND :to'; $paidParams['from'] = $fromDt; $paidParams['to'] = $toDt; }
   } else {
     $paidSql = "SELECT COUNT(DISTINCT o.orderId) FROM `order` o
-                  JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus = 'Successful'";
+                  JOIN payment pay ON pay.orderId = o.orderId AND pay.paymentStatus IN ('Successful','Refunded')";
     $paidParams = [];
     if ($fromDt !== null) { $paidSql .= ' WHERE pay.paymentDate BETWEEN :from AND :to'; $paidParams['from'] = $fromDt; $paidParams['to'] = $toDt; }
   }
