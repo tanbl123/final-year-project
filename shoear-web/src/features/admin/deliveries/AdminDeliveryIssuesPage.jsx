@@ -54,7 +54,7 @@ function AdminDeliveryIssuesPage() {
   }, [status]);
 
   const ACTION_META = {
-    resolve:       { title: 'Resolve issue', verb: 'Resolve', color: 'success', prompt: 'Mark this issue as handled.' },
+    resolve:       { title: 'Close this report', verb: 'Resolve', color: 'success', prompt: 'The parcel was already delivered, so this report is just informational. Closing it clears the flag — it does not change the order.' },
     reassign:      { title: 'Reassign for delivery', verb: 'Reassign', color: 'primary', prompt: 'Send the parcel back to dispatch so another courier can retry the delivery.' },
     cancel_refund: { title: 'Refund undelivered parcel', verb: 'Refund & close', color: 'danger', prompt: 'Refund this failed parcel to the customer and close the issue. If the rest of the order is delivered, the order is completed. If this is the order’s only parcel, the whole order is cancelled & refunded. This cannot be undone.' },
   };
@@ -87,8 +87,10 @@ function AdminDeliveryIssuesPage() {
     <div className="container py-4 text-start">
       <h1 className="mb-1">⚠️ Delivery Issues</h1>
       <p className="text-muted">
-        Problems reported by couriers from the field. Failed parcels can be
-        reassigned from the Deliveries page; mark an issue resolved once handled.
+        Problems reported by couriers from the field. For an undelivered parcel,
+        <strong> reassign</strong> it for another attempt or <strong>refund &amp; close</strong> to
+        settle the order. If the parcel was delivered anyway, just
+        <strong> resolve</strong> the report to clear the flag.
       </p>
 
       {error && (
@@ -169,14 +171,19 @@ function AdminDeliveryIssuesPage() {
                   <td className="small text-muted">{new Date(i.createdAt).toLocaleString()}</td>
                   <td className="text-center">
                     {i.issueStatus === 'Open' ? (
-                      <div className="d-flex flex-wrap gap-1 justify-content-center">
-                        <button className="btn btn-sm btn-outline-primary" disabled={resolving === i.issueId}
-                          onClick={() => openAction(i, 'reassign')}>Reassign</button>
-                        <button className="btn btn-sm btn-outline-danger" disabled={resolving === i.issueId}
-                          onClick={() => openAction(i, 'cancel_refund')}>Refund &amp; close</button>
+                      i.deliveryStatus === 'Delivered' ? (
+                        // parcel arrived anyway — the report is just informational
                         <button className="btn btn-sm btn-outline-success" disabled={resolving === i.issueId}
                           onClick={() => openAction(i, 'resolve')}>Resolve</button>
-                      </div>
+                      ) : (
+                        // parcel still undelivered — it needs a retry or a refund
+                        <div className="d-flex flex-wrap gap-1 justify-content-center">
+                          <button className="btn btn-sm btn-outline-primary" disabled={resolving === i.issueId}
+                            onClick={() => openAction(i, 'reassign')}>Reassign</button>
+                          <button className="btn btn-sm btn-outline-danger" disabled={resolving === i.issueId}
+                            onClick={() => openAction(i, 'cancel_refund')}>Refund &amp; close</button>
+                        </div>
+                      )
                     ) : (
                       <>
                         <span className="badge text-bg-success">Resolved</span>

@@ -654,7 +654,7 @@ function handleResolveDeliveryIssue(PDO $pdo, array $auth, string $issueId, arra
   }
 
   $iss = $pdo->prepare(
-    'SELECT i.issueId, i.deliveryId, i.orderId, i.issueStatus, d.supplierId,
+    'SELECT i.issueId, i.deliveryId, i.orderId, i.issueStatus, d.supplierId, d.deliveryStatus,
             o.customerId, o.orderTotalAmount
        FROM delivery_issue i
        JOIN delivery d ON d.deliveryId = i.deliveryId
@@ -667,6 +667,16 @@ function handleResolveDeliveryIssue(PDO $pdo, array $auth, string $issueId, arra
     sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Issue not found.']);
   }
   $orderId = (string) $issue['orderId'];
+
+  // A plain "resolve" only closes the flag — it does not move the parcel or the
+  // order. That is only safe once the parcel has actually been delivered (the
+  // report was informational). While the parcel is still undelivered the order
+  // is owed a redelivery or a refund, so force one of those instead of letting
+  // the order strand in Paid.
+  if ($action === 'resolve' && $issue['deliveryStatus'] !== 'Delivered') {
+    sendJson(409, false, null, ['code' => 'CONFLICT',
+      'message' => "This parcel hasn't been delivered yet, so there's nothing to just close. Reassign it for another attempt, or refund it to settle the order."]);
+  }
 
   // ── Work out the cancel_refund shape (whole order vs one parcel) up front ──
   $whole = false; $amount = 0.0; $othersAllDelivered = false;
