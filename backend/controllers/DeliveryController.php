@@ -617,7 +617,7 @@ function handleListDeliveryIssues(PDO $pdo): void {
 
   $sql =
     "SELECT i.issueId, i.deliveryId, i.orderId, i.reason, i.note, i.photoUrl,
-            i.issueStatus, i.createdAt, i.resolvedAt,
+            i.issueStatus, i.resolutionNote, i.createdAt, i.resolvedAt,
             d.deliveryStatus,
             i.deliveryPersonnelId, courier.fullName AS courierName,
             buyer.fullName AS customerName, s.companyName AS supplierName
@@ -638,11 +638,106 @@ function handleListDeliveryIssues(PDO $pdo): void {
 }
 
 // PATCH /admin/delivery-issues/{issueId}/resolve — close an issue.
-function handleResolveDeliveryIssue(PDO $pdo, string $issueId): void {
-  $stmt = $pdo->prepare("UPDATE delivery_issue SET issueStatus = 'Resolved', resolvedAt = NOW() WHERE issueId = :id");
-  $stmt->execute(['id' => $issueId]);
-  if ($stmt->rowCount() === 0) {
+// Body: { action?: 'resolve' | 'reassign' | 'cancel_refund', note?: string }
+//   * resolve       — just mark it handled (optional resolution note)
+//   * reassign      — hand the parcel back to dispatch (Pending, no courier) to retry
+//   * cancel_refund — cancel the order and refund the customer in full
+function handleResolveDeliveryIssue(PDO $pdo, array $auth, string $issueId, array $config = []): void {
+  $body   = getJsonBody();
+  $action = trim($body['action'] ?? 'resolve');
+  $note   = trim($body['note'] ?? '');
+  if (mb_strlen($note) > 500) { $note = mb_substr($note, 0, 500); }
+  if (!in_array($action, ['resolve', 'reassign', 'cancel_refund'], true)) {
+    sendJson(400, false, null, ['code' => 'VALIDATION', 'message' => 'Unknown action.']);
+  }
+
+  $iss = $pdo->prepare(
+    'SELECT i.issueId, i.deliveryId, i.orderId, i.issueStatus, o.customerId, o.orderTotalAmount
+       FROM delivery_issue i JOIN `order` o ON o.orderId = i.orderId
+      WHERE i.issueId = :id'
+  );
+  $iss->execute(['id' => $issueId]);
+  $issue = $iss->fetch();
+  if (!$issue) {
     sendJson(404, false, null, ['code' => 'NOT_FOUND', 'message' => 'Issue not found.']);
   }
-  sendJson(200, true, ['issueId' => $issueId, 'issueStatus' => 'Resolved']);
+  $orderId = (string) $issue['orderId'];
+
+  // ── Cancel & refund: return the money first (Stripe), then cancel the order ──
+  if ($action === 'cancel_refund') {
+    $amount = round((float) $issue['orderTotalAmount'], 2);
+    try {
+      if (function_exists('refundOrderPayment')) {
+        refundOrderPayment($pdo, $orderId, $config, 'requested_by_customer', $amount);
+      }
+    } catch (Throwable $e) {
+      sendJson(502, false, null, ['code' => 'REFUND_FAILED',
+        'message' => 'Could not process the refund with Stripe: ' . $e->getMessage()]);
+    }
+  }
+
+  try {
+    $pdo->beginTransaction();
+
+    if ($action === 'reassign') {
+      // hand the parcel back to dispatch (clears courier + OTP) so it can retry
+      $pdo->prepare("UPDATE delivery SET deliveryStatus = 'Pending', deliveryPersonnelId = NULL, otpCode = NULL WHERE deliveryId = :d")
+          ->execute(['d' => $issue['deliveryId']]);
+    }
+
+    if ($action === 'cancel_refund') {
+      // reflect the refund on the payment + record a payout clawback if needed
+      $pStmt = $pdo->prepare('SELECT paymentAmount, refundedAmount FROM payment WHERE orderId = :oid FOR UPDATE');
+      $pStmt->execute(['oid' => $orderId]);
+      if ($pay = $pStmt->fetch()) {
+        $paid = round((float) $pay['paymentAmount'], 2);
+        $pdo->prepare("UPDATE payment SET refundedAmount = :r, paymentStatus = 'Refunded' WHERE orderId = :oid")
+            ->execute(['r' => $paid, 'oid' => $orderId]);
+      }
+      if (function_exists('recordPostPayoutRefundClawback')) {
+        recordPostPayoutRefundClawback($pdo, $orderId, round((float) $issue['orderTotalAmount'], 2));
+      }
+      $pdo->prepare("UPDATE `order` SET orderStatus = 'Cancelled' WHERE orderId = :oid")
+          ->execute(['oid' => $orderId]);
+      // record a Completed refund so it shows in the Refunds queue/history
+      $rid = nextId($pdo, 'refund', 'refundId', 'REF');
+      $pdo->prepare(
+        "INSERT INTO refund (refundId, orderId, customerId, refundReason, refundAmount, refundStatus, requestDate, adminNote)
+         VALUES (:id, :oid, :cid, :reason, :amt, 'Completed', NOW(), :note)"
+      )->execute([
+        'id' => $rid, 'oid' => $orderId, 'cid' => $issue['customerId'],
+        'reason' => 'Undeliverable — cancelled by admin',
+        'amt' => round((float) $issue['orderTotalAmount'], 2),
+        'note' => $note !== '' ? $note : null,
+      ]);
+    }
+
+    // close the issue (all actions end here)
+    $upd = $pdo->prepare(
+      "UPDATE delivery_issue SET issueStatus = 'Resolved', resolvedAt = NOW(),
+              resolutionNote = :n, resolvedBy = :by WHERE issueId = :id"
+    );
+    $upd->execute(['n' => $note !== '' ? $note : null, 'by' => $auth['userId'], 'id' => $issueId]);
+
+    $pdo->commit();
+  } catch (Throwable $e) {
+    if ($pdo->inTransaction()) { $pdo->rollBack(); }
+    sendJson(500, false, null, ['code' => 'DB_ERROR', 'message' => 'Could not update the issue.']);
+  }
+
+  if ($action === 'reassign') { recomputeOrderStatus($pdo, $orderId); }
+
+  // notify the customer of the outcome (best-effort)
+  if (function_exists('notifyOrderCustomer')) {
+    if ($action === 'reassign') {
+      notifyOrderCustomer($pdo, $orderId, 'delivery', 'Redelivery arranged',
+        "We're arranging another delivery attempt for order {$orderId}.");
+    } elseif ($action === 'cancel_refund') {
+      notifyOrderCustomer($pdo, $orderId, 'refund', 'Order cancelled & refunded',
+        "Order {$orderId} couldn't be delivered, so it was cancelled and refunded in full."
+        . ($note !== '' ? " Note: {$note}" : ''));
+    }
+  }
+
+  sendJson(200, true, ['issueId' => $issueId, 'issueStatus' => 'Resolved', 'action' => $action]);
 }

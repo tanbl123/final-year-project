@@ -778,6 +778,8 @@ CREATE TABLE delivery_issue (
     note                VARCHAR(255) NULL,
     photoUrl            VARCHAR(255) NULL,
     issueStatus         ENUM('Open','Resolved') NOT NULL DEFAULT 'Open',
+    resolutionNote      VARCHAR(500) NULL,                     -- admin's note when resolving
+    resolvedBy          VARCHAR(10)  NULL,                     -- admin userId who resolved it
     createdAt           DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     resolvedAt          DATETIME     NULL,
     PRIMARY KEY (issueId),

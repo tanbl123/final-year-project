@@ -337,8 +337,8 @@ export function getDeliveryIssues(filters = {}) {
 }
 
 // Mark a reported issue resolved.
-export function resolveDeliveryIssue(issueId) {
-  return apiPatch(`/admin/delivery-issues/${issueId}/resolve`, {}, getToken());
+export function resolveDeliveryIssue(issueId, { action = 'resolve', note = '' } = {}) {
+  return apiPatch(`/admin/delivery-issues/${issueId}/resolve`, { action, note }, getToken());
 }
 
 // ── reports ──────────────────────────────────────────────────────────

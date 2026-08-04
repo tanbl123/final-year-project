@@ -33,6 +33,8 @@ function AdminDeliveryIssuesPage() {
   const [resolving, setResolving] = useState('');  // issueId being resolved
   const [photo, setPhoto] = useState('');          // photo URL shown in the lightbox
   const [orderModal, setOrderModal] = useState(null); // orderId of the order detail popup
+  const [act, setAct] = useState(null);            // { issue, action } — the action modal
+  const [actNote, setActNote] = useState('');
 
   const { page, setPage, totalPages, pageItems } = usePagination(issues, PAGE_SIZE);
   const openCount = issues.filter((i) => i.issueStatus === 'Open').length;
@@ -51,12 +53,27 @@ function AdminDeliveryIssuesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
-  async function resolve(issueId) {
-    setResolving(issueId);
+  const ACTION_META = {
+    resolve:       { title: 'Resolve issue', verb: 'Resolve', color: 'success', prompt: 'Mark this issue as handled.' },
+    reassign:      { title: 'Reassign for delivery', verb: 'Reassign', color: 'primary', prompt: 'Send the parcel back to dispatch so another courier can retry the delivery.' },
+    cancel_refund: { title: 'Cancel order & refund', verb: 'Cancel & refund', color: 'danger', prompt: 'Cancel this order and refund the customer in full. This cannot be undone.' },
+  };
+
+  function openAction(issue, action) {
+    setActNote('');
+    setError('');
+    setAct({ issue, action });
+  }
+
+  async function runAction() {
+    const { issue, action } = act;
+    setResolving(issue.issueId);
+    setAct(null);
     setError('');
     try {
-      await resolveDeliveryIssue(issueId);
-      setToast('Issue marked resolved.');
+      await resolveDeliveryIssue(issue.issueId, { action, note: actNote.trim() });
+      setToast(action === 'cancel_refund' ? 'Order cancelled & refunded.'
+        : action === 'reassign' ? 'Parcel sent back to dispatch.' : 'Issue marked resolved.');
       load();
       refreshBadges();
     } catch (err) {
@@ -117,7 +134,7 @@ function AdminDeliveryIssuesPage() {
                 <th>Courier</th>
                 <th className="text-center" style={{ width: 130 }}>Delivery</th>
                 <th>Reported</th>
-                <th className="text-center" style={{ width: 120 }}>Action</th>
+                <th className="text-center" style={{ width: 210 }}>Action</th>
               </tr>
             </thead>
             <tbody>
@@ -152,12 +169,21 @@ function AdminDeliveryIssuesPage() {
                   <td className="small text-muted">{new Date(i.createdAt).toLocaleString()}</td>
                   <td className="text-center">
                     {i.issueStatus === 'Open' ? (
-                      <button className="btn btn-sm btn-outline-success" disabled={resolving === i.issueId}
-                        onClick={() => resolve(i.issueId)}>
-                        {resolving === i.issueId ? '…' : 'Resolve'}
-                      </button>
+                      <div className="d-flex flex-wrap gap-1 justify-content-center">
+                        <button className="btn btn-sm btn-outline-primary" disabled={resolving === i.issueId}
+                          onClick={() => openAction(i, 'reassign')}>Reassign</button>
+                        <button className="btn btn-sm btn-outline-danger" disabled={resolving === i.issueId}
+                          onClick={() => openAction(i, 'cancel_refund')}>Cancel &amp; refund</button>
+                        <button className="btn btn-sm btn-outline-success" disabled={resolving === i.issueId}
+                          onClick={() => openAction(i, 'resolve')}>Resolve</button>
+                      </div>
                     ) : (
-                      <span className="badge text-bg-success">Resolved</span>
+                      <>
+                        <span className="badge text-bg-success">Resolved</span>
+                        {i.resolutionNote && (
+                          <div className="text-muted small mt-1" style={{ overflowWrap: 'anywhere' }}>{i.resolutionNote}</div>
+                        )}
+                      </>
                     )}
                   </td>
                 </tr>
@@ -186,6 +212,36 @@ function AdminDeliveryIssuesPage() {
           </div>
         </div>
       )}
+
+      {/* action modal (reassign / cancel & refund / resolve) */}
+      {act && (() => {
+        const meta = ACTION_META[act.action];
+        return (
+          <div className="modal show d-block" tabIndex="-1" style={{ background: 'rgba(0,0,0,.5)' }}
+            onClick={() => setAct(null)}>
+            <div className="modal-dialog modal-dialog-centered" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">{meta.title}</h5>
+                  <button type="button" className="btn-close" onClick={() => setAct(null)}></button>
+                </div>
+                <div className="modal-body">
+                  <p className="mb-2">{meta.prompt}</p>
+                  <p className="text-muted small mb-3">Order {act.issue.orderId} · {act.issue.customerName}</p>
+                  <label className="form-label small mb-1">Note {act.action === 'cancel_refund' ? '(shown to the customer, optional)' : '(optional)'}</label>
+                  <textarea className="form-control" rows="3" maxLength="500"
+                    value={actNote} onChange={(e) => setActNote(e.target.value)}
+                    placeholder="Add a short note for the record…" />
+                </div>
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setAct(null)}>Cancel</button>
+                  <button type="button" className={`btn btn-${meta.color}`} onClick={runAction}>{meta.verb}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <OrderDetailModal orderId={orderModal} onClose={() => setOrderModal(null)} />
 

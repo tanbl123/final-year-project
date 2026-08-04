@@ -1151,7 +1151,7 @@ if ($method === 'PATCH' && preg_match('#^/admin/delivery-issues/([^/]+)/resolve$
   $auth = requireAuth($secret);
   requireAdmin($auth);
   $pdo  = getPDO();
-  handleResolveDeliveryIssue($pdo, $m[1]);
+  handleResolveDeliveryIssue($pdo, $auth, $m[1], $config);
 }
 
 // ── file uploads (multipart): images + 3D models for products ──
