@@ -3,6 +3,7 @@ import { getDeliveryIssues, resolveDeliveryIssue, refreshBadges } from '../admin
 import Toast from '../../../components/Toast';
 import Pagination from '../../../components/Pagination';
 import { usePagination } from '../../../hooks/usePagination';
+import OrderDetailModal from '../orders/OrderDetailModal';
 
 const PAGE_SIZE = 10;
 
@@ -31,6 +32,7 @@ function AdminDeliveryIssuesPage() {
   const [status, setStatus] = useState('Open');   // default to the work queue
   const [resolving, setResolving] = useState('');  // issueId being resolved
   const [photo, setPhoto] = useState('');          // photo URL shown in the lightbox
+  const [orderModal, setOrderModal] = useState(null); // orderId of the order detail popup
 
   const { page, setPage, totalPages, pageItems } = usePagination(issues, PAGE_SIZE);
   const openCount = issues.filter((i) => i.issueStatus === 'Open').length;
@@ -121,7 +123,12 @@ function AdminDeliveryIssuesPage() {
             <tbody>
               {pageItems.map((i) => (
                 <tr key={i.issueId} className={i.issueStatus === 'Open' ? 'table-warning' : undefined}>
-                  <td className="fw-semibold">{i.orderId}</td>
+                  <td>
+                    <button type="button" className="btn btn-link p-0 fw-semibold text-decoration-none"
+                      onClick={() => setOrderModal(i.orderId)} title="View order & products">
+                      {i.orderId}
+                    </button>
+                  </td>
                   <td className="small">
                     <div>{i.customerName}</div>
                     <div className="text-muted">📦 {i.supplierName}</div>
@@ -179,6 +186,8 @@ function AdminDeliveryIssuesPage() {
           </div>
         </div>
       )}
+
+      <OrderDetailModal orderId={orderModal} onClose={() => setOrderModal(null)} />
 
       <Toast message={toast} onClose={() => setToast('')} />
     </div>
