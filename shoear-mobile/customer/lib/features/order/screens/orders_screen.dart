@@ -263,11 +263,18 @@ class _OrderCard extends StatelessWidget {
     final primary = theme.colorScheme.primary;
     final dt = order.orderDate == null ? null : DateTime.tryParse(order.orderDate!)?.toLocal();
     final dateStr = dt == null ? '' : '${dt.day}/${dt.month}/${dt.year}';
+    // "Partially delivered" wins over the raw rolled-up status (which would
+    // read "Shipped") so the list agrees with the order-detail banner.
     final statusColor = order.awaitingPayment
         ? Colors.orange.shade700
-        : (kOrderStatusColors[order.orderStatus] ?? Colors.grey);
-    final statusLabel =
-        order.awaitingPayment ? 'To Pay' : prettyStatus(order.orderStatus);
+        : order.partiallyDelivered
+            ? Colors.indigo.shade600
+            : (kOrderStatusColors[order.orderStatus] ?? Colors.grey);
+    final statusLabel = order.awaitingPayment
+        ? 'To Pay'
+        : order.partiallyDelivered
+            ? 'Partially delivered'
+            : prettyStatus(order.orderStatus);
 
     return Container(
       decoration: BoxDecoration(

@@ -572,7 +572,11 @@ function handleListCustomerOrders(PDO $pdo, array $auth): void {
                JOIN product p ON p.productId = pv.productId
               WHERE oi.orderId = o.orderId ORDER BY oi.orderItemId LIMIT 1) AS previewImage,
             (SELECT rf.refundStatus FROM refund rf WHERE rf.orderId = o.orderId
-               ORDER BY rf.requestDate DESC LIMIT 1) AS refundStatus
+               ORDER BY rf.requestDate DESC LIMIT 1) AS refundStatus,
+            -- some (but not all) parcels delivered, so the list can flag it as
+            -- partially delivered to match the order-detail banner
+            (SELECT (SUM(d3.deliveryStatus = 'Delivered') > 0 AND SUM(d3.deliveryStatus = 'Delivered') < COUNT(*))
+               FROM delivery d3 WHERE d3.orderId = o.orderId) AS partiallyDelivered
        FROM `order` o
        LEFT JOIN payment pay ON pay.orderId = o.orderId
       WHERE $where
@@ -585,9 +589,10 @@ function handleListCustomerOrders(PDO $pdo, array $auth): void {
   $stmt->execute();
   $rows = $stmt->fetchAll();
   foreach ($rows as &$r) {
-    $r['orderTotalAmount'] = (float) $r['orderTotalAmount'];
-    $r['itemCount']        = (int) $r['itemCount'];
-    $r['payBySeconds']     = $r['payBySeconds'] === null ? null : (int) $r['payBySeconds'];
+    $r['orderTotalAmount']   = (float) $r['orderTotalAmount'];
+    $r['itemCount']          = (int) $r['itemCount'];
+    $r['payBySeconds']       = $r['payBySeconds'] === null ? null : (int) $r['payBySeconds'];
+    $r['partiallyDelivered'] = (bool) $r['partiallyDelivered'];
   }
   unset($r);
   sendJson(200, true, ['orders' => $rows, 'page' => $page, 'limit' => $limit, 'total' => $total]);

@@ -101,6 +101,7 @@ class CustomerOrderSummary {
   final String? previewBrand; // first item's brand
   final String? previewImage; // first item's image URL
   final String? refundStatus; // latest refund on the order (null = none)
+  final bool partiallyDelivered; // some (not all) parcels delivered
 
   CustomerOrderSummary({
     required this.orderId,
@@ -116,6 +117,7 @@ class CustomerOrderSummary {
     this.previewBrand,
     this.previewImage,
     this.refundStatus,
+    this.partiallyDelivered = false,
   });
 
   /// An order still awaiting payment (created but not yet paid).
@@ -135,6 +137,7 @@ class CustomerOrderSummary {
         previewBrand: j['previewBrand'] as String?,
         previewImage: (j['previewImage'] as String?)?.isNotEmpty == true ? j['previewImage'] as String : null,
         refundStatus: (j['refundStatus'] as String?)?.isNotEmpty == true ? j['refundStatus'] as String : null,
+        partiallyDelivered: j['partiallyDelivered'] as bool? ?? false,
       );
 }
 
