@@ -6,7 +6,7 @@
 > to these endpoints — never to MySQL directly.
 >
 > This is a **design/planning document**, not the code. We build the PHP from it
-> next. Endpoints map directly onto the tables in `database/schema.sql`.
+> next. Endpoints map directly onto the tables in `database/seed/schema.sql`.
 
 ---
 

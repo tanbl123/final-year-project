@@ -14,7 +14,7 @@ final-year-project/
 │   ├── lib/        db, auth/JWT, ids, response, stripe, delivery dispatch
 │   ├── scripts/    maintenance + Stripe payout demo (test mode)
 │   └── config.php / config.local.php (secrets — gitignored)
-├── database/       shoear.sql (full export), schema.sql, seed*.sql, migrations/, NOTES.md
+├── database/       shoear.sql (full export), seed/ (build-from-scratch SQL), migrations/, NOTES.md
 ├── docs/           API_ENDPOINTS.md (the API contract), STRIPE_TEST_DEMO.md
 ├── shoear-web/     React admin + supplier + AR-specialist web portal (Vite)
 ├── shoear-mobile/  Flutter apps (customer + delivery) — see shoear-mobile/README.md
@@ -54,9 +54,9 @@ others connect to it.
 3. In **phpMyAdmin**, create the `shoear` database and import
    **`database/shoear.sql`** — a full export that contains the schema and the
    demonstration data, including the accounts for all five roles.
-   *(The individual `schema.sql` + `seed*.sql` files are also provided if you
-   prefer to build the database from scratch, but they use different demo
-   accounts.)*
+   *(The `database/seed/` folder holds the individual `schema.sql` + `seed*.sql`
+   files if you prefer to build the database from scratch, but they use
+   different demo accounts.)*
 4. Add your secret keys to `backend/config.local.php` (see
    `config.local.example.php`): the JWT secret, and the Stripe / EasyParcel /
    Firebase / Snapchat Camera Kit keys as needed.

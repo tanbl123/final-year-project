@@ -45,10 +45,10 @@ transfer out.
    ```
 
 4. **Set up the database** (phpMyAdmin → *shoear* → Import, in this order):
-   - `database/schema.sql`
-   - `database/seed.sql`
-   - `database/seed_sales.sql` *(optional — gives Supplier 1 some history)*
-   - `database/seed_multi_supplier.sql`  ← adds Supplier 2 & 3
+   - `database/seed/schema.sql`
+   - `database/seed/seed.sql`
+   - `database/seed/seed_sales.sql` *(optional — gives Supplier 1 some history)*
+   - `database/seed/seed_multi_supplier.sql`  ← adds Supplier 2 & 3
    - Apply `database/migrations/2026_06_14_supplier_payout.sql`
      (only needed if your DB predates the `supplier_payout` table; a fresh
      `schema.sql` already includes it).
