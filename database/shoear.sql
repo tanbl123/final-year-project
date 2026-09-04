@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Aug 30, 2026 at 05:53 PM
+-- Generation Time: Sep 04, 2026 at 09:46 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -175,7 +175,11 @@ CREATE TABLE `commission` (
 INSERT INTO `commission` (`commissionId`, `adminId`, `commissionRateValue`, `effectiveDate`, `commissionStatus`) VALUES
 ('COM0001', 'ADM0001', 10.00, '2026-07-06 06:23:42', 'Inactive'),
 ('COM0002', 'ADM0001', 15.00, '2026-08-04 12:31:27', 'Inactive'),
-('COM0003', 'ADM0001', 10.00, '2026-08-04 12:31:35', 'Active');
+('COM0003', 'ADM0001', 10.00, '2026-08-04 12:31:35', 'Inactive'),
+('COM0004', 'ADM0001', 13.00, '2026-09-04 14:14:02', 'Inactive'),
+('COM0005', 'ADM0001', 10.00, '2026-09-04 14:49:29', 'Inactive'),
+('COM0006', 'ADM0001', 13.00, '2026-09-04 14:50:00', 'Inactive'),
+('COM0007', 'ADM0001', 10.00, '2026-09-04 14:50:36', 'Active');
 
 -- --------------------------------------------------------
 
@@ -201,7 +205,9 @@ CREATE TABLE `content_flag` (
 --
 
 INSERT INTO `content_flag` (`flagId`, `reporterUserId`, `targetUserId`, `reviewId`, `reason`, `flagStatus`, `resolutionNote`, `reviewedBy`, `created_at`, `reviewed_at`) VALUES
-('FLG0001', 'USR0003', 'USR0004', 'REV0006', 'Other', 'Dismissed', NULL, 'USR0001', '2026-08-04 01:34:48', '2026-08-04 06:40:26');
+('FLG0001', 'USR0003', 'USR0004', 'REV0006', 'Other', 'Dismissed', NULL, 'USR0001', '2026-08-04 01:34:48', '2026-08-04 06:40:26'),
+('FLG0002', 'USR0004', 'USR0003', 'REV0003', 'Offensive or abusive content', 'Open', NULL, NULL, '2026-09-04 15:23:37', NULL),
+('FLG0003', 'USR0004', 'USR0003', 'REV0011', 'Spam or scam', 'Open', NULL, NULL, '2026-09-04 15:28:44', NULL);
 
 -- --------------------------------------------------------
 
@@ -273,7 +279,8 @@ CREATE TABLE `courier_payout` (
 --
 
 INSERT INTO `courier_payout` (`payoutId`, `deliveryPersonnelId`, `stripeTransferId`, `amount`, `deliveryCount`, `currency`, `payoutStatus`, `isAuto`, `created_at`) VALUES
-('CPY0001', 'DEL0002', 'tr_1U0UkbGcnylCxTxKS6CBH28e', 5.00, 1, 'myr', 'Paid', 1, '2026-08-04 06:54:30');
+('CPY0001', 'DEL0002', 'tr_1U0UkbGcnylCxTxKS6CBH28e', 5.00, 1, 'myr', 'Paid', 1, '2026-08-04 06:54:30'),
+('CPY0002', 'DEL0002', 'tr_1UAXrQGcnylCxTxKLsjffKTS', 10.00, 2, 'myr', 'Paid', 1, '2026-09-01 00:15:05');
 
 -- --------------------------------------------------------
 
@@ -291,7 +298,7 @@ CREATE TABLE `cron_state` (
 --
 
 INSERT INTO `cron_state` (`id`, `lastSweepAt`) VALUES
-(1, '2026-08-30 23:52:49');
+(1, '2026-09-04 15:42:56');
 
 -- --------------------------------------------------------
 
@@ -351,12 +358,12 @@ INSERT INTO `delivery` (`deliveryId`, `orderId`, `supplierId`, `deliveryPersonne
 ('DLV0002', 'ORD0006', 'SUP0001', NULL, 'Standard', 'Pos Malaysia Berhad (Melplus)', 'EPSAMPLE1785788706100', 'Delivered', '2026-08-04 04:25:48', NULL, NULL, NULL, NULL, 6.22, 0.00, NULL),
 ('DLV0003', 'ORD0007', 'SUP0001', NULL, 'Standard', 'Pos Malaysia Berhad (Melplus)', 'EPSAMPLE1785808229843', 'Delivered', '2026-08-04 10:03:59', NULL, NULL, NULL, NULL, 6.22, 0.00, NULL),
 ('DLV0004', 'ORD0007', 'SUP0002', 'DEL0002', 'InHouse', NULL, NULL, 'Delivered', '2026-08-04 06:47:17', NULL, '5724', 'https://firebasestorage.googleapis.com/v0/b/shoear-65edb.firebasestorage.app/o/images%2Fbb3ce79ccee3899714c7661880f7ac0e.jpg?alt=media&token=586ac799-40e4-2b71-a833-f9d22fc63c1a', NULL, 0.00, 5.00, 'CPY0001'),
-('DLV0005', 'ORD0008', 'SUP0002', 'DEL0002', 'InHouse', NULL, NULL, 'Delivered', '2026-08-04 09:42:59', NULL, '8915', 'https://firebasestorage.googleapis.com/v0/b/shoear-65edb.firebasestorage.app/o/images%2F8e74c2720a73360da83774179f50721a.jpg?alt=media&token=eca3b914-57e1-bcfa-94cd-fe35faf3223c', NULL, 0.00, 5.00, NULL),
+('DLV0005', 'ORD0008', 'SUP0002', 'DEL0002', 'InHouse', NULL, NULL, 'Delivered', '2026-08-04 09:42:59', NULL, '8915', 'https://firebasestorage.googleapis.com/v0/b/shoear-65edb.firebasestorage.app/o/images%2F8e74c2720a73360da83774179f50721a.jpg?alt=media&token=eca3b914-57e1-bcfa-94cd-fe35faf3223c', NULL, 0.00, 5.00, 'CPY0002'),
 ('DLV0006', 'ORD0009', 'SUP0001', NULL, 'Standard', 'Pos Malaysia Berhad (Melplus)', 'EPSAMPLE1785808233337', 'Delivered', '2026-08-04 09:51:38', NULL, NULL, NULL, NULL, 6.22, 0.00, NULL),
 ('DLV0007', 'ORD0009', 'SUP0002', 'DEL0002', 'InHouse', NULL, NULL, 'Failed', NULL, NULL, '0474', NULL, NULL, 0.00, 0.00, NULL),
 ('DLV0008', 'ORD0010', 'SUP0001', NULL, 'Standard', 'Pos Malaysia Berhad (Melplus)', 'EPSAMPLE1785808237621', 'Delivered', '2026-08-04 09:50:43', NULL, NULL, NULL, NULL, 6.22, 0.00, NULL),
 ('DLV0009', 'ORD0011', 'SUP0001', NULL, 'Standard', 'Pos Malaysia Berhad (Melplus)', 'EPSAMPLE1785809000398', 'Delivered', '2026-08-04 10:03:39', NULL, NULL, NULL, NULL, 6.22, 0.00, NULL),
-('DLV0010', 'ORD0012', 'SUP0002', 'DEL0002', 'InHouse', NULL, NULL, 'Delivered', '2026-08-04 10:01:34', NULL, '9323', 'https://firebasestorage.googleapis.com/v0/b/shoear-65edb.firebasestorage.app/o/images%2Ffe700b3c7e3468313b3cb0196ae1cfc0.jpg?alt=media&token=4fa9c083-a743-8470-584b-2c5265cc8e74', NULL, 0.00, 5.00, NULL),
+('DLV0010', 'ORD0012', 'SUP0002', 'DEL0002', 'InHouse', NULL, NULL, 'Delivered', '2026-08-04 10:01:34', NULL, '9323', 'https://firebasestorage.googleapis.com/v0/b/shoear-65edb.firebasestorage.app/o/images%2Ffe700b3c7e3468313b3cb0196ae1cfc0.jpg?alt=media&token=4fa9c083-a743-8470-584b-2c5265cc8e74', NULL, 0.00, 5.00, 'CPY0002'),
 ('DLV0011', 'ORD0013', 'SUP0001', NULL, 'Standard', 'Pos Malaysia Berhad (Melplus)', 'EPSAMPLE1785809005516', 'Delivered', '2026-08-04 10:03:30', NULL, NULL, NULL, NULL, 6.22, 0.00, NULL),
 ('DLV0012', 'ORD0014', 'SUP0001', NULL, 'Standard', 'Pos Malaysia Berhad (Melplus)', 'EPSAMPLE1785810033716', 'Delivered', '2026-08-04 10:27:39', NULL, NULL, NULL, NULL, 6.22, 0.00, NULL),
 ('DLV0013', 'ORD0014', 'SUP0002', 'DEL0002', 'InHouse', NULL, NULL, 'Assigned', NULL, NULL, NULL, NULL, NULL, 0.00, 0.00, NULL),
@@ -461,7 +468,7 @@ INSERT INTO `device_token` (`deviceTokenId`, `userId`, `token`, `platform`, `upd
 ('DVT0004', 'USR0003', 'c-TXmMKaSG-Ipw_pkYXVtQ:APA91bG92JMnIIS-Caxtvm9Bl3N1HkL3PvdL_Z0E0fLkXPT540RmdxZ3QoDH7SJz9PM10ob7ZBoJ-KEt6biziAyZsoOkrmwFyVDO8OkK1IWjq6QNReJN8HY', 'android', '2026-07-19 19:40:06'),
 ('DVT0005', 'USR0003', 'eRk4YpXDRP6O6PwvvRksFv:APA91bH8yHGZDdryrk5TJ1yxTXC9xAjzRozk4vj3FKrxjjJMB0604FTAL4fZLHyC-OnQEklg_zqitHNsZho7I-1WVpuQ8-g3AcrgPSkgGPPpwu0AoHkOG80', 'android', '2026-08-04 11:47:54'),
 ('DVT0006', 'USR0008', 'eS5IuH92T1ei9pH4ilkdy1:APA91bGGKpLmQh5flkrkMVgjxu9R3ExZKSg9tsyHp8TeQ2_qgY4Yu0miEMmN3NPRHiCAvP6o1uDlpJ-kIMFpYv5ryhaHUc7bBnQU3gGkNpHIAo5BNbK-JIc', 'android', '2026-08-29 14:08:29'),
-('DVT0007', 'USR0003', 'ffbZHN4OSjC04aCy-WExiL:APA91bEHs7gxRuXb0IeBJepgrXH-q7V-31foM6UxIPhT5cW4G5Jhrwu45Y3E7q9kqpobkH4C760sT-ZlgxEyrDnAkFrknNPgA8T2IvGOkS3gLVye19F59FU', 'android', '2026-08-29 14:07:32');
+('DVT0007', 'USR0004', 'ffbZHN4OSjC04aCy-WExiL:APA91bEHs7gxRuXb0IeBJepgrXH-q7V-31foM6UxIPhT5cW4G5Jhrwu45Y3E7q9kqpobkH4C760sT-ZlgxEyrDnAkFrknNPgA8T2IvGOkS3gLVye19F59FU', 'android', '2026-09-04 15:23:15');
 
 -- --------------------------------------------------------
 
@@ -1351,7 +1358,8 @@ INSERT INTO `review` (`reviewId`, `customerId`, `productId`, `ratingScore`, `rev
 ('REV0007', 'CUS0001', 'PRD0042', 5, 'I like this shoe', '2026-08-04 10:02:28', 'Published', NULL, NULL),
 ('REV0008', 'CUS0002', 'PRD0041', 5, 'The shoe very nice', '2026-08-04 10:58:49', 'Published', NULL, NULL),
 ('REV0009', 'CUS0002', 'PRD0047', 3, 'I like this shoe', '2026-08-04 10:59:00', 'Published', NULL, NULL),
-('REV0010', 'CUS0002', 'PRD0035', 4, 'Worth to buy', '2026-08-04 10:59:11', 'Published', NULL, NULL);
+('REV0010', 'CUS0002', 'PRD0035', 4, 'Worth to buy', '2026-08-04 10:59:11', 'Published', NULL, NULL),
+('REV0011', 'CUS0001', 'PRD0019', 3, 'Good', '2026-09-04 15:22:14', 'Published', NULL, NULL);
 
 -- --------------------------------------------------------
 
