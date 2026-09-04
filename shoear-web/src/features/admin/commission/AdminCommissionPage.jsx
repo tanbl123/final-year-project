@@ -162,7 +162,7 @@ function AdminCommissionPage() {
                 </div>
               </div>
               <p className="text-muted small mb-0 mt-2">
-                The new rate applies to commission on sales from now on. The previous rate is kept as history.
+                The current rate is used to calculate the platform commission. Previous rates are kept as history.
               </p>
 
               {commission?.history?.length > 0 && (
@@ -303,7 +303,7 @@ function AdminCommissionPage() {
       <ConfirmDialog
         isOpen={confirm}
         title="Update commission rate?"
-        message={`Set the platform commission rate to ${newRate}%? It applies to commission on sales from now on.`}
+        message={`Set the platform commission rate to ${newRate}%? This becomes the current commission rate.`}
         confirmText="Update"
         confirmColor="primary"
         onCancel={() => setConfirm(false)}
