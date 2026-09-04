@@ -14,7 +14,7 @@ final-year-project/
 │   ├── lib/        db, auth/JWT, ids, response, stripe, delivery dispatch
 │   ├── scripts/    maintenance + Stripe payout demo (test mode)
 │   └── config.php / config.local.php (secrets — gitignored)
-├── database/       schema.sql, seed*.sql, migrations/, NOTES.md
+├── database/       shoear.sql (full export), schema.sql, seed*.sql, migrations/, NOTES.md
 ├── docs/           API_ENDPOINTS.md (the API contract), STRIPE_TEST_DEMO.md
 ├── shoear-web/     React admin + supplier + AR-specialist web portal (Vite)
 ├── shoear-mobile/  Flutter apps (customer + delivery) — see shoear-mobile/README.md
@@ -51,10 +51,12 @@ others connect to it.
    first: `rmdir "C:\xampp\htdocs\shoear"` — that removes only the link, not your
    code. A symlink also includes the hidden `.htaccess`, which a copy often
    misses.)*
-3. In **phpMyAdmin**, create the `shoear` database and import, in order:
-   `database/schema.sql` → `seed.sql` → `seed_sales.sql` →
-   `seed_multi_supplier.sql` → `seed_delivery.sql` → `seed_reviews.sql` →
-   `seed_refunds.sql`, then apply everything in `database/migrations/`.
+3. In **phpMyAdmin**, create the `shoear` database and import
+   **`database/shoear.sql`** — a full export that contains the schema and the
+   demonstration data, including the accounts for all five roles.
+   *(The individual `schema.sql` + `seed*.sql` files are also provided if you
+   prefer to build the database from scratch, but they use different demo
+   accounts.)*
 4. Add your secret keys to `backend/config.local.php` (see
    `config.local.example.php`): the JWT secret, and the Stripe / EasyParcel /
    Firebase / Snapchat Camera Kit keys as needed.
@@ -90,12 +92,14 @@ flutter pub get
 flutter run                   # emulator default apiBaseUrl: http://10.0.2.2/shoear/api/v1
 ```
 
-### Demo logins (password: `password123`)
-These accounts are created by the seed files above.
-- **Admin:** `admin@shoear.com`
-- **Supplier:** `supplier@shoear.com` (also `supplier2@`, `supplier3@`)
-- **Customer:** `customer@shoear.com` (also `customer2@`, `customer3@`)
-- **Delivery:** `ali.rider@shoear.com` (also `chong.rider@`, `siti.rider@`)
+### Demo logins
+Accounts from the imported `shoear.sql`. The password is `Password?` for every
+role **except the admin**, whose password is `Password123?`.
+- **Admin:** `admin@shoear.com` — `Password123?`
+- **Supplier:** `timbunleong2@gmail.com` — `Password?`
+- **Customer:** `timbunleong5@gmail.com` — `Password?`
+- **AR Specialist:** `timbunleong4@gmail.com` — `Password?`
+- **Delivery:** `zzggb321@gmail.com` — `Password?`
 
 > If the web page loads but shows **"Failed to fetch"**, the backend isn't
 > reachable — re-check XAMPP and the `http://localhost/shoear/api/v1/ping` step.
